@@ -25,7 +25,7 @@ import { NewOrderSelection, TableSelector, CashierPOS } from "./components/NewOr
 
 const SOUND_NOTIFICATION = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// --- INTERFACES (FIXED) ---
+// --- INTERFACES ---
 interface CashierData {
     restaurant: any;
     stats: { totalRevenue: number; pendingBills: number };
@@ -38,17 +38,13 @@ interface CashierData {
 // --- HELPER CONFIG ---
 const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
 
-// --- ACCURATE NEPALI DATE CONVERTER ---
 const toBS = (dateStr: string) => { 
     try { 
-        // Force Timezone to Kathmandu
         const date = new Date(dateStr);
         const kathmanduTime = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kathmandu" }));
         const bsDate = new NepaliDate(kathmanduTime);
         return bsDate.format('YYYY/MM/DD'); 
-    } catch { 
-        return "---"; 
-    }
+    } catch { return "---"; }
 };
 
 function mergeOrderItems(items: any[]) {
@@ -69,46 +65,24 @@ function SystemLoader() {
     ); 
 }
 
-// --- THERMAL RECEIPT (ZERO-FAIL PRINT STRATEGY) ---
+// --- THERMAL RECEIPT ---
 const ThermalReceipt = ({ data, order, customerDetails }: any) => {
     if (!order || !data) return null;
     const mergedItems = mergeOrderItems(order.items);
     
     return (
-        // Strategy: Height 0 keeps it in DOM (so browser sees it), overflow hidden hides it from user.
         <div style={{ position: 'absolute', top: 0, left: 0, height: 0, overflow: 'hidden', width: 0 }}>
             <style jsx global>{`
                 @media print {
                     @page { margin: 0; size: auto; }
-                    
-                    /* Hide everything else */
                     body * { visibility: hidden; }
-                    
-                    /* Show only receipt */
-                    #printable-receipt, #printable-receipt * { 
-                        visibility: visible !important; 
-                    }
-                    
+                    #printable-receipt, #printable-receipt * { visibility: visible !important; }
                     #printable-receipt {
-                        position: fixed;
-                        left: 0;
-                        top: 0;
-                        width: 72mm; /* Standard 80mm printer print width */
-                        margin: 0 auto;
-                        padding: 5mm;
-                        background: white;
-                        color: black !important;
-                        font-family: 'Courier New', monospace;
-                        font-size: 11px;
-                        line-height: 1.2;
-                        font-weight: 700;
-                        z-index: 9999;
+                        position: fixed; left: 0; top: 0; width: 72mm; margin: 0 auto; padding: 5mm;
+                        background: white; color: black !important; font-family: 'Courier New', monospace;
+                        font-size: 11px; line-height: 1.2; font-weight: 700; z-index: 9999;
                     }
-                    
-                    /* Utility classes for Print */
-                    .r-center { text-align: center; }
-                    .r-right { text-align: right; }
-                    .r-bold { font-weight: 900; }
+                    .r-center { text-align: center; } .r-right { text-align: right; } .r-bold { font-weight: 900; }
                     .r-divider { border-bottom: 2px dashed black; margin: 6px 0; width: 100%; display: block; }
                     .r-flex { display: flex; justify-content: space-between; align-items: center; }
                     .r-grid { display: grid; grid-template-columns: 45% 10% 20% 25%; width: 100%; align-items: start; }
@@ -123,12 +97,12 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
                 <div className="r-divider" />
                 
                 <div className="r-flex">
-                    <div>Date: {toBS(new Date().toISOString())}</div>
-                    <div>Time: {new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', timeZone: 'Asia/Kathmandu'})}</div>
+                    <div>Dt: {toBS(new Date().toISOString())}</div>
+                    <div>Tm: {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kathmandu' })}</div>
                 </div>
                 <div className="r-flex">
                     <div>Bill: {order.id.slice(-6).toUpperCase()}</div>
-                    <div>Table: {order.tbl}</div>
+                    <div>Tab: {order.tbl}</div>
                 </div>
                 
                 {customerDetails?.name && (
@@ -139,16 +113,10 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
                 )}
 
                 <div className="r-divider" />
-                <div className="r-grid r-bold">
-                    <span>ITEM</span>
-                    <span className="r-center">QTY</span>
-                    <span className="r-right">RATE</span>
-                    <span className="r-right">AMT</span>
-                </div>
+                <div className="r-grid r-bold"><span>ITEM</span><span className="r-center">QTY</span><span className="r-right">RATE</span><span className="r-right">AMT</span></div>
                 <div className="r-divider" />
                 
                 {mergedItems.map((item: any, i: number) => {
-                    // Hide variant if it's part of the name
                     const showVariant = item.variant && !item.name.toLowerCase().includes(item.variant.toLowerCase());
                     return (
                         <div key={i} style={{ marginBottom: '6px' }}>
@@ -164,10 +132,7 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
                 })}
                 
                 <div className="r-divider" style={{ borderBottomStyle: 'solid', borderBottomWidth: '2px' }} />
-                <div className="r-flex r-bold" style={{ fontSize: '16px', margin: '8px 0' }}>
-                    <span>TOTAL</span>
-                    <span>Rs {order.total.toLocaleString()}</span>
-                </div>
+                <div className="r-flex r-bold" style={{ fontSize: '16px', margin: '8px 0' }}><span>TOTAL</span><span>Rs {order.total.toLocaleString()}</span></div>
                 <div className="r-divider" />
                 <div className="r-center" style={{ marginTop: '10px', fontSize: '11px', fontWeight: 'bold' }}>*** THANK YOU VISIT AGAIN ***</div>
             </div>
@@ -288,7 +253,6 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
 function FloatingDock({ setView, currentView, onPOS, loadData, hasUpdates }: any) {
     const handleLogout = async () => { if(confirm("Logout?")) { await logoutStaff(); window.location.href = "/staff/login"; } };
     return (
-        // STRICT CENTERING: left-1/2 -translate-x-1/2
         <motion.div initial={{ y: 100 }} animate={{ y: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto px-4">
             <div className="flex items-center gap-3 p-2.5 bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl shadow-slate-400/20 rounded-full ring-1 ring-black/5 scale-90 md:scale-100 transition-transform hover:scale-[1.02]">
                 <button onClick={() => setView('terminal')} className={`p-3.5 rounded-full transition-all duration-300 ${currentView==='terminal' ? 'bg-slate-900 text-white shadow-lg' : 'hover:bg-slate-100 text-slate-500'}`}><LayoutDashboard className="w-5 h-5"/></button>
@@ -321,6 +285,7 @@ export default function CashierDashboard() {
 
   const [posOrderType, setPosOrderType] = useState<'dine_in'|'takeaway'>('dine_in');
   const [posTable, setPosTable] = useState<string>('');
+  const [existingOrderToEdit, setExistingOrderToEdit] = useState<any>(null); 
   const [scale, setScale] = useState(0.8);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [filter, setFilter] = useState("All"); 
@@ -364,25 +329,32 @@ export default function CashierDashboard() {
   };
 
   const handleCancelOrder = async (orderId: string, tableId: string) => {
-      if(!confirm("Are you sure you want to cancel this order?")) return;
+      // Calls server action and returns result to Child
       const res = await cancelOrder(orderId, tableId);
-      if(res.success) { toast.success("Order Cancelled"); setSelectedTable(null); loadData(); } else { toast.error("Could not cancel"); }
+      if(res.success) { 
+          loadData();
+          setSelectedTable(null);
+      }
+      return res; // Must return res for ActiveOrders to handle UI
   };
 
   const handleServeOrder = async (orderId: string, tableId: string) => {
       const res = await serveOrder(orderId, tableId);
-      if(res.success) { toast.success("Order Served"); loadData(); } else { toast.error("Failed"); }
+      if(res.success) { loadData(); }
+      return res;
   };
 
-  // --- EDIT HANDLER (Opens POS) ---
-  const handleEditOrder = (tableLabel: string) => {
-      setPosTable(tableLabel);
-      setView('pos'); 
+  // --- CRITICAL FIX: EDIT HANDLER RECEIVES FULL ORDER OBJECT ---
+  const handleEditOrder = (order: any) => {
+      setPosTable(order.tbl);
+      setPosOrderType(order.type || 'dine_in');
+      setExistingOrderToEdit(order); // Pass full object to POS for locked items
+      setView('pos'); // Trigger view switch
   };
 
-  const handleStartNewOrder = () => setView('new_order_select');
-  const handleSelectService = (type: 'dine_in' | 'takeaway') => { setPosOrderType(type); if (type === 'dine_in') setView('table_select'); else { setPosTable('TAKEAWAY'); setView('pos'); } };
-  const handleSelectTableForOrder = (tableLabel: string) => { setPosTable(tableLabel); setView('pos'); };
+  const handleStartNewOrder = () => { setExistingOrderToEdit(null); setView('new_order_select'); };
+  const handleSelectService = (type: 'dine_in' | 'takeaway') => { setPosOrderType(type); if (type === 'dine_in') setView('table_select'); else { setPosTable('TAKEAWAY'); setExistingOrderToEdit(null); setView('pos'); } };
+  const handleSelectTableForOrder = (tableLabel: string) => { setPosTable(tableLabel); setExistingOrderToEdit(null); setView('pos'); };
   const submitOrder = async (table: string, items: any[], type: 'dine_in'|'takeaway') => { const res = await createCashierOrder(table, items, type); if(res.success) { toast.success("Order Placed"); loadData(); setView('terminal'); } else { toast.error("Failed"); } };
 
   const sections = data ? ['All', ...Array.from(new Set(data.tables?.map((t:any) => t.section || "Main Hall")))] : [];
@@ -419,7 +391,7 @@ export default function CashierDashboard() {
                  view === 'active_orders' ? <ActiveOrdersView data={data} onSelectOrder={(o:any) => handleSettleClick({ label: o.tbl, currentOrder: o })} onServeOrder={handleServeOrder} onCancelOrder={handleCancelOrder} onEditOrder={handleEditOrder} /> :
                  view === 'new_order_select' ? <NewOrderSelection onSelect={handleSelectService} /> :
                  view === 'table_select' ? <TableSelector tables={data.tables} onSelectTable={handleSelectTableForOrder} onBack={() => setView('new_order_select')} /> :
-                 view === 'pos' ? <CashierPOS data={data} onClose={() => setView('terminal')} onSubmit={submitOrder} preSelectedTable={posTable} orderType={posOrderType} /> :
+                 view === 'pos' ? <CashierPOS data={data} onClose={() => setView('terminal')} onSubmit={submitOrder} preSelectedTable={posTable} orderType={posOrderType} existingOrder={existingOrderToEdit} /> :
                  (
                     <>
                         <div className="px-8 py-6 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-slate-100 z-10 shrink-0">

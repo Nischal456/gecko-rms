@@ -9,12 +9,15 @@ function getSafeId(id: string | null | undefined): number {
   return id && !isNaN(Number(id)) ? Number(id) : 5;
 }
 
+// Universal Parser: Handles Array or Stringified JSON
 function safeParse(data: any): any[] {
   if (!data) return [];
   if (Array.isArray(data)) return data;
+  
   if (typeof data === 'string') {
     try {
       const parsed = JSON.parse(data);
+      // Handle double-stringification edge cases
       return Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
     } catch (e) {
       console.error("JSON Parse Error:", e);
@@ -26,15 +29,16 @@ function safeParse(data: any): any[] {
 
 async function getTenantId() {
   const cookieStore = await cookies();
-  const rawId = (await cookieStore.get("gecko_tenant_id"))?.value;
+  const tenantCookie = await cookieStore.get("gecko_tenant_id");
+  const rawId = tenantCookie?.value;
   if (rawId) return getSafeId(rawId);
-  
-  // Fallback to staff token if tenant cookie missing
+
   const staffCookie = await cookieStore.get("gecko_staff_token");
-  if (staffCookie?.value) {
-      try { return getSafeId(JSON.parse(staffCookie.value).tenant_id); } catch {}
+  const staffToken = staffCookie?.value;
+  if (staffToken) {
+      try { return getSafeId(JSON.parse(staffToken).tenant_id); } catch (e) {}
   }
-  return 5;
+  return 5; 
 }
 
 // --- 1. GET CASHIER DATA ---
@@ -46,7 +50,7 @@ export async function getCashierData() {
     const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
     const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
     
-    // Fetch latest log by composite key
+    // Fetch latest log by composite key (tenant_id + date)
     const { data: log } = await supabaseAdmin
         .from("daily_order_logs")
         .select("orders_data, paid_history")
@@ -100,7 +104,7 @@ export async function getCashierData() {
       pendingBills++;
       if (order.tbl) {
           if (tableOrderMap.has(order.tbl)) {
-              // Merge logic for display
+              // Merge logic for display if multiple orders exist for one table
               const existing = tableOrderMap.get(order.tbl);
               existing.items = [...existing.items, ...order.items];
               existing.total = Number(existing.total) + Number(order.total);
@@ -203,7 +207,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     let finalOrders = updatedOrders;
 
     if (!orderUpdated) {
-        // Create NEW Order
+        // Create NEW Order if no pending order found
         const orderId = Date.now().toString(36).toUpperCase();
         const finalTableId = type === 'takeaway' ? `TAKEAWAY-${orderId.slice(-4)}` : tableId;
 
@@ -220,7 +224,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
         }
     }
 
-    // 4. Update DB using Composite Key
+    // 4. DB Update using Composite Key
     const { error } = await supabaseAdmin.from("daily_order_logs").upsert({ 
         tenant_id: tenantId, date: today, orders_data: finalOrders 
     }, { onConflict: 'tenant_id, date' });
@@ -231,7 +235,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     return { success: true };
 }
 
-// --- 3. CANCEL ORDER ---
+// --- 3. CANCEL ORDER (STRICT: Only Pending) ---
 export async function cancelOrder(orderId: string, tableId: string) {
     const tenantId = await getTenantId();
     const today = new Date().toISOString().split('T')[0];
@@ -243,20 +247,21 @@ export async function cancelOrder(orderId: string, tableId: string) {
     let found = false;
 
     const updatedOrders = currentOrders.map((order: any) => {
-        if (order.id === orderId || (order.tbl === tableId && order.status === 'pending')) {
+        // STRICT CHECK: Only cancel if status is 'pending'
+        if ((order.id === orderId || order.tbl === tableId) && order.status === 'pending') {
             found = true;
             return { ...order, status: 'cancelled' };
         }
         return order;
     });
 
-    if (!found) return { success: false, error: "Order not found or kitchen already started" };
+    if (!found) return { success: false, error: "Order is Cooking or Served. Cannot Cancel." };
 
     await supabaseAdmin.from("daily_order_logs").update({ orders_data: updatedOrders }).eq("tenant_id", tenantId).eq("date", today);
     
     if (!tableId.startsWith("TAKEAWAY")) {
-        const stillActive = updatedOrders.some((o:any) => o.tbl === tableId && !['cancelled', 'paid', 'completed'].includes(o.status));
-        if(!stillActive) {
+        const remainingActive = updatedOrders.some((o:any) => o.tbl === tableId && !['cancelled', 'paid', 'completed'].includes(o.status));
+        if(!remainingActive) {
             await supabaseAdmin.from("restaurant_tables").update({ status: 'free' }).eq("label", tableId).eq("tenant_id", tenantId);
         }
     }
@@ -312,7 +317,7 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
                 table_no: tableId,
                 restaurant_name: tenantInfo?.name,
                 items: order.items,
-                grandTotal: amount, // Logic note: Amount passed is usually total, here applied per order part. Ideally summed.
+                grandTotal: amount, 
                 payment_method: paymentMethod,
                 served_by: order.staff || "Cashier",
                 paid_at: new Date().toISOString(),

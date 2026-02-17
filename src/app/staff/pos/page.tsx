@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Search, ShoppingCart, Trash2, Plus, Minus, 
   ChefHat, Loader2, ArrowLeft, ChevronRight, LogOut
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { useSearchParams } from "next/navigation";
-// FIX: getPOSData is now available
+import { useSearchParams, useRouter } from "next/navigation";
 import { getPOSData, submitOrder } from "@/app/actions/pos";
 import { logoutStaff } from "@/app/actions/staff-auth"; 
 
-export default function POSPage() {
+// --- 1. Main Content Component (Logic moved here) ---
+function POSContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const preTableId = searchParams.get("tableId");
 
   const [loading, setLoading] = useState(true);
@@ -82,10 +83,9 @@ export default function POSPage() {
       if (res.success) {
           toast.success("Order sent to Kitchen!");
           setCart([]);
-          if (preTableId) window.location.href = "/staff/waiter"; 
+          if (preTableId) router.push("/staff/waiter"); 
       } else {
-          // FIX: Access 'msg' which is returned by submitOrder on failure
-          // Type casting to 'any' here solves the immediate type error if interface isn't shared
+          // Fix for type safety on error message
           const errorMsg = (res as any).msg || "Unknown error";
           toast.error("Order failed: " + errorMsg);
       }
@@ -287,5 +287,19 @@ export default function POSPage() {
           </div>
       </div>
     </div>
+  );
+}
+
+// --- 2. Main Page Component (Wraps content in Suspense) ---
+export default function POSPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center gap-3">
+          <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
+          <p className="text-emerald-900/50 font-bold text-xs uppercase tracking-widest animate-pulse">Loading Register...</p>
+      </div>
+    }>
+      <POSContent />
+    </Suspense>
   );
 }
