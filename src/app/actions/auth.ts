@@ -13,7 +13,7 @@ export async function requestPasswordReset(code: string, email: string) {
       .from("tenants")
       .select("id, name")
       .eq("code", code.toUpperCase().trim())
-      .eq("email", email.trim())
+      .eq("admin_email", email.trim()) // Checked against admin_email
       .single();
 
     if (error || !tenant) {
@@ -49,7 +49,7 @@ export async function resetPassword(token: string, newPassword: string) {
       .gt("reset_token_expiry", new Date().toISOString())
       .single();
 
-    if (error || !tenant) return { success: false, error: "Invalid link." };
+    if (error || !tenant) return { success: false, error: "Invalid or expired link." };
 
     await supabaseAdmin
       .from("tenants")
@@ -60,10 +60,11 @@ export async function resetPassword(token: string, newPassword: string) {
       })
       .eq("id", tenant.id);
 
+    // Optional: Add notification
     await supabaseAdmin.from("notifications").insert([{
       tenant_id: tenant.id,
       title: "Security Alert",
-      message: "Admin password was reset.",
+      message: "Admin password was reset successfully.",
       type: "alert",
       is_read: false
     }]);
@@ -75,7 +76,7 @@ export async function resetPassword(token: string, newPassword: string) {
   }
 }
 
-// --- 3. MAIN LOGIN HANDLER ---
+// --- 3. MAIN LOGIN HANDLER (UPDATED WITH SUSPENSION) ---
 export async function loginUser(data: any) {
   const code = data instanceof FormData ? data.get("code") as string : data.code;
   const email = data instanceof FormData ? data.get("email") as string : data.email;
@@ -84,41 +85,51 @@ export async function loginUser(data: any) {
   const cookieStore = await cookies();
   const isProduction = process.env.NODE_ENV === "production";
 
-  // SUPER ADMIN
+  // A. SUPER ADMIN LOGIN
+  // Ideally store these in .env
   const SUPER_EMAIL = process.env.SUPER_ADMIN_EMAIL || "super@gecko.works";
-  const SUPER_PASS = process.env.SUPER_ADMIN_PASSWORD || "admin";
+  const SUPER_PASS = process.env.SUPER_ADMIN_PASSWORD || "admin123";
 
   if (email === SUPER_EMAIL && password === SUPER_PASS) {
     cookieStore.set("gecko_super_admin", "true", { 
       path: '/', 
       httpOnly: true, 
-      secure: isProduction, // False on localhost
-      maxAge: 60 * 60 * 24 * 7, 
+      secure: isProduction, 
+      maxAge: 60 * 60 * 24 * 7, // 7 Days
       sameSite: "lax"
     });
     return { success: true, role: "super_admin", url: "/super-admin", name: "Master Control" };
   }
 
-  // RESTAURANT LOGIN
+  // B. RESTAURANT ADMIN LOGIN
   try {
     const { data: tenant, error } = await supabaseAdmin
       .from("tenants")
       .select("*")
       .eq("code", code?.toUpperCase().trim())
-      .eq("email", email)
       .single();
 
-    if (error || !tenant) return { success: false, error: "Invalid Credentials." };
+    // 1. Check Existence
+    if (error || !tenant) return { success: false, error: "Invalid Restaurant Code." };
 
-    if (tenant.admin_password !== password) return { success: false, error: "Invalid Credentials." };
+    // 2. ⛔ SUSPENSION CHECK ⛔
+    if (tenant.subscription_status === 'suspended') {
+        return { 
+            success: false, 
+            error: "⛔ SERVICE SUSPENDED: Your restaurant's access has been paused. Please contact GeckoRMS Administrator." 
+        };
+    }
 
-    if (tenant.subscription_status !== "active") return { success: false, error: "Account Suspended." };
+    // 3. Verify Credentials (Email & Password)
+    // Note: Comparing admin_email from DB vs input
+    if (tenant.admin_email !== email) return { success: false, error: "Invalid Email Address." };
+    if (tenant.admin_password !== password) return { success: false, error: "Incorrect Password." };
 
-    // SET SESSION COOKIE (The Key to Admin Access)
+    // 4. Successful Login -> Set Cookie
     cookieStore.set("gecko_tenant_id", tenant.id.toString(), { 
       path: '/', 
       httpOnly: true, 
-      secure: isProduction, // False on localhost
+      secure: isProduction, 
       maxAge: 60 * 60 * 24 * 7, 
       sameSite: "lax"
     });
@@ -126,23 +137,25 @@ export async function loginUser(data: any) {
     return { success: true, role: "restaurant_admin", url: "/admin", name: tenant.name };
 
   } catch (err: any) {
-    return { success: false, error: "Login failed." };
+    console.error("Login Error:", err);
+    return { success: false, error: "System Error. Please try again." };
   }
 }
 
-// --- 4. IMPERSONATION ---
+// --- 4. IMPERSONATION (SUPER ADMIN ONLY) ---
 export async function impersonateTenant(tenantId: number) {
   const cookieStore = await cookies();
   const isSuper = cookieStore.get("gecko_super_admin");
   const isProduction = process.env.NODE_ENV === "production";
   
-  if (!isSuper) return { success: false, error: "Unauthorized" };
+  if (!isSuper) return { success: false, error: "Unauthorized: Super Admin Access Required" };
 
+  // Set the tenant ID cookie so the admin dashboard loads for this tenant
   cookieStore.set("gecko_tenant_id", tenantId.toString(), { 
     path: '/', 
     httpOnly: true, 
     secure: isProduction,
-    maxAge: 60 * 60 * 24, 
+    maxAge: 60 * 60 * 24, // 1 Day Impersonation
     sameSite: "lax"
   });
 
