@@ -1,0 +1,113 @@
+"use client";
+
+import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, Menu, X } from "lucide-react";
+import { logoutStaff } from "@/app/actions/staff-auth";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function CashierSidebar({ tenantName, tenantCode, logo, currentView, setView, hasUpdates }: any) {
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const handleLogout = async () => {
+    if(confirm("End Shift & Logout?")) {
+        await logoutStaff();
+        window.location.href = "/staff/login";
+    }
+  };
+
+  const navItems = [
+    { id: "terminal", icon: LayoutDashboard, label: "Overview" },
+    { id: "new_order_select", icon: PlusCircle, label: "New Order" }, 
+    { id: "active_orders", icon: Clock, label: "Kitchen Status", badge: hasUpdates }, // Shows Red Dot
+    { id: "reports", icon: PieChart, label: "Reports" },
+    { id: "settings", icon: Settings, label: "Settings" }, 
+  ];
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-white/80 backdrop-blur-xl border-r border-slate-200/60">
+        {/* LOGO AREA */}
+        <div className="p-8 pb-6">
+            <div className="flex items-center gap-4 p-3 bg-white/50 rounded-2xl border border-white/60 shadow-sm">
+                {logo ? (
+                    <img src={logo} alt="Logo" className="w-10 h-10 rounded-xl object-contain bg-white" />
+                ) : (
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0">
+                        <Store className="w-5 h-5" />
+                    </div>
+                )}
+                <div className="overflow-hidden">
+                    <h2 className="font-black text-slate-900 leading-tight truncate text-sm">{tenantName || "POS"}</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tenantCode || "ID: --"}</p>
+                </div>
+            </div>
+        </div>
+
+        {/* NAV ITEMS */}
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+            <p className="px-4 text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Menu</p>
+            {navItems.map((item) => (
+                <button 
+                    key={item.id}
+                    onClick={() => { setView(item.id); setIsMobileOpen(false); }}
+                    className={`w-full flex items-center gap-4 p-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                        currentView === item.id
+                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1' 
+                        : 'text-slate-500 hover:bg-white hover:shadow-sm'
+                    }`}
+                >
+                    <div className="relative">
+                        <item.icon className={`w-5 h-5 transition-colors ${currentView === item.id ? 'text-emerald-400' : 'group-hover:text-emerald-500'}`} />
+                        {/* RED PULSE DOT */}
+                        {item.badge && (
+                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse" />
+                        )}
+                    </div>
+                    <span className="font-bold text-sm">{item.label}</span>
+                </button>
+            ))}
+        </nav>
+
+        {/* FOOTER */}
+        <div className="p-6 border-t border-slate-100/50 mt-auto">
+            <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 relative group overflow-hidden">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-emerald-600 font-black text-sm shadow-sm">CM</div>
+                    <div><p className="font-bold text-slate-900 text-sm">Cashier</p><p className="text-[10px] text-slate-400 font-medium">Online</p></div>
+                </div>
+                <button onClick={handleLogout} className="w-full h-9 flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all"><LogOut className="w-3 h-3" /> Sign Out</button>
+            </div>
+        </div>
+    </div>
+  );
+
+  return (
+    <>
+      <aside className="hidden md:block w-72 h-full relative z-30 shadow-2xl shadow-slate-200/50"><SidebarContent /></aside>
+      
+      {/* MOBILE HEADER */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200 z-[60] flex items-center justify-between px-4 shadow-sm">
+          <div className="flex items-center gap-3">
+             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white"><Store className="w-4 h-4"/></div>
+             <span className="font-black text-slate-900 text-lg">{tenantName || "POS"}</span>
+          </div>
+          <button onClick={() => setIsMobileOpen(true)} className="p-2 bg-slate-100 rounded-lg text-slate-600 active:bg-slate-200 relative">
+              <Menu className="w-6 h-6"/>
+              {hasUpdates && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />}
+          </button>
+      </div>
+
+      {/* MOBILE DRAWER */}
+      <AnimatePresence>
+        {isMobileOpen && (
+            <>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileOpen(false)} className="fixed inset-0 bg-black/40 z-[70] md:hidden backdrop-blur-sm" />
+                <motion.aside initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className="fixed top-0 left-0 bottom-0 w-4/5 max-w-sm bg-white z-[80] md:hidden shadow-2xl">
+                    <div className="absolute top-4 right-4"><button onClick={() => setIsMobileOpen(false)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-red-500"><X className="w-6 h-6"/></button></div>
+                    <SidebarContent />
+                </motion.aside>
+            </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
