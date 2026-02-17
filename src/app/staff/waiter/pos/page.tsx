@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Search, ArrowLeft, Plus, Minus, Trash2, ChefHat, 
   Utensils, Coffee, Beer, IceCream, SearchX, 
   ShoppingBag, Send, AlertCircle, Loader2, X, Layers, MessageSquare,
-  LayoutGrid, Users, ClipboardList, DollarSign, Package, Edit
+  LayoutGrid, Users, ClipboardList, DollarSign, Edit
 } from "lucide-react";
 import { toast } from "sonner";
-import { getPOSMenu, submitOrder, getPOSStats, modifyOrder } from "@/app/actions/pos"; // Imported modifyOrder
+import { getPOSMenu, submitOrder, getPOSStats, modifyOrder } from "@/app/actions/pos"; 
 
 // --- TYPES ---
 interface Variant { name: string; price: string | number; }
@@ -23,7 +23,7 @@ interface CartItem extends MenuItem {
 interface Stats {
     totalTables: number; vacantCount: number; occupiedCount: number; occupancyRate: number; totalOrders: number; totalRevenue: number;
     tables: { label: string; status: string }[];
-    orders_list?: any[]; // Added for Modify Logic
+    orders_list?: any[]; 
 }
 
 const formatRs = (n: number) => "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(n);
@@ -84,11 +84,12 @@ function CategoryPill({ label, isActive, onClick }: any) {
     )
 }
 
-export default function POSPage() {
+// --- 1. SUSPENSE CONTENT COMPONENT ---
+function POSContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const tableId = searchParams.get("table");
-    const orderId = searchParams.get("orderId"); // New: Detect Modify Mode
+    const orderId = searchParams.get("orderId"); 
     const orderType = searchParams.get("type");
     const isTakeaway = orderType === "takeaway";
 
@@ -108,7 +109,6 @@ export default function POSPage() {
             try {
                 const [menuRes, statsRes] = await Promise.all([getPOSMenu(), getPOSStats()]);
                 
-                // 1. Load Menu
                 if (menuRes && menuRes.items.length > 0) {
                     setMenu(menuRes.items);
                     let cats: string[] = [];
@@ -117,11 +117,9 @@ export default function POSPage() {
                     setCategories(cats);
                 }
                 
-                // 2. Load Stats & Check for Order Edit
                 if (statsRes.success && statsRes.stats) {
                     setStats(statsRes.stats);
                     
-                    // --- MODIFY ORDER LOGIC ---
                     if (orderId && statsRes.stats.orders_list) {
                         const existingOrder = statsRes.stats.orders_list.find((o: any) => o.id === orderId);
                         if (existingOrder) {
@@ -131,9 +129,7 @@ export default function POSPage() {
                                 return;
                             }
                             
-                            // Map existing items to Cart structure
                             const prefilledCart = existingOrder.items.map((orderItem: any) => {
-                                // Try to find original item for extra details (category, etc)
                                 const originalMenuItem = menuRes.items.find((m: any) => m.name === orderItem.name);
                                 return {
                                     id: orderItem.id, 
@@ -157,7 +153,7 @@ export default function POSPage() {
             } catch (e) { toast.error("Connection Error"); } finally { setLoading(false); }
         }
         load();
-    }, [orderId]); // Re-run if orderId changes
+    }, [orderId]); 
 
     const addToCart = (item: MenuItem, variant: Variant | undefined, note: string) => {
         setCart(prev => {
@@ -190,10 +186,8 @@ export default function POSPage() {
             
             let result;
             if (isEditMode && orderId) {
-                // CALL MODIFY
                 result = await modifyOrder(orderId, cart, cartTotal);
             } else {
-                // CALL CREATE
                 const targetTable = isTakeaway ? `TAKEAWAY-${Date.now().toString().slice(-4)}` : tableId!;
                 result = await submitOrder(targetTable, cart, cartTotal);
             }
@@ -215,7 +209,6 @@ export default function POSPage() {
 
     const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
-    // --- STATUS CHECKER ---
     let tableStatus = "available";
     if (!isTakeaway && stats?.tables && tableId) {
         const found = stats.tables.find((t: any) => t.label === tableId);
@@ -239,5 +232,18 @@ export default function POSPage() {
                 <div className="flex items-center gap-2 mt-1">{tableStatus === 'occupied' ? (<><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span></span><p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Table {tableId} • <span className="text-orange-500">Occupied</span></p></>) : (<><span className="relative flex h-2 w-2"><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span><p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Table {tableId} • <span className="text-emerald-500">Available</span></p></>)}</div>
             )}
             </div><span className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg shadow-slate-900/20">{cart.length} Items</span></div><div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 custom-scrollbar bg-[#FAFAFA]">{cart.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-slate-300 space-y-4"><div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center border-2 border-dashed border-slate-200"><Coffee className="w-8 h-8 opacity-20" /></div><p className="font-bold text-sm">Add items to start order</p></div> : <AnimatePresence>{cart.map((item) => (<motion.div layout initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} key={item.cartId} className="flex flex-col bg-white p-3 rounded-2xl border border-slate-100 shadow-sm"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-100">{item.name.substring(0,2).toUpperCase()}</div><div className="flex-1 min-w-0"><h4 className="font-bold text-slate-900 text-sm truncate">{item.name}</h4><p className="text-xs text-emerald-600 font-black">{formatRs(item.price)}</p></div><div className="flex items-center bg-slate-100 rounded-xl p-1 shadow-inner"><button onClick={() => updateQty(item.cartId, -1)} className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-red-500 active:scale-90 transition-all"><Minus className="w-3 h-3" /></button><span className="w-8 text-center font-bold text-sm text-slate-700">{item.qty}</span><button onClick={() => updateQty(item.cartId, 1)} className="w-7 h-7 flex items-center justify-center bg-slate-900 text-white rounded-lg shadow-sm hover:bg-slate-800 active:scale-90 transition-all"><Plus className="w-3 h-3" /></button></div></div>{(item.note || item.variantName) && <div className="mt-2 flex flex-wrap gap-2 pl-[3.5rem]">{item.variantName && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">{item.variantName}</span>}{item.note && <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-md flex items-center gap-1 border border-orange-100"><MessageSquare className="w-2.5 h-2.5" /> {item.note}</span>}</div>}</motion.div>))}</AnimatePresence>}</div><div className="p-6 bg-white border-t border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20"><div className="space-y-3 mb-6"><div className="flex justify-between text-xs font-bold text-slate-400"><span>Subtotal</span><span>{formatRs(cartTotal)}</span></div><div className="flex justify-between text-xl font-black text-slate-900 mt-2 pt-3 border-t border-dashed border-slate-200"><span>Total</span><span>{formatRs(cartTotal)}</span></div></div><div className="grid grid-cols-4 gap-3"><button className="col-span-1 py-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all active:scale-95" onClick={() => setCart([])}><Trash2 className="w-5 h-5" /></button><button onClick={handleCheckout} disabled={isSubmitting || cart.length === 0} className={`col-span-3 py-4 text-white rounded-2xl font-black text-sm shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${isEditMode ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20' : 'bg-slate-900 hover:bg-emerald-600 shadow-slate-900/20'}`}>{isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : isEditMode ? <><Edit className="w-4 h-4" /> Update Order</> : <><Send className="w-4 h-4" /> Place Order</>}</button></div></div></div></div>
+    );
+}
+
+// --- 2. WRAPPER FOR BUILD SAFETY ---
+export default function WaiterPOS() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen items-center justify-center bg-[#F8FAFC]">
+                <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
+            </div>
+        }>
+            <POSContent />
+        </Suspense>
     );
 }
