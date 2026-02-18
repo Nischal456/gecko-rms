@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ChefHat, User, ArrowRight, Loader2, Store, Hash, LogOut, 
-  Calculator, Briefcase, UtensilsCrossed, ScanFace, Leaf, CheckCircle2, ShieldCheck,Building
+  Calculator, Briefcase, UtensilsCrossed, ScanFace, Leaf, CheckCircle2, ShieldCheck,Building, Utensils
 } from "lucide-react";
 import { toast, Toaster } from "sonner"; // Ensure you have installed sonner
 import { getPublicStaffList, linkDeviceToRestaurant, staffLogin, unlinkDevice } from "@/app/actions/staff-auth";
@@ -138,10 +138,26 @@ export default function StaffLoginPage() {
             className="fixed top-0 left-0 right-0 p-4 md:p-8 flex justify-between items-center z-10 pointer-events-none"
           >
               <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl p-2.5 pr-6 rounded-2xl border border-white/60 shadow-sm ring-1 ring-slate-100 pointer-events-auto">
-                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20"><Store className="w-5 h-5 text-white" /></div>
+                  {/* LOGO CONTAINER: Changed to white bg so logos represent correctly */}
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md border border-slate-100 overflow-hidden relative">
+                      {tenantInfo?.logo_url ? (
+                          <img 
+                            src={tenantInfo.logo_url} 
+                            alt={tenantInfo.name} 
+                            className="w-full h-full object-contain p-1" 
+                          />
+                      ) : (
+                          <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                             <Store className="w-5 h-5 text-white" />
+                          </div>
+                      )}
+                  </div>
+                  
                   <div>
-                      <h3 className="text-xs font-black text-slate-900 leading-none">{tenantInfo?.name}</h3>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Terminal Active</p>
+                      <h3 className="text-xs font-black text-slate-900 leading-none">{tenantInfo?.name || "Terminal"}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Terminal Active
+                      </p>
                   </div>
               </div>
               <button onClick={handleUnlink} className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-400 text-[10px] font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all shadow-sm ring-1 ring-slate-100 pointer-events-auto">
@@ -155,59 +171,84 @@ export default function StaffLoginPage() {
         {/* --- VIEW 1: SETUP --- */}
        {view === "setup" && (
   <motion.div
-    key="setup"
-    initial={{ opacity: 0, scale: 0.95 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 1.05 }}
-    className="w-full max-w-md z-10"
-  >
+  key="setup"
+  initial={{ opacity: 0, y: 40, scale: 0.96 }}
+  animate={{ opacity: 1, y: 0, scale: 1 }}
+  exit={{ opacity: 0, y: -20, scale: 1.02 }}
+  transition={{ duration: 0.6, ease: "easeOut" }}
+  className="relative w-full max-w-md z-10"
+>
+  {/* Ambient Glow */}
+  <div className="absolute -inset-6 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-transparent blur-3xl rounded-[3rem]" />
+
+  {/* Card */}
+  <div className="relative bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-[0_40px_120px_-30px_rgba(16,185,129,0.35)] border border-white/40 ring-1 ring-emerald-100/50 overflow-hidden">
+
     {/* Header */}
-    <div className="text-center mb-10">
-      <div className="w-28 h-28 bg-gradient-to-br from-emerald-100 to-emerald-50 rounded-[2.5rem] shadow-2xl shadow-emerald-200/60 mx-auto flex items-center justify-center mb-8 ring-1 ring-white/40 backdrop-blur-sm">
-        <Building className="w-14 h-14 text-emerald-500 drop-shadow-md animate-bounce-slow" />
-      </div>
-      <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Setup</h1>
-      <p className="text-slate-400 font-semibold mt-2 text-base">
-        Enter Restaurant ID to activate
+    <div className="text-center px-10 pt-12 pb-8">
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="w-28 h-28 mx-auto mb-8 rounded-[2.5rem] bg-gradient-to-br from-emerald-100 via-white to-emerald-50 shadow-2xl shadow-emerald-300/60 ring-1 ring-white flex items-center justify-center"
+      >
+        <Utensils className="w-14 h-14 text-emerald-500 drop-shadow-lg" />
+      </motion.div>
+
+      <h1 className="text-4xl font-black tracking-tight text-slate-900">
+        System Setup
+      </h1>
+      <p className="mt-3 text-slate-400 font-semibold">
+        Enter your Restaurant ID to activate
       </p>
     </div>
+
+    {/* Divider */}
+    <div className="h-px bg-gradient-to-r from-transparent via-emerald-200/60 to-transparent" />
 
     {/* Form */}
     <form
       onSubmit={handleLink}
-      className="bg-white/80 backdrop-blur-md p-8 rounded-[2.5rem] shadow-2xl shadow-slate-300/40 border border-white/30 ring-1 ring-slate-100 relative overflow-hidden transform-gpu transition-all hover:shadow-3xl hover:shadow-slate-300/50"
+      className="px-10 py-10 space-y-8"
     >
-      <div className="space-y-6">
-        {/* Input */}
-        <div className="relative group/input">
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/80 backdrop-blur-[1px] rounded-xl flex items-center justify-center text-emerald-500 shadow-lg shadow-emerald-300/50 border border-white transition-all group-focus-within/input:scale-105">
-            <Hash className="w-5 h-5" />
-          </div>
-          <input
-            autoFocus
-            value={restCode}
-            onChange={(e) => setRestCode(e.target.value.toUpperCase())}
-            placeholder="e.g. GECKO-01"
-            className="w-full h-20 pl-24 pr-6 bg-white/50 border-2 border-transparent focus:bg-white focus:border-emerald-500 rounded-2xl font-extrabold text-2xl text-slate-900 outline-none transition-all placeholder:text-slate-300 uppercase tracking-widest backdrop-blur-sm"
-          />
+      {/* Input */}
+      <div className="relative group">
+        <div className="absolute left-5 top-1/2 -translate-y-1/2 w-14 h-14 rounded-2xl bg-white shadow-xl shadow-emerald-300/50 border border-white flex items-center justify-center text-emerald-500 transition-all group-focus-within:scale-110">
+          <Hash className="w-6 h-6" />
         </div>
 
-        {/* Button */}
-        <button
-          disabled={!restCode || isSubmitting}
-          className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-400/30 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
-        >
-          {isSubmitting ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            <>
-              Activate <ArrowRight className="w-5 h-5" />
-            </>
-          )}
-        </button>
+        <input
+          autoFocus
+          value={restCode}
+          onChange={(e) => setRestCode(e.target.value.toUpperCase())}
+          placeholder="GECKO-01"
+          className="w-full h-20 pl-24 pr-6 rounded-3xl bg-white/70 backdrop-blur-md border-2 border-transparent focus:border-emerald-500 focus:bg-white text-2xl font-black tracking-[0.3em] text-slate-900 outline-none transition-all placeholder:text-slate-300 shadow-inner"
+        />
       </div>
+
+      {/* Button */}
+      <motion.button
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.95 }}
+        disabled={!restCode || isSubmitting}
+        className="relative w-full h-16 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 shadow-2xl shadow-emerald-400/40 flex items-center justify-center gap-3 overflow-hidden disabled:opacity-50"
+      >
+        {/* Button Shine */}
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
+
+        {isSubmitting ? (
+          <Loader2 className="w-6 h-6 animate-spin" />
+        ) : (
+          <>
+            Activate System
+            <ArrowRight className="w-5 h-5" />
+          </>
+        )}
+      </motion.button>
     </form>
-  </motion.div>
+  </div>
+</motion.div>
+
 )}
 
         {/* --- VIEW 2: STAFF GRID --- */}
