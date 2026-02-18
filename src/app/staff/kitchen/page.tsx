@@ -2,17 +2,20 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { 
   ChefHat, Clock, CheckCircle2, Flame, Bell, Utensils, 
-  Loader2, Maximize2, X, AlertCircle, LogOut, RefreshCcw, Check, CheckCheck, 
-  History, Volume2, VolumeX, Ban, Play, LayoutGrid, FileBarChart
+  X, LogOut, RefreshCcw, Check, CheckCheck, 
+  Volume2, VolumeX, LayoutGrid, FileBarChart, Ban, AlertTriangle, Play, GripVertical, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { getKitchenTickets, updateTicketStatus, updateItemStatus, disableMenuItem } from "@/app/actions/kitchen";
-import { getDashboardData } from "@/app/actions/dashboard";
 import { logoutStaff } from "@/app/actions/staff-auth";
 import NepaliDate from 'nepali-date-converter';
+
+// --- CONFIG ---
+const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+const SWIPE_THRESHOLD = 100; // Pixel distance to trigger swipe
 
 // --- TYPES ---
 interface KitchenItem {
@@ -20,7 +23,7 @@ interface KitchenItem {
     name: string;
     quantity: number;
     notes?: string;
-    status: string;
+    status: string; // 'pending' | 'cooking' | 'ready' | 'served'
     station: string;
 }
 
@@ -40,8 +43,37 @@ function toNepaliDigits(num: number | string): string {
     return num.toString().split('').map(c => nepaliDigits[parseInt(c)] || c).join('');
 }
 
+// --- INITIALIZATION SCREEN ---
+function SystemInitScreen({ onStart }: { onStart: () => void }) {
+    return (
+        <div className="fixed inset-0 z-[100] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+            <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }} 
+                animate={{ scale: 1, opacity: 1 }} 
+                className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl border border-emerald-100 p-10 flex flex-col items-center relative overflow-hidden"
+            >
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner ring-4 ring-white border border-emerald-100 animate-pulse">
+                    <ChefHat className="w-12 h-12 text-emerald-600" />
+                </div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-2">Kitchen<span className="text-emerald-500">OS</span></h1>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-8">Titanium Command Node</p>
+                <button 
+                    onClick={onStart}
+                    className="group relative w-full h-16 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/20 overflow-hidden active:scale-95 transition-all"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <span className="relative flex items-center justify-center gap-3">
+                        <Play className="w-5 h-5 fill-current" /> START SHIFT
+                    </span>
+                </button>
+            </motion.div>
+        </div>
+    )
+}
+
 // --- HEADER ---
-function KDSHeader({ count, hasAlert, onStopAlert }: { count: number, hasAlert: boolean, onStopAlert: () => void }) {
+function KDSHeader({ count, latestOrderTable, onStopAlert, muted, toggleMute }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
@@ -57,54 +89,63 @@ function KDSHeader({ count, hasAlert, onStopAlert }: { count: number, hasAlert: 
     }, []);
 
     return (
-        <header className="flex-shrink-0 bg-white/80 backdrop-blur-2xl border-b border-slate-200 px-6 py-4 flex justify-between items-center z-30 sticky top-0 shadow-sm transition-all duration-500">
-            {/* ALERT OVERLAY */}
+        <header className="flex-shrink-0 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shadow-sm transition-all">
+            {/* ALERT BANNER */}
             <AnimatePresence>
-                {hasAlert && (
+                {latestOrderTable && (
                     <motion.div 
-                        initial={{ y: -100 }} animate={{ y: 0 }} exit={{ y: -100 }}
-                        className="absolute inset-0 bg-red-600 flex items-center justify-between px-6 z-50 text-white shadow-2xl"
+                        initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
+                        className="absolute inset-0 bg-red-500 flex items-center justify-between px-6 z-50 text-white shadow-xl cursor-pointer"
+                        onClick={onStopAlert}
                     >
                         <div className="flex items-center gap-4 animate-pulse">
-                            <Bell className="w-8 h-8" />
-                            <span className="text-2xl font-black uppercase tracking-widest">New Order Incoming!</span>
+                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                <Bell className="w-5 h-5 fill-current" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold opacity-90 uppercase tracking-widest">New Order</p>
+                                <h3 className="text-xl md:text-3xl font-black leading-none">{latestOrderTable}</h3>
+                            </div>
                         </div>
-                        <button onClick={onStopAlert} className="bg-white text-red-600 px-6 py-2 rounded-full font-black text-sm hover:scale-105 active:scale-95 transition-transform">
-                            ACKNOWLEDGE
+                        <button onClick={onStopAlert} className="bg-white text-red-600 px-4 py-1.5 rounded-full font-black text-[10px] md:text-xs shadow-lg uppercase tracking-wider">
+                            Dismiss
                         </button>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-5">
-                <div className="w-14 h-14 bg-slate-900 rounded-[1.2rem] flex items-center justify-center shadow-xl shadow-slate-900/20 ring-4 ring-white">
-                    <ChefHat className="w-7 h-7 text-white" />
+            <div className="flex items-center gap-3 md:gap-5">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20 ring-2 ring-white">
+                    <ChefHat className="w-5 h-5 md:w-6 md:h-6 text-white" />
                 </div>
-                <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">Kitchen<span className="text-slate-300">OS</span></h1>
-                    <div className="flex items-center gap-2 mt-1.5">
-                        <span className="flex items-center gap-1.5 text-[11px] font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-full shadow-lg shadow-emerald-500/20">
-                            <Flame className="w-3 h-3" /> {count} LIVE
+                <div className="hidden md:block">
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Kitchen<span className="text-emerald-500">OS</span></h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="flex items-center gap-1 text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                            <Flame className="w-3 h-3" /> {count} ACTIVE
                         </span>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{timeInfo.date}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">{timeInfo.date}</span>
                     </div>
                 </div>
             </div>
-            <div className="text-right">
-                <p className="text-4xl font-black text-slate-900 tabular-nums leading-none tracking-tight">{timeInfo.time}</p>
-                <div className="flex items-center justify-end gap-2 mt-1">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">System Online</p>
+
+            <div className="flex items-center gap-4">
+                <div className="text-right block">
+                    <p className="text-xl md:text-3xl font-black text-slate-900 tabular-nums leading-none">{timeInfo.time}</p>
                 </div>
+                <button onClick={toggleMute} className={`p-2.5 md:p-3 rounded-full transition-all border ${muted ? 'bg-red-50 text-red-500 border-red-100' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-200 hover:text-emerald-600'}`}>
+                    {muted ? <VolumeX className="w-4 h-4 md:w-5 md:h-5" /> : <Volume2 className="w-4 h-4 md:w-5 md:h-5" />}
+                </button>
             </div>
         </header>
     )
 }
 
-// --- DOCK (FIXED CENTERING) ---
-function KitchenDock({ onRefresh, muted, toggleMute }: any) {
+// --- DOCK (CENTERED) ---
+function KitchenDock({ onRefresh }: any) {
     const handleLogout = async () => {
         if(confirm("End Shift?")) {
+            sessionStorage.removeItem("gecko_kitchen_init");
             await logoutStaff();
             window.location.href = "/staff/login";
         }
@@ -112,36 +153,15 @@ function KitchenDock({ onRefresh, muted, toggleMute }: any) {
 
     return (
         <motion.div 
-            // FIX: Added x: "-50%" to Framer props. This ensures it stays centered and isn't overwritten.
             initial={{ y: 100, x: "-50%", opacity: 0 }} 
             animate={{ y: 0, x: "-50%", opacity: 1 }} 
-            className="fixed bottom-8 left-1/2 z-50 flex items-center gap-3 p-2.5 bg-slate-900/90 backdrop-blur-3xl rounded-full shadow-2xl border border-white/10 ring-1 ring-black/40 hover:scale-105 transition-transform duration-300"
+            className="fixed bottom-6 left-1/2 z-40 flex items-center gap-2 p-1.5 bg-slate-900/95 backdrop-blur-2xl rounded-full shadow-2xl border border-white/10 ring-1 ring-black/20"
         >
-            <DockButton icon={<RefreshCcw className="w-5 h-5" />} onClick={onRefresh} label="Refresh" />
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            
-            {/* Menu Manager Link */}
-            <Link href="/staff/kitchen/menu" className="p-3.5 rounded-full bg-white/5 text-slate-300 hover:text-white hover:bg-white/20 active:scale-90 transition-all group relative">
-                <LayoutGrid className="w-5 h-5" />
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Menu</span>
-            </Link>
-
-            {/* Reports Link */}
-            <Link href="/staff/kitchen/reports" className="p-3.5 rounded-full bg-white/5 text-slate-300 hover:text-white hover:bg-white/20 active:scale-90 transition-all group relative">
-                <FileBarChart className="w-5 h-5" />
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Reports</span>
-            </Link>
-
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            
-            <DockButton 
-                icon={muted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5 text-emerald-400" />} 
-                onClick={toggleMute} 
-                label={muted ? "Unmute" : "Mute"} 
-            />
-            
-            <div className="w-px h-6 bg-white/10 mx-1" />
-            
+            <DockButton icon={<RefreshCcw className="w-5 h-5" />} onClick={onRefresh} label="Sync" />
+            <div className="w-px h-6 bg-white/20 mx-1" />
+            <DockLink href="/staff/kitchen/menu" icon={<LayoutGrid className="w-5 h-5" />} label="Menu" />
+            <DockLink href="/staff/kitchen/reports" icon={<FileBarChart className="w-5 h-5" />} label="Reports" />
+            <div className="w-px h-6 bg-white/20 mx-1" />
             <DockButton icon={<LogOut className="w-5 h-5 text-red-400" />} onClick={handleLogout} label="Exit" />
         </motion.div>
     )
@@ -149,33 +169,23 @@ function KitchenDock({ onRefresh, muted, toggleMute }: any) {
 
 function DockButton({ icon, onClick, label }: any) {
     return (
-        <button onClick={onClick} className="p-3.5 rounded-full bg-white/5 text-white hover:bg-white/20 active:scale-90 transition-all group relative">
+        <button onClick={onClick} className="p-3 rounded-full bg-white/5 text-white hover:bg-white/20 active:scale-90 transition-all group relative">
             {icon}
-            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                 {label}
             </span>
         </button>
     )
 }
 
-// --- START SHIFT OVERLAY ---
-function StartOverlay({ onStart }: { onStart: () => void }) {
+function DockLink({ href, icon, label }: any) {
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
-            <div className="text-center">
-                <div className="w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-emerald-500/20 animate-bounce">
-                    <ChefHat className="w-10 h-10 text-white" />
-                </div>
-                <h1 className="text-3xl font-black text-white tracking-tight mb-2">Kitchen<span className="text-emerald-500">OS</span></h1>
-                <p className="text-slate-400 mb-8">Tap to initialize system sound & graphics</p>
-                <button 
-                    onClick={onStart}
-                    className="bg-white text-slate-900 px-8 py-4 rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto shadow-xl"
-                >
-                    <Play className="w-5 h-5 fill-current" /> START SERVICE
-                </button>
-            </div>
-        </div>
+        <Link href={href} className="p-3 rounded-full bg-white/5 text-slate-300 hover:text-white hover:bg-white/20 active:scale-90 transition-all group relative">
+            {icon}
+            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                {label}
+            </span>
+        </Link>
     )
 }
 
@@ -184,139 +194,123 @@ export default function KitchenPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
-  const [prevCount, setPrevCount] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
   
-  // Sound & Alert State
-  const [hasAlert, setHasAlert] = useState(false);
+  // Logic Refs
+  const prevTicketIds = useRef<Set<string>>(new Set());
+  const [systemReady, setSystemReady] = useState(false);
+  const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const isFirstLoad = useRef(true); // Track first load to avoid initial beep
 
-  // Responsive Check
   useEffect(() => {
-      const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-      checkMobile();
-      window.addEventListener('resize', checkMobile);
-      return () => window.removeEventListener('resize', checkMobile);
+      const isInit = sessionStorage.getItem("gecko_kitchen_init");
+      if(isInit === "true") {
+          setSystemReady(true);
+          const audio = new Audio(ALERT_SOUND);
+          audio.volume = 1.0;
+          audioRef.current = audio;
+          loadData();
+      }
   }, []);
 
-  // Data Polling
+  // FAST POLLING: 3 Seconds
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!systemReady) return;
     loadData();
-    const interval = setInterval(loadData, 5000); 
+    const interval = setInterval(loadData, 3000); // Fast fetch, no reload
     return () => clearInterval(interval);
-  }, [hasStarted]);
+  }, [systemReady]);
 
-  // Audio Initialization
-  const handleStartShift = () => {
-      audioRef.current = new Audio('/sounds/notification.mp3'); 
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.5;
-      
-      // Play brief silence to unlock audio context on mobile
-      audioRef.current.play().then(() => {
-          audioRef.current?.pause();
-          audioRef.current!.currentTime = 0;
-      }).catch(e => console.log("Audio permission needed", e));
+  const initializeSystem = () => {
+      const audio = new Audio(ALERT_SOUND); 
+      audio.volume = 1.0;
+      audioRef.current = audio;
+      audio.play().then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+      }).catch(err => console.log("Audio Permission Needed:", err));
 
-      setHasStarted(true);
+      sessionStorage.setItem("gecko_kitchen_init", "true");
+      setSystemReady(true);
       loadData();
   };
 
-  // Notification Logic (FIXED)
-  useEffect(() => {
-      const currentPending = tickets.filter(t => t.status === 'pending').length;
-      
-      if (hasStarted) {
-          // If it's the very first load, just set the count, don't beep
-          if (isFirstLoad.current) {
-              isFirstLoad.current = false;
-              setPrevCount(currentPending);
-              return;
-          }
-
-          // If pending orders INCREASED, trigger alert (even 0 -> 1)
-          if (currentPending > prevCount) {
-              triggerAlert();
-          }
-      }
-      setPrevCount(currentPending);
-  }, [tickets, hasStarted]);
-
-  const triggerAlert = () => {
-      setHasAlert(true);
+  const triggerAlert = (tableName: string) => {
+      setLatestOrderTable(tableName);
       if (!muted && audioRef.current) {
           audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().catch(e => console.error("Sound play failed", e));
       }
+      setTimeout(() => setLatestOrderTable(null), 8000);
   };
 
   const stopAlert = () => {
-      setHasAlert(false);
+      setLatestOrderTable(null);
       if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
       }
   };
 
-  const toggleMute = () => {
-      setMuted(!muted);
-      if (!muted && audioRef.current) audioRef.current.pause();
-  };
-
   async function loadData() {
     const kdsRes = await getKitchenTickets();
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
         const rawData = kdsRes.data as any[]; 
-        const sorted = rawData.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        // Logic: Exclude 'served' orders from view entirely if backend returns them
+        const activeOrders = rawData.filter(t => t.status !== 'served');
+        
+        const sorted = activeOrders.sort((a, b) => {
+            const statusOrder = { 'pending': 0, 'cooking': 1, 'ready': 2, 'served': 3 };
+            const statusDiff = (statusOrder[a.status as keyof typeof statusOrder] || 0) - (statusOrder[b.status as keyof typeof statusOrder] || 0);
+            if (statusDiff !== 0) return statusDiff;
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
         setTickets(sorted as KitchenTicket[]);
+        
+        if (systemReady) {
+            const currentIds = new Set(sorted.map(t => t.id));
+            const newTicket = sorted.find(t => 
+                t.status === 'pending' && !prevTicketIds.current.has(t.id)
+            );
+            if (newTicket) triggerAlert(newTicket.table_name);
+            prevTicketIds.current = currentIds;
+        }
     }
     setLoading(false);
   }
 
   // --- ACTIONS ---
-
   const handleItemClick = async (item: KitchenItem, ticketId: string) => {
-      const statusCycle: Record<string, string> = { 
-          'pending': 'cooking', 
-          'cooking': 'ready', 
-          'ready': 'served' 
-      };
+      // 1. KITCHEN GUARD: STOP AT READY
+      if (item.status === 'served' || item.status === 'ready') {
+          return; // Cannot move beyond ready
+      }
+
+      const statusCycle: Record<string, string> = { 'pending': 'cooking', 'cooking': 'ready' };
       const nextStatus = statusCycle[item.status] || 'pending';
       
-      setTickets(prev => prev.map(t => {
-          if (t.id !== ticketId) return t;
-          return { ...t, order_items: t.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i) };
-      }));
-
-      if(selectedTicket && selectedTicket.id === ticketId) {
-          setSelectedTicket(prev => prev ? ({...prev, order_items: prev.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i)}) : null);
-      }
+      setTickets(prev => prev.map(t => t.id !== ticketId ? t : { ...t, order_items: t.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i) }));
+      if(selectedTicket?.id === ticketId) setSelectedTicket(prev => prev ? ({...prev, order_items: prev.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i)}) : null);
 
       await updateItemStatus(item.id, nextStatus, ticketId);
       loadData(); 
   };
 
   const handleDisableItem = async (itemName: string) => {
-      if(confirm(`Disable "${itemName}" from the menu? Waiters won't be able to order it.`)) {
-          const res = await disableMenuItem(itemName);
-          if(res.success) toast.success(`${itemName} disabled`);
-          else toast.error("Failed to disable item");
+      if(confirm(`Waiters will see '${itemName}' as Unavailable. Confirm?`)) {
+          await disableMenuItem(itemName);
+          toast.success("Item Disabled");
       }
   };
 
   const handleMoveTicket = async (ticketId: string, newStatus: string) => {
+      // 2. KITCHEN GUARD: CANNOT SERVE
       if (newStatus === 'served') {
-          setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: 'served' } : t));
-          setTimeout(() => { loadData(); }, 2000);
-      } else {
-          setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus as any } : t));
+          toast.error("Kitchen cannot Serve. Mark Ready only.");
+          return;
       }
-
-      if(selectedTicket) setSelectedTicket(null);
+      
+      setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus as any } : t));
       await updateTicketStatus(ticketId, newStatus);
       loadData();
   };
@@ -325,182 +319,177 @@ export default function KitchenPage() {
   const cookingTickets = tickets.filter(t => t.status === 'cooking' || t.status === 'preparing');
   const readyTickets = tickets.filter(t => t.status === 'ready');
 
-  if (!hasStarted) return <StartOverlay onStart={handleStartShift} />;
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]"><Loader2 className="w-16 h-16 text-slate-900 animate-spin" /></div>;
+  if (!systemReady) return <SystemInitScreen onStart={initializeSystem} />;
+  
+  if (loading) return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] gap-4">
+          <div className="w-20 h-20 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin shadow-xl"></div>
+          <p className="text-emerald-900/40 font-bold text-xs uppercase tracking-widest animate-pulse">Syncing Kitchen...</p>
+      </div>
+  );
 
   return (
-    <div className="flex h-[100dvh] bg-[#F1F5F9] font-sans text-slate-900 overflow-hidden selection:bg-emerald-500 selection:text-white">
-      
-      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        
-        <KDSHeader count={tickets.length} hasAlert={hasAlert} onStopAlert={stopAlert} />
+    <div className="flex h-[100dvh] bg-[#F1F5F9] font-sans text-slate-900 overflow-hidden flex-col">
+      <KDSHeader count={tickets.length} latestOrderTable={latestOrderTable} onStopAlert={stopAlert} muted={muted} toggleMute={() => setMuted(!muted)} />
 
-        {/* --- KANBAN BOARD --- */}
-        <div className="flex-1 overflow-x-auto p-6 md:p-8 pb-32">
-            <div className="flex flex-col md:flex-row gap-8 h-full min-w-full md:min-w-[1400px] justify-center">
-                
+      {/* --- KANBAN BOARD (VERTICAL STACK MOBILE, HORIZONTAL DESKTOP) --- */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth">
+          {/* Changed Layout: Flex-Col on Mobile, Flex-Row on Desktop */}
+          <div className="flex flex-col md:flex-row gap-8 md:gap-6 h-auto md:h-full min-w-full md:min-w-[1200px] justify-center">
+              
+              {/* PENDING COLUMN */}
+              <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
                     title="NEW ORDERS" count={pendingTickets.length} tickets={pendingTickets} status="pending"
-                    color="border-blue-200/50 bg-blue-50/30" badgeColor="bg-blue-500 text-white shadow-blue-200"
-                    onOpen={setSelectedTicket} onDrop={handleMoveTicket} isMobile={isMobile}
+                    color="bg-blue-50/50 border-blue-100" badgeColor="bg-blue-600 text-white"
+                    onOpen={setSelectedTicket} onSwipe={handleMoveTicket}
                 />
+              </div>
 
+              {/* COOKING COLUMN */}
+              <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
-                    title="PREPARING" count={cookingTickets.length} tickets={cookingTickets} status="cooking"
-                    color="border-orange-200/50 bg-orange-50/30" badgeColor="bg-orange-500 text-white shadow-orange-200"
-                    onOpen={setSelectedTicket} onDrop={handleMoveTicket} isMobile={isMobile}
+                    title="COOKING" count={cookingTickets.length} tickets={cookingTickets} status="cooking"
+                    color="bg-orange-50/50 border-orange-100" badgeColor="bg-orange-500 text-white"
+                    onOpen={setSelectedTicket} onSwipe={handleMoveTicket}
                 />
+              </div>
 
+              {/* READY COLUMN */}
+              <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
-                    title="READY TO SERVE" count={readyTickets.length} tickets={readyTickets} status="ready"
-                    color="border-emerald-200/50 bg-emerald-50/30" badgeColor="bg-emerald-500 text-white shadow-emerald-200"
-                    onOpen={setSelectedTicket} onDrop={handleMoveTicket} isMobile={isMobile}
+                    title="READY FOR SERVICE" count={readyTickets.length} tickets={readyTickets} status="ready"
+                    color="bg-emerald-50/50 border-emerald-100" badgeColor="bg-emerald-600 text-white"
+                    onOpen={setSelectedTicket} onSwipe={handleMoveTicket}
                 />
+              </div>
 
-            </div>
-        </div>
+          </div>
+      </div>
 
-        <KitchenDock onRefresh={loadData} muted={muted} toggleMute={toggleMute} />
+      <KitchenDock onRefresh={loadData} />
 
-        {/* --- DETAIL MODAL --- */}
-        <AnimatePresence>
-            {selectedTicket && (
-                <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4">
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTicket(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
-                    <motion.div 
-                        initial={{ y: "100%", scale: 0.95 }} animate={{ y: 0, scale: 1 }} exit={{ y: "100%", scale: 0.95 }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="bg-white w-full md:w-[600px] rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] border border-white/20"
-                    >
-                        {/* Modal Header */}
-                        <div className="bg-white p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 z-10">
-                            <div>
-                                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{selectedTicket.table_name}</h2>
-                                <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Order #{selectedTicket.id.slice(0,6)}</p>
-                            </div>
-                            <button onClick={() => setSelectedTicket(null)} className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-900 hover:text-white transition-all"><X className="w-6 h-6" /></button>
-                        </div>
+      {/* --- DETAIL MODAL --- */}
+      <AnimatePresence>
+          {selectedTicket && (
+              <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTicket(null)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+                  <motion.div 
+                      initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                      className="bg-white w-full md:w-[600px] rounded-t-[2rem] md:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh] md:max-h-[90vh] border border-white/20"
+                  >
+                      {/* Header */}
+                      <div className="bg-slate-50 p-6 border-b border-slate-200 flex justify-between items-start sticky top-0 z-10">
+                          <div>
+                              <h2 className="text-3xl font-black text-slate-900 tracking-tight">{selectedTicket.table_name}</h2>
+                              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Order #{selectedTicket.id.slice(0,6)}</p>
+                          </div>
+                          <button onClick={() => setSelectedTicket(null)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all"><X className="w-5 h-5" /></button>
+                      </div>
 
-                        {/* Items */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar bg-slate-50">
-                            {selectedTicket.order_items.map((item) => (
-                                <div 
-                                    key={item.id} 
-                                    className={`p-5 rounded-3xl border-2 flex justify-between items-center transition-all ${
-                                        item.status === 'served' ? 'bg-slate-100 border-slate-200 opacity-60 grayscale' : 
-                                        'bg-white border-white shadow-sm hover:border-emerald-400 hover:shadow-lg'
-                                    }`}
-                                >
-                                    {/* Left: Item Info (Clickable for Status) */}
-                                    <div className="flex items-center gap-5 flex-1 cursor-pointer" onClick={() => handleItemClick(item, selectedTicket.id)}>
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner ${item.status === 'served' ? 'bg-slate-200 text-slate-500' : 'bg-slate-900 text-white'}`}>
-                                            {item.quantity}x
-                                        </div>
-                                        <div>
-                                            <h4 className={`font-extrabold text-xl leading-none ${item.status === 'served' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
-                                            {item.notes && <p className="text-xs font-bold text-red-500 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" /> {item.notes}</p>}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Right: Actions */}
-                                    <div className="flex flex-col items-end gap-2">
-                                        {/* Status Badge */}
-                                        <div 
-                                            onClick={() => handleItemClick(item, selectedTicket.id)}
-                                            className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 cursor-pointer transition-colors ${
-                                                item.status === 'ready' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 
-                                                item.status === 'cooking' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 
-                                                'bg-slate-200 text-slate-500'
-                                        }`}>
-                                            {item.status === 'ready' ? <CheckCheck className="w-4 h-4" /> : item.status === 'cooking' ? <Flame className="w-4 h-4 animate-pulse" /> : <Clock className="w-4 h-4" />}
-                                            {item.status}
-                                        </div>
-                                        
-                                        {/* Disable Menu Item Button */}
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleDisableItem(item.name); }}
-                                            className="text-[10px] font-bold text-slate-300 hover:text-red-500 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                                        >
-                                            <Ban className="w-3 h-3" /> Disable
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                      {/* Items List */}
+                      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 custom-scrollbar bg-white">
+                          {selectedTicket.order_items.map((item) => (
+                              <div 
+                                  key={item.id} 
+                                  className={`p-4 rounded-2xl border flex justify-between items-start transition-all ${
+                                      item.status === 'served' ? 'bg-slate-50 border-slate-100 opacity-60 pointer-events-none' : // DISABLE POINTER EVENTS IF SERVED
+                                      'bg-white border-slate-100 shadow-sm hover:border-emerald-200'
+                                  }`}
+                              >
+                                  <div className="flex gap-4 flex-1 cursor-pointer" onClick={() => handleItemClick(item, selectedTicket.id)}>
+                                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-700">{item.quantity}x</div>
+                                      <div className="flex-1">
+                                          <h4 className={`font-bold text-lg leading-tight ${item.status === 'served' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
+                                          {item.notes && (
+                                              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-100 animate-pulse">
+                                                  <AlertTriangle className="w-4 h-4 fill-red-100" />
+                                                  <span className="text-xs font-black uppercase tracking-wide">{item.notes}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="flex flex-col gap-2 items-end">
+                                      <button 
+                                          onClick={() => handleItemClick(item, selectedTicket.id)}
+                                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors ${
+                                              item.status === 'served' ? 'bg-slate-200 text-slate-400' :
+                                              item.status === 'ready' ? 'bg-emerald-100 text-emerald-700' : 
+                                              item.status === 'cooking' ? 'bg-orange-100 text-orange-700' : 
+                                              'bg-slate-100 text-slate-500'
+                                      }`}>
+                                          {item.status === 'served' ? <Check className="w-3 h-3"/> : item.status === 'ready' ? <CheckCheck className="w-3 h-3" /> : item.status === 'cooking' ? <Flame className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                          {item.status}
+                                      </button>
+                                      {item.status !== 'served' && item.status !== 'ready' && (
+                                        <button onClick={(e) => { e.stopPropagation(); handleDisableItem(item.name); }} className="text-[9px] font-bold text-slate-300 hover:text-red-500 flex items-center gap-1"><Ban className="w-3 h-3" /> 86 Item</button>
+                                      )}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
 
-                        {/* Actions Footer */}
-                        <div className="p-6 bg-white border-t border-slate-100 flex gap-4 safe-area-pb shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-                            {selectedTicket.status !== 'cooking' && selectedTicket.status !== 'ready' && (
-                                <button onClick={() => handleMoveTicket(selectedTicket.id, 'cooking')} className="flex-1 py-4 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white font-black text-base shadow-xl shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                    <Flame className="w-5 h-5" /> Start Cooking
-                                </button>
-                            )}
-                            {selectedTicket.status !== 'ready' && (
-                                <button onClick={() => handleMoveTicket(selectedTicket.id, 'ready')} className="flex-1 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-black text-base shadow-xl shadow-emerald-500/30 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                    <CheckCircle2 className="w-5 h-5" /> All Ready
-                                </button>
-                            )}
-                            {selectedTicket.status === 'ready' && (
-                                <button onClick={() => handleMoveTicket(selectedTicket.id, 'served')} className="flex-1 py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base shadow-xl shadow-slate-900/30 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                    <Check className="w-5 h-5" /> SERVE ORDER
-                                </button>
-                            )}
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
+                      {/* Footer Actions */}
+                      <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-200 flex gap-3 safe-area-pb">
+                          {selectedTicket.status !== 'cooking' && selectedTicket.status !== 'ready' && (
+                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'cooking')} className="flex-1 py-3.5 rounded-xl bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                  <Flame className="w-4 h-4" /> Start Cooking
+                              </button>
+                          )}
+                          {selectedTicket.status !== 'ready' && (
+                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'ready')} className="flex-1 py-3.5 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4" /> Mark Ready
+                              </button>
+                          )}
+                          {/* SERVE BUTTON REMOVED FOR KITCHEN STAFF */}
+                          {selectedTicket.status === 'ready' && (
+                              <div className="flex-1 py-3.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                                  <Check className="w-4 h-4" /> Awaiting Waiter
+                              </div>
+                          )}
+                      </div>
+                  </motion.div>
+              </div>
+          )}
+      </AnimatePresence>
 
-      </main>
     </div>
   );
 }
 
-// --- COLUMN COMPONENT (Protection Enabled) ---
-function TicketColumn({ title, count, tickets, status, color, badgeColor, onOpen, onDrop, isMobile }: any) {
-    const handleDropInternal = (e: React.DragEvent) => {
-        e.preventDefault();
-        const ticketId = e.dataTransfer.getData("ticketId");
-        if(ticketId) onDrop(ticketId, status);
-    };
-
+// --- COLUMN COMPONENT ---
+function TicketColumn({ title, count, tickets, status, color, badgeColor, onOpen, onSwipe }: any) {
     return (
-        <div 
-            onDragOver={(e) => !isMobile && e.preventDefault()}
-            onDrop={!isMobile ? handleDropInternal : undefined}
-            className={`flex-1 flex flex-col h-[600px] md:h-full rounded-[3rem] border-4 border-dashed ${color} overflow-hidden transition-all duration-300 flex-shrink-0 snap-center shadow-inner relative`}
-        >
-            <div className="px-8 py-6 flex justify-between items-center sticky top-0 z-10">
-                <h3 className="font-black text-slate-400/80 uppercase tracking-widest text-xs flex items-center gap-2">
+        <div className={`w-full flex-1 flex flex-col h-full md:rounded-[2.5rem] md:border-2 md:border-dashed ${color} overflow-hidden transition-all duration-300 relative bg-transparent md:bg-white/50 backdrop-blur-sm`}>
+            {/* Desktop Header */}
+            <div className="flex px-6 py-5 justify-between items-center sticky top-0 z-10 bg-white/50 backdrop-blur-md border-b border-slate-100">
+                <h3 className="font-black text-slate-500 text-xs flex items-center gap-2 uppercase tracking-wider">
                     {status === 'pending' ? <Bell className="w-4 h-4" /> : status === 'cooking' ? <Flame className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                     {title}
                 </h3>
-                <span className={`px-3 py-1.5 rounded-xl text-[11px] font-black shadow-lg ${badgeColor}`}>{count}</span>
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${badgeColor}`}>{count}</span>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 <AnimatePresence>
                     {tickets.map((t: KitchenTicket) => (
-                        <motion.div 
-                            key={t.id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.5, filter: 'grayscale(100%)' }}
-                            draggable={!isMobile}
-                            onDragStart={(e: any) => !isMobile && e.dataTransfer.setData("ticketId", t.id)}
-                            onClick={() => onOpen(t)} 
-                            className="cursor-pointer"
-                        >
-                            {/* Passed empty onItemClick to Disable click on main card */}
-                            <TicketCard ticket={t} onItemClick={() => {}} />
-                        </motion.div>
+                        <SwipeableTicket 
+                            key={t.id} 
+                            ticket={t} 
+                            status={status}
+                            onSwipe={onSwipe} 
+                            onOpen={onOpen} 
+                        />
                     ))}
                 </AnimatePresence>
                 
                 {tickets.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-50 pb-20">
-                        <Utensils className="w-12 h-12 mb-3" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Station Clear</span>
+                    <div className="h-64 flex flex-col items-center justify-center text-slate-300 opacity-60">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                            <Utensils className="w-6 h-6" />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">No Orders</span>
                     </div>
                 )}
             </div>
@@ -508,8 +497,57 @@ function TicketColumn({ title, count, tickets, status, color, badgeColor, onOpen
     )
 }
 
-// --- TICKET CARD ---
-function TicketCard({ ticket, onItemClick }: { ticket: KitchenTicket, onItemClick: any }) {
+// --- SWIPEABLE TICKET ---
+function SwipeableTicket({ ticket, status, onSwipe, onOpen }: any) {
+    const x = useMotionValue(0);
+    const opacity = useTransform(x, [0, 200], [1, 0]);
+    
+    let nextStatus = '';
+    let actionLabel = '';
+    let actionColor = '';
+    
+    // LOGIC GUARD: NO 'SERVE' OPTION
+    if (status === 'pending') { nextStatus = 'cooking'; actionLabel = 'Cook'; actionColor = 'bg-orange-500'; }
+    else if (status === 'cooking') { nextStatus = 'ready'; actionLabel = 'Ready'; actionColor = 'bg-emerald-500'; }
+    // NO NEXT STATUS FOR READY IN KITCHEN VIEW
+
+    const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        if (info.offset.x > SWIPE_THRESHOLD && status !== 'ready') {
+            onSwipe(ticket.id, nextStatus);
+        }
+    };
+
+    return (
+        <motion.div 
+            style={{ x, opacity }}
+            drag={status !== 'ready' ? "x" : false} // DISABLE DRAG IF READY
+            dragConstraints={{ left: 0, right: 0 }} 
+            dragElastic={{ left: 0, right: 0.5 }} 
+            onDragEnd={handleDragEnd}
+            layout
+            onClick={() => onOpen(ticket)}
+            className="cursor-pointer relative touch-pan-y"
+        >
+            {/* Background Action Indicator */}
+            {status !== 'ready' && (
+                <div className={`absolute inset-0 ${actionColor} rounded-[1.8rem] flex items-center justify-start px-8 text-white font-black uppercase tracking-widest z-0`}>
+                    <div className="flex items-center gap-2">
+                        <ChevronRight className="w-6 h-6 animate-pulse" />
+                        {actionLabel}
+                    </div>
+                </div>
+            )}
+
+            {/* Foreground Card */}
+            <div className="relative bg-white z-10 p-5 rounded-[1.8rem] shadow-sm hover:shadow-md border border-slate-100 transition-all active:scale-[0.98]">
+                <TicketCardContent ticket={ticket} />
+            </div>
+        </motion.div>
+    );
+}
+
+// --- TICKET CARD CONTENT ---
+function TicketCardContent({ ticket }: { ticket: KitchenTicket }) {
     const [elapsed, setElapsed] = useState("");
     const [isLate, setIsLate] = useState(false);
 
@@ -527,75 +565,50 @@ function TicketCard({ ticket, onItemClick }: { ticket: KitchenTicket, onItemClic
 
     const readyItems = ticket.order_items.filter(i => i.status === 'ready' || i.status === 'served').length;
     const totalItems = ticket.order_items.length;
-    const progress = Math.round((readyItems / totalItems) * 100);
+    const progress = totalItems > 0 ? Math.round((readyItems / totalItems) * 100) : 0;
+    const hasNotes = ticket.order_items.some(i => i.notes);
 
     return (
-        <div className={`bg-white p-6 rounded-[2.5rem] shadow-lg shadow-slate-200/50 group relative overflow-hidden transition-all hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98] border-2 ${isLate ? 'border-red-100 ring-2 ring-red-50' : 'border-transparent'}`}>
-            
-            {/* SERVED STAMP OVERLAY */}
-            {ticket.status === 'served' && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 backdrop-blur-[2px]">
-                    <motion.div 
-                        initial={{ scale: 2, opacity: 0, rotate: -45 }} 
-                        animate={{ scale: 1, opacity: 1, rotate: -15 }}
-                        className="border-8 border-emerald-500 text-emerald-500 font-black text-5xl px-4 py-2 rounded-2xl opacity-50 uppercase tracking-tighter"
-                    >
-                        SERVED
-                    </motion.div>
-                </div>
-            )}
-
+        <div className={`w-full ${isLate ? 'ring-2 ring-red-100 rounded-[1.8rem]' : ''}`}>
             {/* Header */}
-            <div className="flex justify-between items-start mb-5">
-                <div>
-                    <span className="text-2xl font-black text-slate-900 block leading-none tracking-tight">{ticket.table_name}</span>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 block">Ticket #{ticket.id.slice(0,4)}</span>
+            <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 rounded-xl"><GripVertical className="w-4 h-4 text-slate-300" /></div>
+                    <div>
+                        <span className="text-xl font-black text-slate-900 block leading-none">{ticket.table_name}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1 block">#{ticket.id.slice(0,4)}</span>
+                    </div>
                 </div>
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black shadow-inner ${isLate ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
-                    <Clock className="w-3.5 h-3.5" /> {elapsed}
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black ${isLate ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                    <Clock className="w-3 h-3" /> {elapsed}
                 </div>
             </div>
 
-            {/* Items */}
-            <div className="space-y-3 mb-4" onClick={(e) => e.stopPropagation()}>
-                {ticket.order_items.map((item, i) => (
-                    <div 
-                        key={i} 
-                        // onItemClick is empty here to prevent accidental clicks
-                        onClick={() => onItemClick(item, ticket.id)}
-                        className={`flex justify-between items-center text-sm p-3 rounded-2xl transition-all border-2 ${
-                            item.status === 'ready' ? 'bg-emerald-50 border-emerald-100 text-emerald-900 shadow-sm' :
-                            item.status === 'cooking' ? 'bg-orange-50 border-orange-100 text-orange-900 shadow-sm' :
-                            'bg-slate-50 border-transparent hover:bg-white hover:border-slate-100'
-                        }`}
-                    >
-                        <span className="flex gap-4 items-center">
-                            <span className="font-black text-slate-600 bg-white shadow-sm border border-slate-100 w-7 h-7 flex items-center justify-center rounded-lg text-xs">{item.quantity}</span> 
-                            <span className="font-bold tracking-tight">{item.name}</span>
-                        </span>
-                        {item.status === 'cooking' && <Flame className="w-4 h-4 text-orange-500 animate-pulse" />}
-                        {item.status === 'ready' && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+            {/* Item Summary */}
+            <div className="space-y-1.5 mb-4 pl-2">
+                {ticket.order_items.slice(0, 3).map((item, i) => (
+                    <div key={i} className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-600 bg-slate-50 px-1.5 rounded-md min-w-[20px] text-center">{item.quantity}</span> 
+                            <span className={`font-bold truncate max-w-[120px] ${item.status === 'ready' || item.status === 'served' ? 'text-emerald-600 line-through' : 'text-slate-700'}`}>{item.name}</span>
+                        </div>
+                        {item.notes && <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
                     </div>
                 ))}
+                {ticket.order_items.length > 3 && <p className="text-[10px] text-slate-400 font-bold pl-1">+ {ticket.order_items.length - 3} more items...</p>}
             </div>
 
-            {/* Progress Footer */}
-            <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                <div className="flex gap-2">
-                    {ticket.order_items.some(i => i.notes) && (
-                        <div className="text-[10px] font-bold text-white bg-red-500 px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-lg shadow-red-500/30">
-                            <AlertCircle className="w-3 h-3" /> NOTE
-                        </div>
-                    )}
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+                {hasNotes ? (
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md">
+                        <AlertTriangle className="w-3 h-3" /> NOTE
+                    </div>
+                ) : <div />}
+                
+                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }} />
                 </div>
-                {/* Visual Progress */}
-                <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-slate-900 transition-all duration-700 ease-out" style={{ width: `${progress}%` }} />
-                </div>
-            </div>
-            
-            <div className="absolute top-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Maximize2 className="w-5 h-5 text-slate-300" />
             </div>
         </div>
     )

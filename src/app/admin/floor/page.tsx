@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner";
 import { getTables, saveTableLayout, deleteTable } from "@/app/actions/floor";
 import { getDashboardData } from "@/app/actions/dashboard"; 
-import { getPOSStats } from "@/app/actions/pos"; // Using POS stats for live order data
+import { getPOSStats } from "@/app/actions/pos"; 
 import { v4 as uuidv4 } from 'uuid';
 
 // --- TYPES ---
@@ -36,7 +36,7 @@ const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP', { ma
 export default function FloorPlanPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [tables, setTables] = useState<TableData[]>([]);
-  const [allOrders, setAllOrders] = useState<any[]>([]); // Store Live Orders
+  const [allOrders, setAllOrders] = useState<any[]>([]); 
   
   // --- STATE ---
   const [sections, setSections] = useState<string[]>(["Main Hall"]);
@@ -46,7 +46,7 @@ export default function FloorPlanPage() {
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
-  const [viewTable, setViewTable] = useState<TableData | null>(null); // For viewing order details
+  const [viewTable, setViewTable] = useState<TableData | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,6 +57,13 @@ export default function FloorPlanPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // --- CRITICAL FIX: REF TO TRACK EDIT MODE IN INTERVAL ---
+  const editModeRef = useRef(isEditMode);
+
+  useEffect(() => {
+      editModeRef.current = isEditMode;
+  }, [isEditMode]);
 
   // --- INIT ---
   useEffect(() => {
@@ -73,6 +80,9 @@ export default function FloorPlanPage() {
   }, []);
 
   async function loadRealData() {
+      // FIX: IF EDITING, DO NOT OVERWRITE LOCAL STATE WITH DB DATA
+      if (editModeRef.current) return;
+
       try {
         const [dashRes, posRes] = await Promise.all([ 
             getDashboardData(), 
@@ -85,7 +95,6 @@ export default function FloorPlanPage() {
             const rawTables = posRes.stats.tables;
             const ordersList = posRes.stats.orders_list || [];
             
-            // Store raw orders for details view
             setAllOrders(ordersList);
 
             // Merge & Sync Status
@@ -111,9 +120,16 @@ export default function FloorPlanPage() {
 
             // Extract Sections
             const loadedSections = Array.from(new Set(liveTables.map((t: any) => t.section))).sort() as string[];
-            if (loadedSections.length > 0 && sections.length <= 1) {
-                setSections(loadedSections);
-                setCurrentSection(loadedSections[0]);
+            
+            // Only update sections if we found new ones from DB, preserving current Selection if valid
+            if (loadedSections.length > 0) {
+                // Ensure Main Hall is always there if list empty
+                if(loadedSections.length === 0 && sections.length === 0) setSections(["Main Hall"]);
+                else setSections(prev => {
+                    // Merge unique sections
+                    const unique = Array.from(new Set([...prev, ...loadedSections]));
+                    return unique.length > 0 ? unique : ["Main Hall"];
+                });
             }
         }
       } catch (e) {
@@ -162,11 +178,16 @@ export default function FloorPlanPage() {
   // --- ACTIONS ---
   const handleAddSection = () => {
       if(!newSectionName.trim()) return;
-      if(sections.includes(newSectionName)) return toast.error("Floor exists");
-      setSections([...sections, newSectionName]);
+      if(sections.includes(newSectionName)) {
+          toast.error("Floor exists");
+          return;
+      }
+      const updatedSections = [...sections, newSectionName];
+      setSections(updatedSections);
       setCurrentSection(newSectionName);
       setIsAddingSection(false);
       setNewSectionName("");
+      toast.success(`Created ${newSectionName}`);
   };
 
   const addTable = (shape: 'square' | 'round' | 'rectangle') => {
@@ -217,15 +238,19 @@ export default function FloorPlanPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    // 1. Delete removed tables
     if(deletedIds.length > 0) {
         await Promise.all(deletedIds.map(id => deleteTable(id)));
         setDeletedIds([]); 
     }
+    // 2. Save current tables
     const res = await saveTableLayout(tables);
     if(res.success) {
       toast.success("Layout Saved");
       setIsEditMode(false);
       setSelectedTableId(null);
+      // Force reload to confirm DB state matches local
+      setTimeout(loadRealData, 500); 
     } else {
       toast.error("Save Failed");
     }
@@ -257,8 +282,12 @@ export default function FloorPlanPage() {
                     {sections.map(section => (
                         <button key={section} onClick={() => { setCurrentSection(section); setSelectedTableId(null); setViewTable(null); }} className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-all border ${currentSection === section ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{section}</button>
                     ))}
-                    <button onClick={() => isAddingSection ? handleAddSection() : setIsAddingSection(true)} className="min-w-[36px] w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition-colors border border-transparent hover:border-emerald-200"><Plus className="w-5 h-5" /></button>
-                    {isAddingSection && <input autoFocus value={newSectionName} onChange={e => setNewSectionName(e.target.value)} onBlur={() => setIsAddingSection(false)} onKeyDown={e => e.key === 'Enter' && handleAddSection()} className="w-28 px-3 py-1.5 text-sm border rounded-xl shadow-inner" placeholder="Name..." />}
+                    {isEditMode && (
+                        <>
+                            <button onClick={() => isAddingSection ? handleAddSection() : setIsAddingSection(true)} className="min-w-[36px] w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors border border-emerald-200"><Plus className="w-5 h-5" /></button>
+                            {isAddingSection && <input autoFocus value={newSectionName} onChange={e => setNewSectionName(e.target.value)} onBlur={handleAddSection} onKeyDown={e => e.key === 'Enter' && handleAddSection()} className="w-28 px-3 py-1.5 text-sm border-2 border-emerald-500 rounded-xl shadow-lg animate-in fade-in zoom-in" placeholder="Name..." />}
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -271,7 +300,7 @@ export default function FloorPlanPage() {
                                 <button onClick={() => addTable('round')} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 hover:text-slate-900 transition-colors"><Circle className="w-5 h-5" /></button>
                                 <button onClick={() => addTable('rectangle')} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 hover:text-slate-900 transition-colors"><MonitorSmartphone className="w-5 h-5 rotate-90" /></button>
                             </div>
-                            <button onClick={() => { setIsEditMode(false); setSelectedTableId(null); }} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
+                            <button onClick={() => { setIsEditMode(false); setSelectedTableId(null); loadRealData(); }} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
                             <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/30 flex items-center gap-2 transition-all active:scale-95">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>
                         </motion.div>
                     ) : (
