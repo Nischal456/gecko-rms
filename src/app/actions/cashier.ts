@@ -281,8 +281,13 @@ export async function serveOrder(orderId: string, tableId: string) {
     const currentOrders = safeParse(log.orders_data);
     
     const updatedOrders = currentOrders.map((order: any) => {
-        if (order.id === orderId || order.tbl === tableId) {
-            const newItems = (order.items || []).map((i:any) => ({...i, status: 'served'}));
+        // CRITICAL FIX: Only serve if the order is not already cancelled, paid, or completed
+        if ((order.id === orderId || order.tbl === tableId) && !['cancelled', 'paid', 'completed'].includes(order.status)) {
+            const newItems = (order.items || []).map((i:any) => {
+                // Ensure cancelled items within the order stay cancelled
+                if (i.status === 'cancelled') return i;
+                return { ...i, status: 'served' };
+            });
             return { ...order, status: 'served', items: newItems };
         }
         return order;
@@ -311,8 +316,13 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     currentOrders.forEach((order: any) => {
         if (order.tbl === tableId && !['cancelled', 'completed', 'paid'].includes(order.status)) {
             found = true;
+            
+            // CRITICAL FIX: Uses the exact order ID as the Invoice / Bill Number
+            const displayBillNo = order.bill_no || order.id.slice(-6).toUpperCase();
+
             newHistoryItems.push({
-                invoice_no: `INV-${Date.now().toString().slice(-6)}`,
+                invoice_no: displayBillNo,
+                bill_no: displayBillNo, 
                 date: new Date().toISOString(),
                 table_no: tableId,
                 restaurant_name: tenantInfo?.name,

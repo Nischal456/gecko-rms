@@ -8,7 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Calendar, Crown, 
   Bell, ChefHat, RefreshCcw, PlusCircle, ZoomIn, ZoomOut, 
   LayoutDashboard, CloudSun, IndianRupee, Trash2, Sparkles,
-  Utensils, Coffee, ArrowRight, LogOut, Ban, AlertTriangle, CheckCircle2, RotateCcw, XCircle
+  Utensils, Coffee, ArrowRight, LogOut, Ban, AlertTriangle, CheckCircle2, RotateCcw, XCircle, Home
 } from "lucide-react";
 import { getWaiterDashboardData, cleanTable, markOrderServed } from "@/app/actions/waiter"; 
 import { getPOSStats } from "@/app/actions/pos"; 
@@ -19,7 +19,6 @@ import NepaliDate from 'nepali-date-converter';
 import { toast } from "sonner";
 
 // --- SOUND CONSTANTS ---
-// Only keeping the notification sound for Ready Orders
 const SOUND_NOTIFICATION = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- UTILS ---
@@ -50,38 +49,87 @@ function SystemLoader() {
 }
 
 function FloatingDock({ router, dockStatus }: any) {
-    const handleLogout = async () => {
-        if(confirm("End Shift & Sign Out?")) {
-            await logoutStaff();
-            window.location.href = "/staff/login";
-        }
+    // --- PREMIUM SONNER LOGOUT TOAST ---
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">End Shift & Sign Out?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to securely log out of the Waiter Hub?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Ending shift...");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Sign Out
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
     };
-
-    let indicator = null;
-    if (dockStatus?.hasReady) {
-        indicator = <span className="absolute top-2 right-2 flex h-3 w-3 z-10"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900"></span></span>;
-    } else if (dockStatus?.hasCooking) {
-        indicator = <span className="absolute top-2 right-2 flex h-3 w-3 z-10"><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500 border-2 border-slate-900"></span></span>;
-    }
 
     return (
         <motion.div 
-            initial={{ y: 100, x: "-50%", opacity: 0 }}
-            animate={{ y: 0, x: "-50%", opacity: 1 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex justify-center w-auto pointer-events-none px-4"
+            initial={{ y: 100, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+            className="md:hidden fixed bottom-[90px] left-0 right-0 mx-auto w-[92%] max-w-[400px] z-[100] bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_20px_50px_-10px_rgba(0,200,83,0.15)] rounded-full p-1.5 flex justify-between items-center"
         >
-            <div className="pointer-events-auto flex items-center gap-2 md:gap-3 p-2.5 bg-slate-900/90 backdrop-blur-3xl border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/5 scale-[0.90] md:scale-100 origin-bottom transition-transform relative">
-                <button onClick={() => router.push('/staff/waiter/new-order')} className="flex items-center gap-2 pl-5 pr-6 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-full font-black text-xs md:text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-emerald-500/25 group whitespace-nowrap">
-                    <PlusCircle className="w-5 h-5" /> <span>New Order</span>
-                </button>
-                <div className="w-[1px] h-8 bg-white/10 mx-1" />
-                <button onClick={() => router.push('/staff/waiter/orders')} className="relative p-3.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-all hover:scale-110 active:scale-90 group">
-                    <Clock className="w-6 h-6" /> {indicator}
-                </button>
-                <button onClick={() => router.push('/staff/waiter')} className="relative p-3.5 text-emerald-400 bg-white/5 hover:bg-white/10 rounded-full transition-all hover:scale-110 active:scale-90 group border border-emerald-500/30"><LayoutDashboard className="w-6 h-6" /></button>
-                <div className="w-[1px] h-8 bg-white/10 mx-1" />
-                <button onClick={handleLogout} className="relative p-3.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-all hover:scale-110 active:scale-90 group"><LogOut className="w-6 h-6" /></button>
-            </div>
+            {/* 1. Home (Active) */}
+            <button onClick={() => router.push('/staff/waiter')} className="flex flex-col items-center justify-center w-[22%] h-[52px] rounded-full text-emerald-600 bg-emerald-50 shadow-sm transition-all group">
+                <Home className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
+                <span className="text-[8px] font-bold uppercase tracking-widest">Home</span>
+            </button>
+            
+            {/* 2. Active Orders */}
+            <button onClick={() => router.push('/staff/waiter/orders')} className="relative flex flex-col items-center justify-center w-[22%] h-[52px] rounded-full text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all group">
+                <Clock className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
+                <span className="text-[8px] font-bold uppercase tracking-widest">Orders</span>
+                
+                {/* Smart Dots */}
+                {dockStatus?.hasReady && (
+                    <span className="absolute top-2 right-4 flex h-2.5 w-2.5 z-10">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                    </span>
+                )}
+                {dockStatus?.hasCooking && !dockStatus?.hasReady && (
+                    <span className="absolute top-2 right-4 flex h-2.5 w-2.5 z-10">
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500 border border-white"></span>
+                    </span>
+                )}
+            </button>
+
+            {/* 3. New Order (Prominent Primary Action) */}
+            <button onClick={() => router.push('/staff/waiter/new-order')} className="flex flex-col items-center justify-center w-[34%] h-[52px] rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30 hover:from-emerald-400 hover:to-emerald-500 transition-all group active:scale-95 border border-emerald-400/50">
+                <PlusCircle className="w-[20px] h-[20px] mb-0.5 group-hover:scale-110 transition-transform" />
+                <span className="text-[9px] font-black uppercase tracking-widest drop-shadow-sm">New Order</span>
+            </button>
+
+            {/* 4. Logout */}
+            <button onClick={handleLogout} className="flex flex-col items-center justify-center w-[22%] h-[52px] rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all group">
+                <LogOut className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
+                <span className="text-[8px] font-bold uppercase tracking-widest">Exit</span>
+            </button>
         </motion.div>
     )
 }
@@ -107,22 +155,6 @@ function PremiumDateCard() {
     )
 }
 
-function ActionCard({ title, desc, icon: Icon, onClick, delay }: any) {
-    return (
-        <motion.button 
-            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay }} onClick={onClick}
-            className="flex flex-col items-center justify-center text-center bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg hover:border-emerald-200 hover:-translate-y-1 transition-all group relative overflow-hidden h-40 w-full"
-        >
-            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-white to-emerald-50/50`} />
-            <div className={`w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-white group-hover:shadow-md transition-all shadow-sm relative z-10`}>
-                <Icon className={`w-7 h-7 text-slate-600 group-hover:text-emerald-600 transition-colors`} />
-            </div>
-            <h3 className="font-black text-slate-900 text-sm relative z-10 group-hover:text-emerald-700 transition-colors">{title}</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 relative z-10">{desc}</p>
-        </motion.button>
-    )
-}
-
 function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     const isPositive = trend >= 0;
     const themeColor = color === 'blue' ? 'text-blue-600 bg-blue-50' : color === 'orange' ? 'text-orange-600 bg-orange-50' : color === 'red' ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50';
@@ -137,7 +169,6 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     )
 }
 
-// --- NEW COMPONENT: UNAVAILABLE ITEMS HERO CARD ---
 function UnavailableHeroCard({ items, delay }: any) {
     return (
         <motion.div 
@@ -167,7 +198,6 @@ function UnavailableHeroCard({ items, delay }: any) {
                     </div>
                 )}
             </div>
-            {/* Background Blob */}
             <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-red-100 blur-2xl opacity-50 pointer-events-none" />
         </motion.div>
     )
@@ -250,7 +280,6 @@ export default function WaiterDashboard() {
   const [tenant, setTenant] = useState<any>(null);
   const [staff, setStaff] = useState<any>({ name: "Team" });
   
-  // STATS
   const [stats, setStats] = useState({ mySales: 0, tablesServed: 0, occupiedCount: 0, vacantCount: 0 });
   const [tables, setTables] = useState<any[]>([]);
   const [sections, setSections] = useState<string[]>(["All"]); 
@@ -258,7 +287,6 @@ export default function WaiterDashboard() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [disabledItems, setDisabledItems] = useState<any[]>([]); 
   
-  // VIEWPORT
   const [scale, setScale] = useState(0.8);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -266,7 +294,6 @@ export default function WaiterDashboard() {
   const [greeting, setGreeting] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   
-  // ALERTS (Only for Ready)
   const [topAlert, setTopAlert] = useState<{msg: string} | null>(null);
   const [dockStatus, setDockStatus] = useState({ hasReady: false, hasCooking: false });
   const lastOrderCount = useRef(0);
@@ -282,7 +309,6 @@ export default function WaiterDashboard() {
     return () => { clearInterval(timer); clearInterval(dataTimer); };
   }, []);
 
-  // Auto-Dismiss Top Alert
   useEffect(() => {
     if(topAlert) {
         const timer = setTimeout(() => setTopAlert(null), 5000); 
@@ -306,7 +332,6 @@ export default function WaiterDashboard() {
             setDisabledItems(waiterRes.disabledItems || []);
             setNotifications(waiterRes.notifications || []);
             
-            // --- SOUND LOGIC (READY ORDERS ONLY) ---
             (waiterRes.notifications || []).forEach((n: any) => {
                 if (n.type === 'kitchen' && !notifiedReadyIds.current.has(n.id)) {
                     setTopAlert({ msg: `${n.title} for ${n.desc}` });
@@ -360,7 +385,7 @@ export default function WaiterDashboard() {
   };
 
   const handleCleanTable = async (tableName: string) => {
-      if(!confirm(`Table ${tableName} Cleaned & Free?`)) return;
+      if(!window.confirm(`Table ${tableName} Cleaned & Free?`)) return;
       setTables(prev => prev.map(t => t.label === tableName ? { ...t, status: "available" } : t));
       await cleanTable(tableName);
       toast.success(`Table ${tableName} is now Free`);
@@ -368,7 +393,6 @@ export default function WaiterDashboard() {
   };
 
   const handleServe = async (orderId: string, tableLabel: string) => {
-      // Optimistic UI
       setNotifications(prev => prev.filter(n => n.id !== orderId));
       setTables(prev => prev.map(t => t.label === tableLabel ? { ...t, status: "occupied" } : t)); 
       
@@ -378,16 +402,16 @@ export default function WaiterDashboard() {
           loadAllData();
       } else {
           toast.error("Failed to mark as served");
-          loadAllData(); // Revert on failure
+          loadAllData(); 
       }
   };
 
   const firstName = staff.name ? staff.name.split(' ')[0] : "Team";
   
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
+    <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
       
-      {/* ALERT BANNER (READY ORDER ONLY) */}
+      {/* ALERT BANNER */}
       <AnimatePresence>
         {topAlert && (
             <motion.div 
@@ -412,7 +436,9 @@ export default function WaiterDashboard() {
       {!loading && (
         <>
             <Sidebar tenantName={tenant?.name} tenantCode={tenant?.code} logo={tenant?.logo_url} />
-            <main className="flex-1 flex flex-col h-full relative pb-0">
+            
+            {/* pb-[160px] guarantees the lifted mobile dock never blocks scrolling content */}
+            <main className="flex-1 flex flex-col h-full relative pb-[160px] lg:pb-0 overflow-hidden">
                 <header className="px-6 md:px-8 py-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-white/90 backdrop-blur-xl sticky top-0 z-30 border-b border-slate-200/80 shadow-sm flex-shrink-0 gap-3">
                     <div>
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-emerald-600 font-bold text-xs mb-1 uppercase tracking-wider">
@@ -437,8 +463,7 @@ export default function WaiterDashboard() {
                     <div className="hidden md:block"><PremiumDateCard /></div>
                 </header>
 
-                {/* HERO METRICS - UPDATED: 4th Card is now the List View */}
-                <div className="px-6 md:px-8 pt-6 pb-2 grid grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
+                <div className="px-6 md:px-8 pt-6 pb-2 grid grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0 overflow-y-auto">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[2.5rem] p-5 text-white shadow-2xl col-span-2 lg:col-span-1">
                         <div className="flex items-center justify-between mb-2">
                             <span className="flex items-center gap-2 text-emerald-100 text-xs font-bold uppercase tracking-widest"><IndianRupee className="w-4 h-4" /> My Sales</span>
@@ -447,16 +472,14 @@ export default function WaiterDashboard() {
                     </motion.div>
                     <MetricCard title="Vacant" value={stats.vacantCount} trend={0} icon={LayoutDashboard} color="blue" delay={0.2} />
                     <MetricCard title="Occupied" value={stats.occupiedCount} trend={0} icon={Crown} color="orange" delay={0.3} />
-                    
-                    {/* NEW: UNAVAILABLE ITEMS LIST (REPLACES THE NUMBER CARD) */}
                     <UnavailableHeroCard items={disabledItems} delay={0.4} />
                 </div>
 
                 {/* MAIN CONTENT GRID */}
-                <div className="flex-1 overflow-y-auto lg:overflow-hidden relative grid grid-cols-1 lg:grid-cols-3 p-6 md:px-8 gap-6 pb-24 lg:pb-6">
+                <div className="flex-1 overflow-y-auto lg:overflow-hidden relative grid grid-cols-1 lg:grid-cols-3 p-6 md:px-8 gap-6 pb-6 scroll-smooth">
                     
-                    {/* LEFT: MAP (Fixed Height on Mobile) */}
-                    <div className="lg:col-span-2 relative bg-[#F1F5F9] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-inner h-[450px] lg:h-full flex flex-col order-1">
+                    {/* LEFT: MAP (Min height ensures it doesn't crush on mobile, but stays scrollable) */}
+                    <div className="lg:col-span-2 relative bg-[#F1F5F9] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-inner min-h-[450px] lg:h-full flex flex-col order-1 shrink-0">
                         <div className="absolute top-4 left-4 z-20 flex gap-2 pointer-events-none">
                             <span className="bg-white/90 backdrop-blur px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-slate-400 shadow-sm border border-slate-100">Live Floor</span>
                         </div>
@@ -477,48 +500,44 @@ export default function WaiterDashboard() {
                         </motion.div>
                     </div>
 
-                    {/* RIGHT: NOTIFICATIONS ONLY (Expanded Height) */}
-                    <div className="bg-white rounded-[2.5rem] flex flex-col border border-slate-100 shadow-sm overflow-hidden h-[500px] lg:h-full order-2">
-                        <div className="p-6 pb-0 mb-4 flex-shrink-0">
+                    {/* RIGHT: READY ORDERS (Expanded Height, Removed Extra Buttons) */}
+                    <div className="bg-white rounded-[2.5rem] flex flex-col border border-slate-100 shadow-sm overflow-hidden min-h-[500px] lg:h-full order-2 shrink-0">
+                        <div className="p-6 pb-4 flex-shrink-0 border-b border-slate-50">
                             <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
-                                <Bell className="w-5 h-5 text-orange-500" /> Ready Orders 
-                                <span className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full">{notifications.length}</span>
+                                <Bell className="w-5 h-5 text-emerald-500" /> Ready Orders 
+                                <span className="bg-emerald-500 text-white text-[10px] px-2.5 py-0.5 rounded-full shadow-sm">{notifications.length}</span>
                             </h3>
                         </div>
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar space-y-3">
-                            {notifications.length === 0 && (
+                        <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-4">
+                            {notifications.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
                                     <ChefHat className="w-12 h-12 mb-3" />
                                     <span className="text-xs font-bold uppercase tracking-widest">All Orders Served</span>
                                 </div>
-                            )}
-                            {notifications.map((n: any, i: number) => (
-                                <motion.div 
-                                    key={i}
-                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                    className="p-5 rounded-[1.5rem] bg-white border border-emerald-100 shadow-md shadow-emerald-500/5 group relative overflow-hidden flex flex-col gap-3"
-                                >
-                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500" />
-                                    <div className="flex justify-between items-start pl-2">
-                                        <div>
-                                            <p className="font-black text-slate-900 text-xl">{n.desc}</p>
-                                            <p className="text-sm text-emerald-600 mt-0.5 font-bold flex items-center gap-1"><Sparkles className="w-3 h-3" /> {n.title}</p>
-                                            <p className="text-[10px] text-slate-400 mt-1 font-bold">{n.time}</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleServe(n.id, n.table)}
-                                        className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                            ) : (
+                                notifications.map((n: any, i: number) => (
+                                    <motion.div 
+                                        key={i}
+                                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                        className="p-5 rounded-[1.5rem] bg-white border border-emerald-100 shadow-md shadow-emerald-500/5 group relative overflow-hidden flex flex-col gap-3 hover:border-emerald-300 transition-colors"
                                     >
-                                        <CheckCircle2 className="w-4 h-4" /> Mark Served
-                                    </button>
-                                </motion.div>
-                            ))}
-                        </div>
-                        
-                        <div className="p-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-3 flex-shrink-0">
-                                <ActionCard title="New Order" desc="Open POS" icon={PlusCircle} onClick={() => router.push('/staff/waiter/new-order')} delay={0} />
-                                <ActionCard title="Active Orders" desc="Status" icon={Clock} onClick={() => router.push('/staff/waiter/orders')} delay={0.1} />
+                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500" />
+                                        <div className="flex justify-between items-start pl-2">
+                                            <div>
+                                                <p className="font-black text-slate-900 text-2xl tracking-tight">{n.desc}</p>
+                                                <p className="text-sm text-emerald-600 mt-1 font-bold flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> {n.title}</p>
+                                                <p className="text-[10px] text-slate-400 mt-1.5 font-bold">{n.time}</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleServe(n.id, n.table)}
+                                            className="w-full mt-2 py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                                        >
+                                            <CheckCircle2 className="w-4 h-4" /> Mark Served
+                                        </button>
+                                    </motion.div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

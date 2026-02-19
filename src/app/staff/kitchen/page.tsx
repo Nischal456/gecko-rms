@@ -142,36 +142,73 @@ function KDSHeader({ count, latestOrderTable, onStopAlert, muted, toggleMute }: 
 }
 
 // --- DOCK (CENTERED) ---
+// --- PREMIUM KITCHEN DOCK ---
 function KitchenDock({ onRefresh }: any) {
-    const handleLogout = async () => {
-        if(confirm("End Shift?")) {
-            sessionStorage.removeItem("gecko_kitchen_init");
-            await logoutStaff();
-            window.location.href = "/staff/login";
-        }
-    }
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">Power Down Terminal?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to end your kitchen shift and sign out of KitchenOS?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Powering down terminal...");
+                            sessionStorage.removeItem("gecko_kitchen_init");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Sign Out
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
+    };
 
+    // The wrapper ensures perfect, bulletproof centering regardless of screen size
     return (
-        <motion.div 
-            initial={{ y: 100, x: "-50%", opacity: 0 }} 
-            animate={{ y: 0, x: "-50%", opacity: 1 }} 
-            className="fixed bottom-6 left-1/2 z-40 flex items-center gap-2 p-1.5 bg-slate-900/95 backdrop-blur-2xl rounded-full shadow-2xl border border-white/10 ring-1 ring-black/20"
-        >
-            <DockButton icon={<RefreshCcw className="w-5 h-5" />} onClick={onRefresh} label="Sync" />
-            <div className="w-px h-6 bg-white/20 mx-1" />
-            <DockLink href="/staff/kitchen/menu" icon={<LayoutGrid className="w-5 h-5" />} label="Menu" />
-            <DockLink href="/staff/kitchen/reports" icon={<FileBarChart className="w-5 h-5" />} label="Reports" />
-            <div className="w-px h-6 bg-white/20 mx-1" />
-            <DockButton icon={<LogOut className="w-5 h-5 text-red-400" />} onClick={handleLogout} label="Exit" />
-        </motion.div>
+        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
+            <motion.div 
+                initial={{ y: 100, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10"
+            >
+                <DockButton icon={<RefreshCcw className="w-[18px] h-[18px]" />} onClick={onRefresh} label="Sync Feed" />
+                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <DockLink href="/staff/kitchen/menu" icon={<LayoutGrid className="w-[18px] h-[18px]" />} label="Menu" />
+                <DockLink href="/staff/kitchen/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
+                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <DockButton icon={<LogOut className="w-[18px] h-[18px] text-red-400" />} onClick={handleLogout} label="Sign Out" />
+            </motion.div>
+        </div>
     )
 }
 
 function DockButton({ icon, onClick, label }: any) {
     return (
-        <button onClick={onClick} className="p-3 rounded-full bg-white/5 text-white hover:bg-white/20 active:scale-90 transition-all group relative">
-            {icon}
-            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+        <button onClick={onClick} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
+            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
+            
+            {/* Premium Tooltip */}
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
                 {label}
             </span>
         </button>
@@ -180,9 +217,11 @@ function DockButton({ icon, onClick, label }: any) {
 
 function DockLink({ href, icon, label }: any) {
     return (
-        <Link href={href} className="p-3 rounded-full bg-white/5 text-slate-300 hover:text-white hover:bg-white/20 active:scale-90 transition-all group relative">
-            {icon}
-            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
+            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
+            
+            {/* Premium Tooltip */}
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
                 {label}
             </span>
         </Link>
@@ -423,7 +462,7 @@ export default function KitchenPage() {
                                           {item.status}
                                       </button>
                                       {item.status !== 'served' && item.status !== 'ready' && (
-                                        <button onClick={(e) => { e.stopPropagation(); handleDisableItem(item.name); }} className="text-[9px] font-bold text-slate-300 hover:text-red-500 flex items-center gap-1"><Ban className="w-3 h-3" /> 86 Item</button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDisableItem(item.name); }} className="text-[9px] font-bold text-slate-300 hover:text-red-500 flex items-center gap-1"><Ban className="w-3 h-3" /> Item</button>
                                       )}
                                   </div>
                               </div>

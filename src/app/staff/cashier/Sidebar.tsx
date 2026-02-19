@@ -4,15 +4,46 @@ import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, 
 import { logoutStaff } from "@/app/actions/staff-auth";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 export default function CashierSidebar({ tenantName, tenantCode, logo, currentView, setView, hasUpdates }: any) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const handleLogout = async () => {
-    if(confirm("End Shift & Logout?")) {
-        await logoutStaff();
-        window.location.href = "/staff/login";
-    }
+  const handleLogout = () => {
+      toast.custom((t) => (
+          <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+              <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
+                      <LogOut className="w-5 h-5 ml-1" />
+                  </div>
+                  <div className="pt-0.5">
+                      <h4 className="font-black text-slate-900 text-sm tracking-tight">End Shift & Logout?</h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                          Are you sure you want to close the terminal and end your current shift?
+                      </p>
+                  </div>
+              </div>
+              <div className="flex gap-2 mt-1">
+                  <button 
+                      onClick={() => toast.dismiss(t)} 
+                      className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                  >
+                      Cancel
+                  </button>
+                  <button 
+                      onClick={async () => {
+                          toast.dismiss(t);
+                          const loadingToast = toast.loading("Ending shift...");
+                          await logoutStaff();
+                          window.location.href = "/staff/login";
+                      }} 
+                      className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                  >
+                      Yes, Logout
+                  </button>
+              </div>
+          </div>
+      ), { duration: 8000 });
   };
 
   const navItems = [

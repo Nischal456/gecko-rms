@@ -47,9 +47,17 @@ const toBS = (dateStr: string) => {
     } catch { return "---"; }
 };
 
+// --- CRITICAL FIX: ULTRA STRICT MERGE & FILTER ---
+// This guarantees cancelled items, voided items, or 0 qty items NEVER show up anywhere.
 function mergeOrderItems(items: any[]) {
     if (!items) return [];
-    return items.reduce((acc: any[], current: any) => {
+    
+    const validItems = items.filter(item => {
+        const s = (item.status || '').toLowerCase();
+        return s !== 'cancelled' && s !== 'void' && item.qty > 0;
+    });
+    
+    return validItems.reduce((acc: any[], current: any) => {
         const existing = acc.find((item: any) => item.name === current.name && item.price === current.price && item.variant === current.variant);
         if (existing) existing.qty += current.qty; else acc.push({ ...current });
         return acc;
@@ -70,6 +78,10 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
     if (!order || !data) return null;
     const mergedItems = mergeOrderItems(order.items);
     
+    // CRITICAL FIX: Recalculate exactly from valid items to avoid backend total errors
+    const actualTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const displayBillNo = order.bill_no || order.id.slice(-6).toUpperCase();
+
     return (
         <div style={{ position: 'absolute', top: 0, left: 0, height: 0, overflow: 'hidden', width: 0 }}>
             <style jsx global>{`
@@ -101,7 +113,7 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
                     <div>Tm: {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kathmandu' })}</div>
                 </div>
                 <div className="r-flex">
-                    <div>Bill: {order.id.slice(-6).toUpperCase()}</div>
+                    <div>Bill: {displayBillNo}</div>
                     <div>Tab: {order.tbl}</div>
                 </div>
                 
@@ -132,7 +144,7 @@ const ThermalReceipt = ({ data, order, customerDetails }: any) => {
                 })}
                 
                 <div className="r-divider" style={{ borderBottomStyle: 'solid', borderBottomWidth: '2px' }} />
-                <div className="r-flex r-bold" style={{ fontSize: '16px', margin: '8px 0' }}><span>TOTAL</span><span>Rs {order.total.toLocaleString()}</span></div>
+                <div className="r-flex r-bold" style={{ fontSize: '16px', margin: '8px 0' }}><span>TOTAL</span><span>Rs {actualTotal.toLocaleString()}</span></div>
                 <div className="r-divider" />
                 <div className="r-center" style={{ marginTop: '10px', fontSize: '11px', fontWeight: 'bold' }}>*** THANK YOU VISIT AGAIN ***</div>
             </div>
@@ -149,7 +161,11 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     
     const isPayable = ['served', 'payment_pending', 'ready'].includes(order.status);
     const isCancellable = order.status === 'pending';
+    
     const displayItems = mergeOrderItems(order.items);
+    
+    // CRITICAL FIX: Recalculate frontend total for accurate charging
+    const actualTotal = displayItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
     
     // FETCH DYNAMIC ACCOUNTS
     const bankAccounts = restaurant?.bank_accounts || []; 
@@ -189,7 +205,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                     </div>
                     <div className="mt-6 pt-6 border-t-2 border-dashed border-slate-200 flex justify-between items-end">
                         <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Total Due</span>
-                        <span className="text-4xl font-black text-slate-900">{formatRs(order.total)}</span>
+                        <span className="text-4xl font-black text-slate-900">{formatRs(actualTotal)}</span>
                     </div>
                 </div>
                 
@@ -236,7 +252,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                             )}
                             <button 
                                 disabled={!isPayable}
-                                onClick={() => onConfirm(table.label, order.id, method, order.total, customer)} 
+                                onClick={() => onConfirm(table.label, order.id, method, actualTotal, customer)} 
                                 className={`flex-[2] py-4 rounded-xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isPayable ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30' : 'bg-slate-300 cursor-not-allowed shadow-none'}`}
                             >
                                 {isPayable ? <><CheckCircle2 className="w-5 h-5"/> Confirm Payment</> : <><Clock className="w-5 h-5"/> Wait for Service</>}
@@ -251,10 +267,12 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
 
 // --- FLOATING DOCK (PERFECTLY CENTERED UNIVERSALLY) ---
 function FloatingDock({ setView, currentView, onPOS, loadData, hasUpdates }: any) {
-    const handleLogout = async () => { if(confirm("Logout?")) { await logoutStaff(); window.location.href = "/staff/login"; } };
+    const handleLogout = async () => { if(window.confirm("Logout?")) { await logoutStaff(); window.location.href = "/staff/login"; } };
+    
+    // Dead-centered wrapper ensures it ignores sidebars entirely
     return (
-        <motion.div initial={{ y: 100 }} animate={{ y: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto px-4">
-            <div className="flex items-center gap-3 p-2.5 bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl shadow-slate-400/20 rounded-full ring-1 ring-black/5 scale-90 md:scale-100 transition-transform hover:scale-[1.02]">
+        <div className="md:hidden fixed bottom-[85px] left-0 w-full flex justify-center z-[100] pointer-events-none px-4">
+            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} className="pointer-events-auto flex items-center gap-3 p-2 bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_12px_40px_-10px_rgba(0,200,83,0.25)] rounded-full ring-1 ring-black/5">
                 <button onClick={() => setView('terminal')} className={`p-3.5 rounded-full transition-all duration-300 ${currentView==='terminal' ? 'bg-slate-900 text-white shadow-lg' : 'hover:bg-slate-100 text-slate-500'}`}><LayoutDashboard className="w-5 h-5"/></button>
                 <button onClick={onPOS} className="p-3.5 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-400 hover:scale-110 transition-all"><Plus className="w-6 h-6"/></button>
                 
@@ -267,8 +285,8 @@ function FloatingDock({ setView, currentView, onPOS, loadData, hasUpdates }: any
                 <div className="w-[1px] h-8 bg-slate-300 mx-1" />
                 <button onClick={loadData} className="p-3.5 hover:bg-slate-100 text-slate-600 rounded-full transition-all active:rotate-180"><RefreshCcw className="w-5 h-5"/></button>
                 <button onClick={handleLogout} className="p-3.5 hover:bg-red-50 text-red-500 rounded-full transition-all"><LogOut className="w-5 h-5"/></button>
-            </div>
-        </motion.div>
+            </motion.div>
+        </div>
     )
 }
 
@@ -329,13 +347,12 @@ export default function CashierDashboard() {
   };
 
   const handleCancelOrder = async (orderId: string, tableId: string) => {
-      // Calls server action and returns result to Child
       const res = await cancelOrder(orderId, tableId);
       if(res.success) { 
           loadData();
           setSelectedTable(null);
       }
-      return res; // Must return res for ActiveOrders to handle UI
+      return res; 
   };
 
   const handleServeOrder = async (orderId: string, tableId: string) => {
@@ -344,12 +361,11 @@ export default function CashierDashboard() {
       return res;
   };
 
-  // --- CRITICAL FIX: EDIT HANDLER RECEIVES FULL ORDER OBJECT ---
   const handleEditOrder = (order: any) => {
       setPosTable(order.tbl);
       setPosOrderType(order.type || 'dine_in');
-      setExistingOrderToEdit(order); // Pass full object to POS for locked items
-      setView('pos'); // Trigger view switch
+      setExistingOrderToEdit(order); 
+      setView('pos'); 
   };
 
   const handleStartNewOrder = () => { setExistingOrderToEdit(null); setView('new_order_select'); };
@@ -385,7 +401,8 @@ export default function CashierDashboard() {
                 setView={(v: string) => { setView(v); if(v==='active_orders') setHasUpdates(false); }} 
                 hasUpdates={hasUpdates} 
             />
-            <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-16 md:pt-0 pb-20 md:pb-0">
+            
+            <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-16 md:pt-0 pb-[140px] md:pb-0">
                 {view === 'settings' ? <SettingsPage data={data} onSave={updateStoreSettings} /> : 
                  view === 'reports' ? <ReportsPage data={data} /> : 
                  view === 'active_orders' ? <ActiveOrdersView data={data} onSelectOrder={(o:any) => handleSettleClick({ label: o.tbl, currentOrder: o })} onServeOrder={handleServeOrder} onCancelOrder={handleCancelOrder} onEditOrder={handleEditOrder} /> :
@@ -427,10 +444,15 @@ export default function CashierDashboard() {
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                                     {data.activeOrders?.map((order: any, i: number) => {
                                         const isPayable = ['served', 'payment_pending'].includes(order.status);
+                                        
+                                        // CRITICAL FIX: Strictly calculate UI bill amounts
+                                        const validItems = mergeOrderItems(order.items);
+                                        const actualTotal = validItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+
                                         return (
                                             <button key={i} onClick={() => handleSettleClick({ label: order.tbl, currentOrder: order, status: order.status })} className={`w-full text-left p-4 rounded-2xl border transition-all group ${isPayable ? 'bg-emerald-50/50 border-emerald-200 hover:shadow-lg' : 'bg-slate-50 border-transparent opacity-70'}`}>
                                                 <div className="flex justify-between items-center mb-2"><span className="font-black text-slate-900 text-lg group-hover:text-emerald-600 transition-colors">Table {order.tbl}</span><span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${isPayable ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{order.status}</span></div>
-                                                <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-bold">{order.items?.length || 0} Items</span><span className="font-black text-emerald-600">{formatRs(order.total || 0)}</span></div>
+                                                <div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-bold">{validItems.length} Items</span><span className="font-black text-emerald-600">{formatRs(actualTotal)}</span></div>
                                             </button>
                                         );
                                     })}

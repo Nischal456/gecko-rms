@@ -9,9 +9,10 @@ import {
   Zap, Crown, Box, ShieldCheck, Activity, IndianRupee, Star, 
   Bell, Info, AlertTriangle, CheckCircle, Check, X, CheckCheck, 
   Globe, CloudSun, ChefHat, Map, Utensils, Wallet, FileBarChart,
-  TrendingDown, RefreshCcw, Leaf, Receipt 
+  TrendingDown, RefreshCcw, Leaf, Receipt, LogOut, Home 
 } from "lucide-react";
 import { getManagerDashboard } from "@/app/actions/manager"; 
+import { logoutStaff } from "@/app/actions/staff-auth"; 
 import { useRouter } from "next/navigation";
 import NepaliDate from 'nepali-date-converter'; 
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ function toNepaliDigits(num: number | string): string {
 const formatRs = (amount: number) => {
     return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
 };
+
 function SystemLoader() {
     return (
         <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="fixed inset-0 bg-[#F8FAFC] z-[100] flex flex-col items-center justify-center">
@@ -37,10 +39,11 @@ function SystemLoader() {
                 <motion.div animate={{ rotate: -360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="absolute inset-3 border-[3px] border-slate-200 rounded-full border-b-slate-900" />
                 <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-xl shadow-emerald-200">G</motion.div>
             </div>
-            <p className="text-emerald-800/60 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading Manager Dashboard...</p>
+            <p className="text-emerald-800/60 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading Live Dashboard...</p>
         </motion.div>
     )
 }
+
 // --- 1. PREMIUM DATE CARD ---
 function PremiumDateCard() {
     const [dateInfo, setDateInfo] = useState({ nepali: "", english: "" });
@@ -131,7 +134,6 @@ export default function ManagerPage() {
             const dashboardData: any = await getManagerDashboard(); 
             if(!dashboardData) { router.push("/staff/login"); return; }
             
-            // STRICTLY use backend data. No frontend math.
             setData(dashboardData);
         } catch (e) {
             console.error("Dashboard Load Error", e);
@@ -140,6 +142,44 @@ export default function ManagerPage() {
         setRefreshing(false);
         setLoading(false);
     }
+
+    // PREMIUM SONNER LOGOUT TOAST FOR MOBILE DOCK
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">End Shift?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to securely log out of the Operations Hub?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Securing session & signing out...");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Logout
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
+    };
 
     useEffect(() => {
         const hour = new Date().getHours();
@@ -169,7 +209,9 @@ export default function ManagerPage() {
             {!loading && data && (
                 <>
                     <Sidebar tenantName={data.tenant?.name} tenantCode={data.tenant?.code} logo={data.tenant?.logo_url} />
-                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 md:pb-8">
+                    
+                    {/* PB-[140px] ensures scrolling perfectly clears BOTH bottom nav bars */}
+                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-[140px] md:pb-8 relative">
                         
                         {/* HEADER */}
                         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
@@ -181,7 +223,7 @@ export default function ManagerPage() {
                                     <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[70vw]">
                                         Operations Hub
                                     </h1>
-                                    <button onClick={loadData} className={`p-2 rounded-xl bg-white border border-emerald-100 text-emerald-600 hover:bg-emerald-50 transition-all ${refreshing ? 'animate-spin' : ''}`}>
+                                    <button onClick={loadData} className={`hidden md:block p-2 rounded-xl bg-white border border-emerald-100 text-emerald-600 hover:bg-emerald-50 transition-all ${refreshing ? 'animate-spin' : ''}`}>
                                         <RefreshCcw className="w-4 h-4" />
                                     </button>
                                 </motion.div>
@@ -254,7 +296,7 @@ export default function ManagerPage() {
                             </motion.div>
                         </div>
 
-                        {/* METRICS & ACTIONS (Unchanged Layout) */}
+                        {/* METRICS & ACTIONS */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
                             <MetricCard title="Active Orders" value={stats.orders} trend={0} icon={ShoppingBag} color="blue" delay={0.5} />
                             <MetricCard title="Total Today" value={stats.totalOrders} trend={0} icon={Map} color="emerald" delay={0.55} />
@@ -338,8 +380,41 @@ export default function ManagerPage() {
                                 </div>
                             </motion.div>
                         </div>
-
                     </main>
+
+                    {/* REDESIGNED PREMIUM MOBILE DOCK */}
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }} 
+                        animate={{ y: 0, opacity: 1 }} 
+                        transition={{ delay: 1.2, type: "spring", stiffness: 200, damping: 20 }}
+                        className="md:hidden fixed bottom-[85px] left-0 right-0 mx-auto w-[90%] max-w-[320px] z-[100] bg-white/90 backdrop-blur-xl border border-white/50 shadow-[0_12px_40px_-10px_rgba(0,200,83,0.2)] rounded-full p-1.5 flex justify-between items-center"
+                    >
+                        {/* CHANGED TO REPORTS */}
+                        <button 
+                            onClick={() => router.push('/staff/manager/reports')} 
+                            className="flex flex-col items-center justify-center w-[30%] h-12 rounded-full text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all group"
+                        >
+                            <FileBarChart className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
+                            <span className="text-[8px] font-bold uppercase tracking-widest">Reports</span>
+                        </button>
+                        
+                        <button 
+                            onClick={loadData} 
+                            className="flex flex-col items-center justify-center w-[40%] h-12 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-100 shadow-sm hover:shadow-md transition-all relative group"
+                        >
+                            <RefreshCcw className={`w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform ${refreshing ? 'animate-spin' : ''}`} />
+                            <span className="text-[8px] font-bold uppercase tracking-widest">Reload</span>
+                            {refreshing && <span className="absolute top-1 right-1/4 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />}
+                        </button>
+
+                        <button 
+                            onClick={handleLogout} 
+                            className="flex flex-col items-center justify-center w-[30%] h-12 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all group"
+                        >
+                            <LogOut className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
+                            <span className="text-[8px] font-bold uppercase tracking-widest">Logout</span>
+                        </button>
+                    </motion.div>
                 </>
             )}
         </div>

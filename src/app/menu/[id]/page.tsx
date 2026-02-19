@@ -217,7 +217,7 @@ export default function PublicMenuPage() {
                             className="col-span-full py-24 text-center flex flex-col items-center opacity-60"
                         >
                             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                                <Sparkles className="w-10 h-10 text-slate-300" />
+                                <Utensils className="w-10 h-10 text-slate-300" />
                             </div>
                             <h3 className="font-black text-slate-900 text-xl">No dishes found</h3>
                             <p className="text-sm text-slate-500 max-w-xs mt-2 font-medium">Try checking your spelling or selecting "All Items".</p>
