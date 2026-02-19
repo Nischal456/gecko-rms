@@ -1,59 +1,54 @@
 import { NextResponse } from "next/server";
 import { Groq } from "groq-sdk";
 
-// Initialize Groq (if key exists)
+// Initialize Groq safely
 const groq = process.env.GROQ_API_KEY 
   ? new Groq({ apiKey: process.env.GROQ_API_KEY }) 
   : null;
 
 const SYSTEM_PROMPT = `
-You are **Gecko AI**, the elite Sales Engineer for **GeckoRMS** (Restaurant Management System) in Nepal.
+You are Gecko AI, the elite virtual assistant for GeckoRMS, a premium Restaurant Management System.
 
-**YOUR GOAL:**
-Impress the user with speed and intelligence, then get them to **WhatsApp us**.
+**COMPANY INFO:**
+- **Developer:** Gecko Works Nepal, a top-tier software company based in Kathmandu.
+- **Product:** GeckoRMS - The fastest, cloud-based POS system with zero lag, smart offline caching, and instant Kitchen Display Sync (KDS).
 
-**KEY FACTS:**
-- **Speed:** We are the fastest POS in Nepal (Syncs in <200ms).
-- **Offline Mode:** Works without internet.
-- **Hardware:** Works on ANY device (iPad, Android, Laptop).
-- **Pricing:** "Unbeatable value for premium features."
-- **Contact:** WhatsApp **+977 9765009755**.
+**PRICING PLANS:**
+1. **Starter Plan:** Perfect for small cafes and cloud kitchens. Basic inventory, digital QR menu, single terminal.
+2. **Standard Plan:** Ideal for high-volume restaurants. Includes Kitchen Display System (KDS), multi-terminal sync, and advanced inventory.
+3. **Business Plan:** For multi-location chains. Centralized analytics, unlimited outlets, VIP support, and custom APIs.
 
-**BEHAVIOR:**
-- Keep answers **short** (max 2-3 sentences).
-- Be enthusiastic but professional.
-- Use emojis like 🚀, ⚡, ✅ sparingly.
-- **ALWAYS** end by suggesting they book a demo on WhatsApp.
+**YOUR GOAL & TONE:**
+- Tone: Professional, ultra-fast, helpful, and welcoming (Silicon Valley meets Nepali hospitality).
+- Keep responses short and scannable (use bullet points if listing features or plans).
+- If they ask for specific prices, demo, or want to buy: Direct them to our WhatsApp VIP line: +977 9765009755.
 
-**EXAMPLE:**
-User: "How much?"
-You: "We offer custom pricing plans that fit small cafes to large chains! 🚀 To get the best quote for your specific needs, please chat with us instantly on **WhatsApp: +977 9765009755**."
+**RULES:**
+- NEVER say "I don't know". Say "I can have a human engineer explain that. Reach out on WhatsApp: +977 9765009755".
+- Don't output massive paragraphs. Be concise.
 `;
 
 export async function POST(req: Request) {
   try {
     const { message, history } = await req.json();
 
-    // --- 1. FALLBACK MODE (If API Key is missing/wrong) ---
     if (!groq) {
-        // Simulate a smart response so the site NEVER crashes
-        await new Promise(r => setTimeout(r, 600)); // Fake "thinking" time
+        // Fallback if API key is missing
+        await new Promise(r => setTimeout(r, 800)); 
         return NextResponse.json({ 
-            reply: "I'm connecting to the Gecko Neural Network... ⚡\n\nWhile I calibrate, you can get an instant VIP Demo by messaging our team on **WhatsApp: +977 9765009755**!" 
+            reply: "I am currently running in offline simulation mode. GeckoRMS offers Starter, Standard, and Business plans. For live pricing or a demo, please WhatsApp our team at **+977 9765009755**!" 
         });
     }
 
-    // --- 2. REAL AI MODE ---
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        ...history.slice(-3), // Keep context light for speed
+        ...history.slice(-4), // Keep context light for absolute maximum speed
         { role: "user", content: message },
       ],
-      // UPDATED MODEL: Fast, supported, and smart
-      model: "llama3-70b-8192", 
+      model: "llama3-8b-8192", // THE FASTEST & NEWEST WORKING MODEL
       temperature: 0.6,
-      max_tokens: 200,
+      max_tokens: 250,
     });
 
     const reply = chatCompletion.choices[0]?.message?.content || "System busy. Please WhatsApp us.";
@@ -62,9 +57,8 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("AI Error:", error);
-    // Graceful error that still looks professional
     return NextResponse.json({ 
-        reply: "My servers are currently upgrading for faster speeds! 🚀\n\nPlease message us directly on **WhatsApp: +977 9765009755** for immediate help." 
+        reply: "My servers are optimizing. 🚀 Please message us directly on **WhatsApp: +977 9765009755** for immediate help." 
     });
   }
 }

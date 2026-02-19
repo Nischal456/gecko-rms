@@ -6,22 +6,37 @@ import {
 } from "framer-motion";
 import Link from "next/link";
 import { ArrowLeft, Globe, Database, Zap, WifiOff, Laptop, CheckCircle2, Cloud, Smartphone, Lock, Scan, Cpu, Layers } from "lucide-react";
-import AIChatWidget from "@/components/landing/AIChatWidget"; // Ensure this path matches your project structure
+import AIChatWidget from "@/components/landing/AIChatWidget";
 
 // --- UTILS ---
 function cn(...classes: (string | undefined | null | false)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
-const EASE_ELASTIC = [0.25, 0.4, 0.25, 1.4] as const; // Bouncy feel
+const EASE_ELASTIC = [0.25, 0.4, 0.25, 1.4] as const; 
+
+// --- HOOK: DETECT TOUCH DEVICE FOR PERFORMANCE ---
+function useIsTouchDevice() {
+    const [isTouch, setIsTouch] = useState(false);
+    useEffect(() => {
+        setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    }, []);
+    return isTouch;
+}
 
 // --- 1. COMPONENT: MAGNETIC BACK BUTTON ---
 function BackButton() {
     const ref = useRef<HTMLAnchorElement>(null);
+    const isTouch = useIsTouchDevice();
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
+    // Spring physics for ultra-smooth return to center
+    const springX = useSpring(x, { stiffness: 150, damping: 15, mass: 0.1 });
+    const springY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
+
     const handleMouse = (e: React.MouseEvent) => {
+        if (isTouch) return; // Skip calculation on mobile
         const rect = ref.current?.getBoundingClientRect();
         if (rect) {
             x.set((e.clientX - (rect.left + rect.width / 2)) * 0.3);
@@ -30,7 +45,10 @@ function BackButton() {
     };
 
     return (
-        <motion.div style={{ x, y }} className="fixed top-6 left-6 z-50">
+        <motion.div 
+            style={{ x: springX, y: springY, willChange: "transform" }} 
+            className="fixed top-6 left-6 z-50"
+        >
             <Link 
                 href="/" 
                 ref={ref}
@@ -44,51 +62,45 @@ function BackButton() {
     );
 }
 
-// --- 2. COMPONENT: PARALLAX PARTICLES (Floating Dust) ---
+// --- 2. COMPONENT: PARALLAX PARTICLES ---
 function ParallaxParticles() {
     const { scrollYProgress } = useScroll();
-    const y1 = useTransform(scrollYProgress, [0, 1], [0, -200]);
-    const y2 = useTransform(scrollYProgress, [0, 1], [0, -400]);
-    const y3 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+    // Using springs instead of raw transform for a silkier parallax feel
+    const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
+    
+    const y1 = useTransform(smoothProgress, [0, 1], [0, -200]);
+    const y2 = useTransform(smoothProgress, [0, 1], [0, -400]);
+    const y3 = useTransform(smoothProgress, [0, 1], [0, -100]);
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
             {/* Layer 1 (Fast) */}
-            <motion.div style={{ y: y2 }} className="absolute inset-0">
+            <motion.div style={{ y: y2, willChange: "transform" }} className="absolute inset-0">
                 {[...Array(10)].map((_, i) => (
                     <div 
                         key={`l1-${i}`}
                         className="absolute w-2 h-2 bg-emerald-400/20 rounded-full blur-[1px]"
-                        style={{ 
-                            top: `${Math.random() * 100}%`, 
-                            left: `${Math.random() * 100}%`,
-                        }} 
+                        style={{ top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%` }} 
                     />
                 ))}
             </motion.div>
             {/* Layer 2 (Medium) */}
-            <motion.div style={{ y: y1 }} className="absolute inset-0">
+            <motion.div style={{ y: y1, willChange: "transform" }} className="absolute inset-0">
                 {[...Array(15)].map((_, i) => (
                     <div 
                         key={`l2-${i}`}
                         className="absolute w-1 h-1 bg-teal-500/30 rounded-full"
-                        style={{ 
-                            top: `${Math.random() * 100}%`, 
-                            left: `${Math.random() * 100}%`,
-                        }} 
+                        style={{ top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%` }} 
                     />
                 ))}
             </motion.div>
              {/* Layer 3 (Slow - Big Orbs) */}
-             <motion.div style={{ y: y3 }} className="absolute inset-0">
+             <motion.div style={{ y: y3, willChange: "transform" }} className="absolute inset-0">
                 {[...Array(3)].map((_, i) => (
                     <div 
                         key={`l3-${i}`}
                         className="absolute w-64 h-64 bg-emerald-300/5 rounded-full blur-3xl"
-                        style={{ 
-                            top: `${Math.random() * 100}%`, 
-                            left: `${Math.random() * 100}%`,
-                        }} 
+                        style={{ top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%` }} 
                     />
                 ))}
             </motion.div>
@@ -96,10 +108,11 @@ function ParallaxParticles() {
     );
 }
 
-// --- 3. COMPONENT: THE NEURAL SPINE (SVG Scroll Tracer) ---
+// --- 3. COMPONENT: THE NEURAL SPINE ---
 function NeuralSpine() {
     const { scrollYProgress } = useScroll();
     const pathLength = useSpring(scrollYProgress, { stiffness: 400, damping: 90 });
+    const dotY = useTransform(scrollYProgress, [0, 1], ["0%", "10000%"]); // Map to path height
 
     return (
         <div className="absolute left-8 md:left-1/2 top-0 bottom-0 w-20 -translate-x-1/2 pointer-events-none z-0 hidden md:block h-full">
@@ -138,9 +151,7 @@ function NeuralSpine() {
             {/* Path-Following Dot */}
             <motion.div
                 className="absolute top-0 left-1/2 -ml-[8px] -mt-[8px] w-4 h-4 bg-white border-4 border-emerald-500 rounded-full shadow-[0_0_30px_rgba(16,185,129,1)] z-10"
-                style={{ 
-                    top: useTransform(scrollYProgress, (val) => `${val * 100}%`),
-                }}
+                style={{ y: dotY, willChange: "transform" }} // GPU Accelerated Y translation
             >
                 <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-75" />
             </motion.div>
@@ -148,20 +159,24 @@ function NeuralSpine() {
     );
 }
 
-// --- 4. COMPONENT: 3D TILT CARD (The "Wow" Card) ---
+// --- 4. COMPONENT: 3D TILT CARD ---
 function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any) {
     const ref = useRef<HTMLDivElement>(null);
     const isInView = useInView(ref, { once: true, margin: "-50px" });
+    const isTouch = useIsTouchDevice();
     
-    // Mouse Motion Values
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
-    // 3D Transforms
-    const rotateX = useTransform(y, [-100, 100], [10, -10]);
-    const rotateY = useTransform(x, [-100, 100], [-10, 10]);
+    // Apply smooth springing to mouse movements
+    const mouseXSpring = useSpring(x, { stiffness: 150, damping: 20 });
+    const mouseYSpring = useSpring(y, { stiffness: 150, damping: 20 });
+
+    const rotateX = useTransform(mouseYSpring, [-100, 100], [7, -7]);
+    const rotateY = useTransform(mouseXSpring, [-100, 100], [-7, 7]);
 
     const handleMouseMove = (e: React.MouseEvent) => {
+        if (isTouch) return; // Prevent heavy JS calculation on touch scrolling
         const rect = ref.current?.getBoundingClientRect();
         if (rect) {
             const centerX = rect.width / 2;
@@ -171,7 +186,6 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
         }
     };
 
-    // Connector Line Path
     const pathD = align === "left" 
         ? "M 100 20 C 50 20, 50 80, 0 80" 
         : "M 0 20 C 50 20, 50 80, 100 80";
@@ -179,10 +193,8 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
     return (
         <div className={`relative flex items-center mb-40 ${align === "left" ? "justify-start md:pr-24" : "justify-end md:pl-24"} pl-16 md:pl-0 perspective-1000`}>
             
-            {/* The Spine Node */}
             <div className="absolute left-8 md:left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-4 border-emerald-500 rounded-full z-10 hidden md:block shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
 
-            {/* The Drawing Connector */}
             <div className={`absolute top-10 ${align === "left" ? "right-[-50px] md:right-[-100px]" : "left-[-50px] md:left-[-100px]"} w-[50px] md:w-[100px] h-[100px] pointer-events-none hidden md:block`}>
                 <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <motion.path
@@ -197,31 +209,37 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
                 </svg>
             </div>
 
-            {/* The 3D Card */}
             <motion.div
                 ref={ref}
-                style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+                style={{ 
+                    rotateX: isTouch ? 0 : rotateX, 
+                    rotateY: isTouch ? 0 : rotateY, 
+                    transformStyle: "preserve-3d",
+                    willChange: "transform"
+                }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={() => { x.set(0); y.set(0); }}
-                initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
                 whileInView={{ opacity: 1, y: 0, scale: 1 }}
                 viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.8, type: "spring", bounce: 0.4 }}
+                transition={{ duration: 0.6, type: "spring", bounce: 0.3 }}
                 className="group relative border border-white/60 bg-white/80 backdrop-blur-xl rounded-[2.5rem] p-10 w-full md:w-[48%] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.2)] transition-shadow duration-500 z-10"
             >
-                {/* Spotlight Effect */}
-                <motion.div
-                    className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition duration-500 group-hover:opacity-100"
-                    style={{
-                        background: useMotionTemplate`
-                            radial-gradient(
-                                600px circle at ${x}px ${y}px,
-                                rgba(16, 185, 129, 0.15),
-                                transparent 80%
-                            )
-                        `,
-                    }}
-                />
+                {/* Spotlight Effect (Disabled on mobile for performance) */}
+                {!isTouch && (
+                    <motion.div
+                        className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition duration-500 group-hover:opacity-100"
+                        style={{
+                            background: useMotionTemplate`
+                                radial-gradient(
+                                    600px circle at ${mouseXSpring}px ${mouseYSpring}px,
+                                    rgba(16, 185, 129, 0.12),
+                                    transparent 80%
+                                )
+                            `,
+                        }}
+                    />
+                )}
                 
                 <div style={{ transform: "translateZ(50px)" }} className="relative z-10">
                     <div className="flex justify-between items-start mb-8">
@@ -239,16 +257,16 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
     );
 }
 
-// --- 5. COMPONENT: RADAR SCAN (For Tech Grid) ---
+// --- 5. COMPONENT: RADAR SCAN ---
 function RadarScan() {
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[3rem]">
+            {/* GPU Accelerated Translation instead of animating 'top' layout property */}
             <motion.div 
-                className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/10 to-transparent w-full h-[50%]"
-                animate={{ top: ["-50%", "150%"] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="absolute top-0 left-0 bg-gradient-to-b from-transparent via-emerald-500/10 to-transparent w-full h-[50%] will-change-transform"
+                animate={{ y: ["-100%", "300%"] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
             />
-            {/* Grid Lines */}
             <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20" />
         </div>
     )
@@ -277,7 +295,6 @@ export default function FeaturesPage() {
                         <span className="block">Zero Hardware.</span>
                         <span className="relative inline-block text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-600 pb-4">
                             100% Web.
-                            {/* Sketch Underline */}
                             <svg className="absolute -bottom-2 left-0 w-full h-6 overflow-visible" viewBox="0 0 100 10" preserveAspectRatio="none">
                                 <motion.path
                                     d="M0 5 Q 50 15 100 5"
@@ -304,11 +321,10 @@ export default function FeaturesPage() {
                 </div>
             </section>
 
-            {/* --- TIMELINE SECTION (The Neural Spine) --- */}
+            {/* --- TIMELINE SECTION --- */}
             <section className="relative py-20 pb-40 px-6 max-w-7xl mx-auto">
                 <NeuralSpine />
 
-                {/* STEP 1 */}
                 <TiltFeatureCard 
                     step="01"
                     title="Browser Native"
@@ -317,7 +333,6 @@ export default function FeaturesPage() {
                     align="left"
                 />
 
-                {/* STEP 2 */}
                 <TiltFeatureCard 
                     step="02"
                     title="Menu Cloud Sync"
@@ -326,7 +341,6 @@ export default function FeaturesPage() {
                     align="right"
                 />
 
-                {/* STEP 3 */}
                 <TiltFeatureCard 
                     step="03"
                     title="Kitchen Direct"
@@ -336,7 +350,7 @@ export default function FeaturesPage() {
                 />
             </section>
 
-            {/* --- TECH SPECS GRID (Radar Effect) --- */}
+            {/* --- TECH SPECS GRID --- */}
             <section className="bg-slate-950 py-40 relative overflow-hidden">
                 <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] bg-emerald-500/10 rounded-full blur-[150px]" />
@@ -374,8 +388,8 @@ export default function FeaturesPage() {
                                 key={i}
                                 initial={{ opacity: 0, y: 30 }}
                                 whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.15 }}
+                                viewport={{ once: true, margin: "50px" }}
+                                transition={{ delay: i * 0.1, type: "spring", stiffness: 100 }}
                                 className="bg-white/5 backdrop-blur-xl border border-white/10 p-10 rounded-[2.5rem] hover:bg-white/10 transition-colors group relative overflow-hidden"
                             >
                                 <RadarScan />
@@ -390,7 +404,7 @@ export default function FeaturesPage() {
                 </div>
             </section>
 
-            {/* --- FAQ SECTION (Progressive Reveal) --- */}
+            {/* --- FAQ SECTION --- */}
             <section className="py-32 px-6 max-w-4xl mx-auto relative">
                 <div className="text-center mb-20">
                     <h2 className="text-4xl font-black text-slate-900">Common Questions</h2>
@@ -404,9 +418,10 @@ export default function FeaturesPage() {
                     ].map((faq, i) => (
                         <motion.div 
                             key={i}
-                            initial={{ opacity: 0, height: 0 }}
-                            whileInView={{ opacity: 1, height: "auto" }}
-                            transition={{ duration: 0.5, delay: i * 0.1 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.4, delay: i * 0.05 }}
                             className="group"
                         >
                             <div className="bg-white border border-slate-200 p-8 rounded-[2rem] hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300 cursor-pointer">

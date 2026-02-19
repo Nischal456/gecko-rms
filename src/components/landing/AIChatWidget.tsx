@@ -19,7 +19,7 @@ export default function AIChatWidget() {
             setIsTyping(true);
             setTimeout(() => {
                 setIsTyping(false);
-                setMessages([{ role: 'ai', text: "Namaste! 🙏 I'm Gecko AI.\n\nAsk me about our **Offline Mode** or **Pricing**, or I can direct you to WhatsApp." }]);
+                setMessages([{ role: 'ai', text: "Namaste! 🙏 I'm Gecko AI. I am on Testing Phase so dont use me instead sontact ius on whataspp." }]);
             }, 800);
         }
     }, [isOpen]);
