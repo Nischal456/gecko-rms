@@ -21,6 +21,15 @@ function PricingCard({ plan, isAnnual, index }: any) {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
+  // FIX: Moved useMotionTemplate to the top level so it is NEVER called conditionally
+  const spotlightBackground = useMotionTemplate`
+    radial-gradient(
+      400px circle at ${mouseX}px ${mouseY}px,
+      ${plan.popular ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.08)"},
+      transparent 80%
+    )
+  `;
+
   function handleMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
     if (isTouch) return; // Skip on mobile for buttery scrolling
     let { left, top } = currentTarget.getBoundingClientRect();
@@ -31,7 +40,6 @@ function PricingCard({ plan, isAnnual, index }: any) {
   const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
 
   return (
-    
     <motion.div
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -49,15 +57,7 @@ function PricingCard({ plan, isAnnual, index }: any) {
       {!isTouch && (
         <motion.div
           className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition duration-500 group-hover:opacity-100"
-          style={{
-            background: useMotionTemplate`
-              radial-gradient(
-                400px circle at ${mouseX}px ${mouseY}px,
-                ${plan.popular ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.08)"},
-                transparent 80%
-              )
-            `,
-          }}
+          style={{ background: spotlightBackground }}
         />
       )}
 

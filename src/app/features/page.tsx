@@ -175,6 +175,15 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
     const rotateX = useTransform(mouseYSpring, [-100, 100], [7, -7]);
     const rotateY = useTransform(mouseXSpring, [-100, 100], [-7, 7]);
 
+    // FIX: Moved useMotionTemplate to the top level so it is NEVER called conditionally
+    const spotlightBackground = useMotionTemplate`
+        radial-gradient(
+            600px circle at ${mouseXSpring}px ${mouseYSpring}px,
+            rgba(16, 185, 129, 0.12),
+            transparent 80%
+        )
+    `;
+
     const handleMouseMove = (e: React.MouseEvent) => {
         if (isTouch) return; // Prevent heavy JS calculation on touch scrolling
         const rect = ref.current?.getBoundingClientRect();
@@ -225,19 +234,11 @@ function TiltFeatureCard({ title, desc, icon: Icon, align = "left", step }: any)
                 transition={{ duration: 0.6, type: "spring", bounce: 0.3 }}
                 className="group relative border border-white/60 bg-white/80 backdrop-blur-xl rounded-[2.5rem] p-10 w-full md:w-[48%] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] hover:shadow-[0_30px_60px_-15px_rgba(16,185,129,0.2)] transition-shadow duration-500 z-10"
             >
-                {/* Spotlight Effect (Disabled on mobile for performance) */}
+                {/* Spotlight Effect (Rendered conditionally, but hook is safely above) */}
                 {!isTouch && (
                     <motion.div
                         className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition duration-500 group-hover:opacity-100"
-                        style={{
-                            background: useMotionTemplate`
-                                radial-gradient(
-                                    600px circle at ${mouseXSpring}px ${mouseYSpring}px,
-                                    rgba(16, 185, 129, 0.12),
-                                    transparent 80%
-                                )
-                            `,
-                        }}
+                        style={{ background: spotlightBackground }}
                     />
                 )}
                 
@@ -288,7 +289,7 @@ export default function FeaturesPage() {
                         className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm mb-10"
                     >
                         <Zap className="w-4 h-4 text-emerald-500 fill-emerald-500" />
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Fastest Flow v2.0</span>
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">One System. Total Restaurant Control.</span>
                     </motion.div>
                     
                     <h1 className="text-6xl md:text-9xl font-black text-slate-900 tracking-tighter mb-10 leading-[0.85]">
