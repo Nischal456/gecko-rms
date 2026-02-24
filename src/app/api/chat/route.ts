@@ -40,13 +40,19 @@ export async function POST(req: Request) {
         });
     }
 
+    // CRITICAL FIX: Groq expects 'assistant' instead of 'ai', and 'content' instead of 'text'
+    const formattedHistory = history.slice(-4).map((msg: any) => ({
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.text
+    }));
+
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        ...history.slice(-4), // Keep context light for absolute maximum speed
+        ...formattedHistory,
         { role: "user", content: message },
       ],
-      model: "llama3-8b-8192", // THE FASTEST & NEWEST WORKING MODEL
+      model: "llama3-8b-8192", // Extremely fast and capable model
       temperature: 0.6,
       max_tokens: 250,
     });
@@ -58,7 +64,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("AI Error:", error);
     return NextResponse.json({ 
-        reply: "My servers are optimizing. 🚀 Please message us directly on **WhatsApp: +977 9765009755** for immediate help." 
+        reply: "My servers are optimizing. 🚀 Please message us directly on WhatsApp: +977 9765009755 for immediate help." 
     });
   }
 }
