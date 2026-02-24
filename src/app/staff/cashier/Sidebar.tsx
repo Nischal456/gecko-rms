@@ -1,14 +1,13 @@
 "use client";
 
-import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, Menu, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, Menu, X, Plus } from "lucide-react";
 import { logoutStaff } from "@/app/actions/staff-auth";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
 export default function CashierSidebar({ tenantName, tenantCode, logo, currentView, setView, hasUpdates }: any) {
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-
+  
   const handleLogout = () => {
       toast.custom((t) => (
           <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
@@ -33,7 +32,7 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
                   <button 
                       onClick={async () => {
                           toast.dismiss(t);
-                          const loadingToast = toast.loading("Ending shift...");
+                          toast.loading("Ending shift...");
                           await logoutStaff();
                           window.location.href = "/staff/login";
                       }} 
@@ -49,11 +48,12 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
   const navItems = [
     { id: "terminal", icon: LayoutDashboard, label: "Overview" },
     { id: "new_order_select", icon: PlusCircle, label: "New Order" }, 
-    { id: "active_orders", icon: Clock, label: "Kitchen Status", badge: hasUpdates }, // Shows Red Dot
+    { id: "active_orders", icon: Clock, label: "Kitchen Status", badge: hasUpdates }, 
     { id: "reports", icon: PieChart, label: "Reports" },
     { id: "settings", icon: Settings, label: "Settings" }, 
   ];
 
+  // --- DESKTOP SIDEBAR CONTENT ---
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white/80 backdrop-blur-xl border-r border-slate-200/60">
         {/* LOGO AREA */}
@@ -79,15 +79,15 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
             {navItems.map((item) => (
                 <button 
                     key={item.id}
-                    onClick={() => { setView(item.id); setIsMobileOpen(false); }}
+                    onClick={() => setView(item.id)}
                     className={`w-full flex items-center gap-4 p-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
-                        currentView === item.id
+                        currentView === item.id || (item.id === 'new_order_select' && (currentView === 'table_select' || currentView === 'pos'))
                         ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1' 
                         : 'text-slate-500 hover:bg-white hover:shadow-sm'
                     }`}
                 >
                     <div className="relative">
-                        <item.icon className={`w-5 h-5 transition-colors ${currentView === item.id ? 'text-emerald-400' : 'group-hover:text-emerald-500'}`} />
+                        <item.icon className={`w-5 h-5 transition-colors ${currentView === item.id || (item.id === 'new_order_select' && (currentView === 'table_select' || currentView === 'pos')) ? 'text-emerald-400' : 'group-hover:text-emerald-500'}`} />
                         {/* RED PULSE DOT */}
                         {item.badge && (
                             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse" />
@@ -113,32 +113,62 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
 
   return (
     <>
-      <aside className="hidden md:block w-72 h-full relative z-30 shadow-2xl shadow-slate-200/50"><SidebarContent /></aside>
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden md:block w-72 h-full relative z-30 shadow-2xl shadow-slate-200/50">
+          <SidebarContent />
+      </aside>
       
-      {/* MOBILE HEADER */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200 z-[60] flex items-center justify-between px-4 shadow-sm">
+      {/* MOBILE TOP HEADER (Compact) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200 z-[60] flex items-center justify-between px-5 shadow-sm">
           <div className="flex items-center gap-3">
-             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white"><Store className="w-4 h-4"/></div>
-             <span className="font-black text-slate-900 text-lg">{tenantName || "POS"}</span>
+             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-md">
+                 {logo ? <img src={logo} alt="Logo" className="w-6 h-6 object-contain" /> : <Store className="w-4 h-4"/>}
+             </div>
+             <div>
+                 <span className="font-black text-slate-900 leading-tight block">{tenantName || "POS"}</span>
+                 <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Active Terminal</span>
+             </div>
           </div>
-          <button onClick={() => setIsMobileOpen(true)} className="p-2 bg-slate-100 rounded-lg text-slate-600 active:bg-slate-200 relative">
-              <Menu className="w-6 h-6"/>
-              {hasUpdates && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />}
+          <button onClick={handleLogout} className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-full transition-colors">
+              <LogOut className="w-5 h-5"/>
           </button>
       </div>
 
-      {/* MOBILE DRAWER */}
-      <AnimatePresence>
-        {isMobileOpen && (
-            <>
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileOpen(false)} className="fixed inset-0 bg-black/40 z-[70] md:hidden backdrop-blur-sm" />
-                <motion.aside initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className="fixed top-0 left-0 bottom-0 w-4/5 max-w-sm bg-white z-[80] md:hidden shadow-2xl">
-                    <div className="absolute top-4 right-4"><button onClick={() => setIsMobileOpen(false)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-red-500"><X className="w-6 h-6"/></button></div>
-                    <SidebarContent />
-                </motion.aside>
-            </>
-        )}
-      </AnimatePresence>
+      {/* MOBILE BOTTOM NAVIGATION DOCK (App-Like) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[72px] bg-white border-t border-slate-200 z-[70] flex items-center justify-around px-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+          
+          <button onClick={() => setView('terminal')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${currentView === 'terminal' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+              <LayoutDashboard className={`w-6 h-6 ${currentView === 'terminal' ? 'fill-emerald-50 text-emerald-600' : ''}`} />
+              <span className="text-[9px] font-bold tracking-wide">Terminal</span>
+          </button>
+
+          <button onClick={() => setView('active_orders')} className={`relative flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${currentView === 'active_orders' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+              <Clock className={`w-6 h-6 ${currentView === 'active_orders' ? 'fill-emerald-50 text-emerald-600' : ''}`} />
+              <span className="text-[9px] font-bold tracking-wide">Orders</span>
+              {hasUpdates && <span className="absolute top-2 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse" />}
+          </button>
+
+          {/* Prominent Center Add Button */}
+          <div className="w-full flex justify-center -mt-8">
+              <button 
+                  onClick={() => setView('new_order_select')} 
+                  className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all border-4 border-white ${currentView === 'new_order_select' || currentView === 'table_select' || currentView === 'pos' ? 'bg-slate-900 text-white shadow-slate-900/30' : 'bg-emerald-500 text-white shadow-emerald-500/30'}`}
+              >
+                  <Plus className="w-7 h-7" />
+              </button>
+          </div>
+
+          <button onClick={() => setView('reports')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${currentView === 'reports' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+              <PieChart className={`w-6 h-6 ${currentView === 'reports' ? 'fill-emerald-50 text-emerald-600' : ''}`} />
+              <span className="text-[9px] font-bold tracking-wide">Reports</span>
+          </button>
+
+          <button onClick={() => setView('settings')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${currentView === 'settings' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+              <Settings className={`w-6 h-6 ${currentView === 'settings' ? 'fill-emerald-50 text-emerald-600' : ''}`} />
+              <span className="text-[9px] font-bold tracking-wide">Settings</span>
+          </button>
+
+      </div>
     </>
   );
 }

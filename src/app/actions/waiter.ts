@@ -9,15 +9,12 @@ function getSafeId(id: string | null | undefined): number {
   return id && !isNaN(Number(id)) ? Number(id) : 5;
 }
 
-// Universal Parser: Handles Array or Stringified JSON
 function safeParse(data: any): any[] {
   if (!data) return [];
   if (Array.isArray(data)) return data;
-  
   if (typeof data === 'string') {
     try {
       const parsed = JSON.parse(data);
-      // Handle double-stringification
       return Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
     } catch (e) {
       console.error("JSON Parse Error:", e);
@@ -29,11 +26,11 @@ function safeParse(data: any): any[] {
 
 async function getTenantId() {
   const cookieStore = await cookies();
-  const tenantCookie = await cookieStore.get("gecko_tenant_id");
+  const tenantCookie = cookieStore.get("gecko_tenant_id");
   const rawId = tenantCookie?.value;
   if (rawId) return getSafeId(rawId);
 
-  const staffCookie = await cookieStore.get("gecko_staff_token");
+  const staffCookie = cookieStore.get("gecko_staff_token");
   const staffToken = staffCookie?.value;
   if (staffToken) {
       try { return getSafeId(JSON.parse(staffToken).tenant_id); } catch (e) {}
@@ -44,11 +41,9 @@ async function getTenantId() {
 // --- 1. GET WAITER DASHBOARD DATA ---
 export async function getWaiterDashboardData() {
   const tenantId = await getTenantId();
-  // Fetch based on server date, but allow flexibility
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    // A. FETCH TABLES
     const { data: tables, error: tableError } = await supabaseAdmin
         .from("restaurant_tables")
         .select("*")
@@ -57,8 +52,6 @@ export async function getWaiterDashboardData() {
 
     if (tableError) console.error("Table Fetch Error:", tableError);
 
-    // B. FETCH LIVE LOGS
-    // We grab the most recent log to be safe
     const { data: log } = await supabaseAdmin
         .from("daily_order_logs")
         .select("orders_data")
@@ -69,7 +62,6 @@ export async function getWaiterDashboardData() {
 
     const orders = safeParse(log?.orders_data);
     
-    // C. FETCH DISABLED MENU ITEMS
     const { data: menuData } = await supabaseAdmin
         .from("menu_optimized")
         .select("items")
@@ -92,7 +84,6 @@ export async function getWaiterDashboardData() {
         });
     }
 
-    // D. PROCESS ORDERS
     const notifications: any[] = [];
     let mySales = 0;
     let tablesServed = 0;
@@ -116,20 +107,23 @@ export async function getWaiterDashboardData() {
             const tableName = order.tbl?.trim();
             let displayStatus = isPayment ? 'payment' : 'occupied';
             
-            const itemsReady = order.items?.filter((i: any) => i.status === 'ready').length || 0;
+            const validItems = order.items?.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0) || [];
+            const itemsReady = validItems.filter((i: any) => i.status === 'ready').length;
             
-            if (itemsReady > 0 && order.status !== 'served') {
+            if (itemsReady > 0) {
                 displayStatus = 'ready';
                 hasReady = true;
                 
-                notifications.push({
-                    id: order.id,
-                    type: 'kitchen',
-                    title: `${itemsReady} Items Ready`,
-                    desc: `Table ${tableName}`,
-                    time: new Date(order.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                    table: tableName
-                });
+                if (order.status !== 'served' && order.status !== 'payment_pending') {
+                    notifications.push({
+                        id: order.id,
+                        type: 'kitchen',
+                        title: `${itemsReady} Items Ready`,
+                        desc: `Table ${tableName}`,
+                        time: new Date(order.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        table: tableName
+                    });
+                }
             }
             
             const current = activeTableStatus.get(tableName);
@@ -139,7 +133,6 @@ export async function getWaiterDashboardData() {
         }
     });
 
-    // E. MERGE DATA
     const processedTables = tables?.map(t => {
         const status = activeTableStatus.get(t.label.trim()) || 'available';
         return {
@@ -155,7 +148,7 @@ export async function getWaiterDashboardData() {
     const cookieStore = await cookies();
     let staffName = "Team";
     try {
-        const staffCookie = await cookieStore.get("gecko_staff_token");
+        const staffCookie = cookieStore.get("gecko_staff_token");
         const token = staffCookie?.value;
         if (token) staffName = JSON.parse(token).name;
     } catch(e) {}
@@ -172,7 +165,6 @@ export async function getWaiterDashboardData() {
     };
 
   } catch (error) {
-      console.error("Waiter Dashboard Error:", error);
       return { 
           success: false, 
           staff: { name: "Error" }, 
@@ -190,10 +182,9 @@ export async function getWaiterDashboardData() {
 export async function cleanTable(tableName: string) {
     const tenantId = await getTenantId();
     
-    // Fetch latest log to determine which row to update
     const { data: log } = await supabaseAdmin
         .from("daily_order_logs")
-        .select("date, orders_data") // Need DATE, not ID
+        .select("date, orders_data") 
         .eq("tenant_id", tenantId)
         .order("date", { ascending: false })
         .limit(1)
@@ -209,7 +200,6 @@ export async function cleanTable(tableName: string) {
         return order;
     });
 
-    // FIX: Update using Composite Key (date + tenant_id)
     const updateResult = await supabaseAdmin
         .from("daily_order_logs")
         .update({ orders_data: newOrders })
@@ -226,11 +216,10 @@ export async function cleanTable(tableName: string) {
     return { success: !updateResult.error };
 }
 
-// --- 3. MARK ORDER SERVED (COMPOSITE KEY FIX) ---
-export async function markOrderServed(orderId: string | number, tableLabel?: string) {
+// --- 3. MARK ORDER SERVED (BULLETPROOF ITEM LEVEL) ---
+export async function markOrderServed(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
-    // Search Window: Yesterday, Today, Tomorrow
     const today = new Date();
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -242,10 +231,9 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
     ];
 
     try {
-        // Fetch logs (Select DATE, not ID)
         const { data: logs } = await supabaseAdmin
             .from("daily_order_logs")
-            .select("date, orders_data") // Vital: Get the DATE for the composite key
+            .select("date, orders_data") 
             .eq("tenant_id", tenantId)
             .in("date", datesToCheck);
 
@@ -257,8 +245,6 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         let foundDate = null;
         let modifiedOrders = null;
 
-        console.log(`[WAITER] Searching for Order ID: ${targetId}`);
-
         for (const log of logs) {
             const currentOrders = safeParse(log.orders_data);
             let found = false;
@@ -267,18 +253,42 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
                 const currentOrderId = String(order.id || "").trim();
                 const currentTable = String(order.tbl || "").trim();
 
-                const isMatch = currentOrderId === targetId || (targetTable && currentTable === targetTable && order.status === 'ready');
+                const isMatch = currentOrderId === targetId || (targetTable && currentTable === targetTable && (order.status === 'ready' || order.status === 'cooking'));
 
                 if (isMatch) {
-                    console.log(`[WAITER] FOUND in Log Date: ${log.date}`);
                     found = true;
-                    foundDate = log.date; // Capture the DATE
+                    foundDate = log.date; 
                     
-                    const updatedItems = (order.items || []).map((i: any) => 
-                        i.status === 'ready' ? { ...i, status: 'served' } : i
-                    );
+                    let itemsStillPendingOrCooking = false;
+                    let itemsStillReady = false;
 
-                    return { ...order, status: 'served', items: updatedItems };
+                    const updatedItems = (order.items || []).map((i: any) => {
+                        
+                        if (itemIdentifiers && itemIdentifiers.length > 0) {
+                            const fallbackSig = `${i.name}||${i.variant || ''}`;
+                            const isItemMatch = (i.unique_id && itemIdentifiers.includes(i.unique_id)) || 
+                                                (i.id && itemIdentifiers.includes(i.id)) || 
+                                                itemIdentifiers.includes(fallbackSig);
+
+                            if (isItemMatch && i.status === 'ready') {
+                                return { ...i, status: 'served' };
+                            }
+                        } 
+                        else if (i.status === 'ready') {
+                            return { ...i, status: 'served' };
+                        }
+
+                        if (['pending', 'cooking'].includes(i.status)) itemsStillPendingOrCooking = true;
+                        if (i.status === 'ready') itemsStillReady = true;
+
+                        return i;
+                    });
+
+                    let newOrderStatus = 'payment_pending'; 
+                    if (itemsStillReady) newOrderStatus = 'ready';
+                    else if (itemsStillPendingOrCooking) newOrderStatus = 'cooking';
+
+                    return { ...order, status: newOrderStatus, items: updatedItems };
                 }
                 return order;
             });
@@ -290,19 +300,16 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         }
 
         if (!foundDate || !modifiedOrders) {
-            console.error(`[WAITER] Order ${targetId} not found.`);
             return { success: false, error: "Order not found" };
         }
 
-        // FIX: Update using Composite Key (date + tenant_id)
         const { error } = await supabaseAdmin
             .from("daily_order_logs")
             .update({ orders_data: modifiedOrders })
             .eq("tenant_id", tenantId)
-            .eq("date", foundDate); // Correct identifier
+            .eq("date", foundDate); 
 
         if (error) {
-            console.error("[WAITER] DB Update Error:", error);
             return { success: false, error: error.message };
         }
 
@@ -310,7 +317,116 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         return { success: true };
 
     } catch (e: any) {
-        console.error("Mark Served Exception:", e.message);
+        return { success: false, error: e.message };
+    }
+}
+
+// --- 4. CANCEL ORDER (SUPPORTS BOTH FULL AND ITEM-LEVEL) ---
+export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string) {
+    const tenantId = await getTenantId();
+    
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const datesToCheck = [
+        yesterday.toISOString().split('T')[0],
+        today.toISOString().split('T')[0],
+        tomorrow.toISOString().split('T')[0]
+    ];
+
+    try {
+        const { data: logs } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("date, orders_data") 
+            .eq("tenant_id", tenantId)
+            .in("date", datesToCheck);
+
+        if (!logs || logs.length === 0) return { success: false, error: "No logs found" };
+
+        const targetId = String(orderId).trim();
+        let foundDate = null;
+        let modifiedOrders = null;
+
+        for (const log of logs) {
+            const currentOrders = safeParse(log.orders_data);
+            let found = false;
+
+            const updatedOrders = currentOrders.map((order: any) => {
+                if (String(order.id || "").trim() === targetId) {
+                    
+                    // IF SPECIFIC ITEM ID IS PROVIDED
+                    if (itemIdToCancel) {
+                        found = true;
+                        foundDate = log.date;
+                        let amountToDeduct = 0;
+                        
+                        const newItems = order.items.map((i:any) => {
+                            const sig = i.unique_id || i.id || `${i.name}||${i.variant || ''}`;
+                            if (sig === itemIdToCancel && i.status === 'pending') {
+                                amountToDeduct += (i.price * i.qty);
+                                return { ...i, status: 'cancelled' };
+                            }
+                            return i;
+                        });
+
+                        // Recalculate Parent Status Based on Remaining Items
+                        const stillPending = newItems.some((i:any) => i.status === 'pending');
+                        const stillCooking = newItems.some((i:any) => i.status === 'cooking');
+                        const stillReady = newItems.some((i:any) => i.status === 'ready');
+                        const allCancelled = newItems.every((i:any) => i.status === 'cancelled' || i.status === 'void');
+                        
+                        let newOrderStatus = 'payment_pending';
+                        if (allCancelled) newOrderStatus = 'cancelled';
+                        else if (stillReady) newOrderStatus = 'ready';
+                        else if (stillCooking) newOrderStatus = 'cooking';
+                        else if (stillPending) newOrderStatus = 'pending';
+
+                        return { 
+                            ...order, 
+                            status: newOrderStatus,
+                            items: newItems,
+                            total: Math.max(0, order.total - amountToDeduct)
+                        };
+                    } 
+                    // ELSE CANCEL ENTIRE ORDER (IF FULLY PENDING)
+                    else {
+                        const isFullyPending = order.items.every((i:any) => i.status === 'pending' || i.status === 'cancelled');
+                        if (isFullyPending) {
+                            found = true;
+                            foundDate = log.date;
+                            const newItems = order.items.map((i:any) => ({ ...i, status: 'cancelled' }));
+                            return { ...order, status: 'cancelled', items: newItems, total: 0 };
+                        }
+                    }
+                }
+                return order;
+            });
+
+            if (found) {
+                modifiedOrders = updatedOrders;
+                break; 
+            }
+        }
+
+        if (!foundDate || !modifiedOrders) {
+            return { success: false, error: "Could not cancel. Item might be cooking." };
+        }
+
+        await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", foundDate);
+        
+        // Free table if it was the only active order
+        if (!tableLabel.startsWith("TAKEAWAY")) {
+            const remainingActive = modifiedOrders.some((o:any) => o.tbl === tableLabel && !['cancelled', 'paid', 'completed'].includes(o.status));
+            if(!remainingActive) {
+                await supabaseAdmin.from("restaurant_tables").update({ status: 'free' }).eq("label", tableLabel).eq("tenant_id", tenantId);
+            }
+        }
+
+        revalidatePath("/staff/waiter");
+        return { success: true };
+
+    } catch (e: any) {
         return { success: false, error: e.message };
     }
 }

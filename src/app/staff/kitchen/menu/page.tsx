@@ -103,20 +103,20 @@ function KitchenDock() {
                 initial={{ y: 100, opacity: 0 }} 
                 animate={{ y: 0, opacity: 1 }} 
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10"
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100"
             >
                 <DockLink href="/staff/kitchen" icon={<ChefHat className="w-[18px] h-[18px]" />} label="Kitchen" />
-                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
                 
                 {/* Active Tab */}
                 <button className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all group relative">
                     <LayoutGrid className="w-[18px] h-[18px]" />
                 </button>
                 
-                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
                 <DockLink href="/staff/kitchen/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
-                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
-                <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-red-400 hover:text-white hover:bg-red-500/20 active:scale-95 transition-all group relative">
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all group relative">
                     <LogOut className="w-[18px] h-[18px]" />
                     <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none">
                         Sign Out
@@ -129,7 +129,7 @@ function KitchenDock() {
 
 function DockLink({ href, icon, label }: any) {
     return (
-        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
+        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
             <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
             <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
                 {label}
@@ -167,7 +167,7 @@ export default function KitchenMenuPage() {
 
   const catInputRef = useRef<HTMLInputElement>(null);
 
-  // NOTIFICATION STATE
+  // NOTIFICATION STATE (Persistent Loop exactly like Kitchen page)
   const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
   const prevTicketIds = useRef<Set<string>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -180,11 +180,12 @@ export default function KitchenMenuPage() {
       // Init Audio
       const audio = new Audio(ALERT_SOUND);
       audio.volume = 1.0;
+      audio.loop = true; // Loop until acknowledged
       audioRef.current = audio;
 
       // Start Live Order Polling
       pollForNewOrders();
-      const pollInterval = setInterval(pollForNewOrders, 4000);
+      const pollInterval = setInterval(pollForNewOrders, 3000);
       return () => clearInterval(pollInterval);
   }, []);
 
@@ -194,7 +195,6 @@ export default function KitchenMenuPage() {
     if(res.success && res.categories) {
       setCategories(res.categories);
       
-      // AUTO-SELECT FIRST CATEGORY (Fix for blank screen)
       if(res.categories.length > 0) {
           const savedId = localStorage.getItem("gecko_kitchen_cat");
           const exists = res.categories.find((c: any) => c.id === savedId);
@@ -204,14 +204,13 @@ export default function KitchenMenuPage() {
     setLoading(false);
   }
 
-  // --- POLLING LOGIC ---
+  // --- LIVE ORDER POLLING ---
   const pollForNewOrders = async () => {
     try {
         const kdsRes = await getKitchenTickets();
         if (kdsRes.success && Array.isArray(kdsRes.data)) {
             const currentIds = new Set(kdsRes.data.map(t => t.id));
             
-            // Don't alert on the very first load
             if (!isFirstLoad.current) {
                 const newTicket = kdsRes.data.find(t => 
                     t.status === 'pending' && !prevTicketIds.current.has(t.id)
@@ -222,9 +221,7 @@ export default function KitchenMenuPage() {
             isFirstLoad.current = false;
             prevTicketIds.current = currentIds;
         }
-    } catch (e) {
-        console.error("Polling error", e);
-    }
+    } catch (e) {}
   };
 
   const triggerAlert = (tableName: string) => {
@@ -233,7 +230,14 @@ export default function KitchenMenuPage() {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(e => console.log("Audio play blocked", e));
     }
-    setTimeout(() => setLatestOrderTable(null), 8000);
+  };
+
+  const stopAlert = () => {
+      setLatestOrderTable(null);
+      if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+      }
   };
 
   // --- ACTIONS ---
@@ -288,7 +292,6 @@ export default function KitchenMenuPage() {
   }
 
   async function handleQuickToggle(item: MenuItem) {
-      // Optimistic Update
       const newCats = categories.map(c => c.id === activeTabId ? { 
           ...c, items: c.items.map(i => i.id === item.id ? { ...i, is_available: !i.is_available } : i) 
       } : c);
@@ -313,7 +316,6 @@ export default function KitchenMenuPage() {
     setIsUploading(false);
   };
 
-  // --- HELPERS ---
   const openEdit = (item: MenuItem) => {
       setEditingItem(item);
       setFormName(item.name);
@@ -338,7 +340,6 @@ export default function KitchenMenuPage() {
   };
   const removeVariant = (idx: number) => setVariants(variants.filter((_, i) => i !== idx));
 
-  // --- FILTERING ---
   const activeCategory = categories.find(c => c.id === activeTabId);
   const itemsToDisplay = activeCategory?.items
     .filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -360,7 +361,7 @@ export default function KitchenMenuPage() {
               <motion.div 
                   initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
                   className="fixed top-0 left-0 right-0 bg-red-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer"
-                  onClick={() => setLatestOrderTable(null)}
+                  onClick={stopAlert}
               >
                   <div className="flex items-center gap-4 animate-pulse">
                       <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
@@ -371,17 +372,17 @@ export default function KitchenMenuPage() {
                           <h3 className="text-xl md:text-2xl font-black leading-none">{latestOrderTable}</h3>
                       </div>
                   </div>
-                  <button className="bg-white text-red-600 px-4 py-2 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
-                      Dismiss
+                  <button className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
+                      Acknowledge
                   </button>
               </motion.div>
           )}
       </AnimatePresence>
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative pb-[120px] md:pb-0">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative pb-[100px] md:pb-0">
         
         {/* HEADER */}
-        <header className="flex-shrink-0 px-4 md:px-8 py-4 bg-white/90 backdrop-blur-xl border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 z-20 shadow-sm">
+        <header className="flex-shrink-0 px-4 md:px-8 py-4 bg-white/90 backdrop-blur-xl border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 z-20 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shadow-inner border border-emerald-100"><Database className="w-5 h-5 text-emerald-600" /></div>
                 <div>
@@ -391,15 +392,15 @@ export default function KitchenMenuPage() {
             </div>
             
             <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-center">
-                <div className="flex p-1.5 bg-slate-100 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
-                    <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>All</button>
-                    <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "kitchen" ? "bg-white shadow text-orange-600" : "text-slate-500 hover:text-slate-700"}`}><ChefHat className="w-3.5 h-3.5" /> Kitchen</button>
-                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-violet-600" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
+                <div className="flex p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
+                    <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}>All</button>
+                    <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "kitchen" ? "bg-white shadow text-orange-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><ChefHat className="w-3.5 h-3.5" /> Kitchen</button>
+                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-violet-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
                 </div>
 
                 <div className="relative group w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                    <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search dishes..." className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 shadow-sm rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none" />
+                    <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search dishes..." className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 shadow-[0_2px_10px_rgb(0,0,0,0.02)] rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none" />
                 </div>
                 
                 <button onClick={() => { setEditingItem(null); setFormName(""); setFormDesc(""); setFormImage(""); setFormDietary("non-veg"); setFormStation("kitchen"); setFormAvailable(true); setVariants([{name:"", price:0}]); setIsItemModalOpen(true); }} disabled={!activeTabId} className="w-full md:w-auto h-11 px-5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap">
@@ -410,8 +411,8 @@ export default function KitchenMenuPage() {
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             
-            {/* NAV / SIDEBAR (Scrollable horizontally on mobile, vertically on desktop) */}
-            <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex-shrink-0 flex md:flex-col overflow-x-auto md:overflow-y-auto no-scrollbar p-3 md:p-5 gap-2 z-10">
+            {/* NAV / SIDEBAR */}
+            <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex-shrink-0 flex md:flex-col overflow-x-auto md:overflow-y-auto no-scrollbar p-3 md:p-5 gap-2 z-10 shadow-[4px_0_24px_rgb(0,0,0,0.02)]">
                 <button onClick={() => setIsCatModalOpen(true)} className="flex-shrink-0 w-auto md:w-full h-11 md:h-12 px-4 border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-xs uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap">
                     <Plus className="w-4 h-4 mr-1.5" /> Category
                 </button>
@@ -419,7 +420,7 @@ export default function KitchenMenuPage() {
                 <div className="w-full h-[1px] bg-slate-100 my-2 hidden md:block"></div>
                 
                 {categories.map(cat => (
-                    <button key={cat.id} onClick={() => setTab(cat.id)} className={`flex-shrink-0 w-auto md:w-full text-left px-4 py-2.5 md:py-3.5 rounded-xl transition-all flex items-center gap-3 group border ${activeTabId === cat.id ? 'bg-slate-900 text-white shadow-lg border-slate-800' : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50 hover:border-slate-200'}`}>
+                    <button key={cat.id} onClick={() => setTab(cat.id)} className={`flex-shrink-0 w-auto md:w-full text-left px-4 py-2.5 md:py-3.5 rounded-xl transition-all flex items-center gap-3 group border ${activeTabId === cat.id ? 'bg-slate-900 text-white shadow-lg border-slate-800' : 'bg-white text-slate-600 border-transparent hover:bg-slate-50 hover:border-slate-200'}`}>
                         <span className="font-bold text-sm truncate max-w-[120px] md:max-w-full">{cat.category_name}</span>
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ml-auto ${activeTabId === cat.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>{cat.items?.length || 0}</span>
                         {activeTabId === cat.id && <Trash2 onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }} className="w-3.5 h-3.5 text-red-400 hover:text-red-500 md:hidden group-hover:block ml-1 transition-colors" />}
@@ -427,7 +428,7 @@ export default function KitchenMenuPage() {
                 ))}
             </div>
 
-            {/* GRID */}
+            {/* GRID - CRITICAL FIX: 2 COLUMNS ON MOBILE */}
             <div className="flex-1 bg-[#F8FAFC] p-4 md:p-8 overflow-y-auto custom-scrollbar">
                 {itemsToDisplay.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50 min-h-[300px]">
@@ -436,7 +437,7 @@ export default function KitchenMenuPage() {
                         <p className="text-xs font-bold uppercase tracking-widest mt-1">Try changing your filters</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-6">
                         <AnimatePresence>
                             {itemsToDisplay.map((item) => (
                                 <ItemCard key={item.id} item={item} onEdit={() => openEdit(item)} onDelete={() => handleDeleteItem(item.id)} onToggle={() => handleQuickToggle(item)} />
@@ -453,7 +454,7 @@ export default function KitchenMenuPage() {
         <AnimatePresence>
             {isCatModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsCatModalOpen(false)} />
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsCatModalOpen(false)} />
                     <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[2rem] p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100">
                         <h3 className="text-2xl font-black text-slate-900 mb-6">New Category</h3>
                         <input ref={catInputRef} autoFocus placeholder="e.g. Starters, Main Course" className="w-full h-14 px-5 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none mb-6 focus:ring-4 focus:ring-emerald-50 focus:border-emerald-400 transition-all text-lg" />
@@ -568,6 +569,7 @@ export default function KitchenMenuPage() {
   );
 }
 
+// --- PREMIUM MOBILE-OPTIMIZED ITEM CARD ---
 function ItemCard({ item, onEdit, onDelete, onToggle }: any) {
     const isVeg = item.dietary === 'veg';
     const isDrinks = item.dietary === 'drinks';
@@ -581,36 +583,36 @@ function ItemCard({ item, onEdit, onDelete, onToggle }: any) {
     const priceDisplay = prices.length > 1 ? `Rs ${Math.min(...prices)} - ${Math.max(...prices)}` : `Rs ${item.price}`;
 
     return (
-        <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className={`bg-white p-4 rounded-[2rem] border-2 shadow-sm hover:shadow-xl transition-all group flex flex-col h-full ${item.is_available ? 'border-transparent hover:border-emerald-100' : 'border-red-100 bg-red-50/30 opacity-90'}`}>
-            <div className="relative aspect-[4/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 shadow-inner">
+        <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} 
+            className={`bg-white p-3 md:p-4 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-xl transition-all group flex flex-col h-full border border-slate-100 ${item.is_available ? '' : 'bg-red-50/10 opacity-90'}`}
+        >
+            <div className="relative aspect-[4/3] bg-slate-100 rounded-xl md:rounded-2xl overflow-hidden mb-3 shadow-inner">
                 {item.image_url ? (
                     <img src={item.image_url} className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${!item.is_available && 'grayscale opacity-60'}`} />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><ImageIcon className="w-10 h-10 opacity-50" /></div>
+                    <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><ImageIcon className="w-8 h-8 md:w-10 md:h-10 opacity-50" /></div>
                 )}
-                {!item.is_available && <div className="absolute inset-0 bg-red-900/40 flex items-center justify-center text-white font-black text-sm uppercase tracking-widest backdrop-blur-sm border-4 border-red-500/50 rounded-2xl">Disabled (Sold Out)</div>}
-                <div className={`absolute top-3 left-3 px-2.5 py-1.5 rounded-xl shadow-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${badgeColor}`}><BadgeIcon className="w-3.5 h-3.5" /></div>
+                {!item.is_available && <div className="absolute inset-0 bg-red-900/30 flex items-center justify-center text-white font-black text-[10px] md:text-xs uppercase tracking-widest backdrop-blur-sm border-2 border-red-500/50 rounded-xl md:rounded-2xl">Sold Out</div>}
+                <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg shadow-sm text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${badgeColor}`}><BadgeIcon className="w-3 h-3" /></div>
             </div>
             
             <div className="flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-1.5">
-                    <h4 className="font-black text-slate-900 text-lg leading-tight line-clamp-1 pr-2">{item.name}</h4>
-                </div>
+                <h4 className="font-black text-slate-900 text-sm md:text-lg leading-tight line-clamp-2 pr-1 mb-1.5">{item.name}</h4>
+                {item.sub_category && <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 px-2 py-1 rounded-md mb-2 w-fit">{item.sub_category}</span>}
                 
-                {item.sub_category && <span className="text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 px-2 py-1 rounded-lg mb-2 w-fit">{item.sub_category}</span>}
-                
-                <div className="flex items-center gap-2 mt-auto pt-2">
-                    <span className="text-emerald-600 font-black text-sm">{priceDisplay}</span>
-                    {item.variants?.length > 1 && <span className="text-[9px] bg-slate-100 px-2 py-1 rounded-md font-bold text-slate-500 flex items-center gap-1"><Layers className="w-3 h-3" /> {item.variants.length} Sizes</span>}
+                <div className="flex items-center gap-1.5 md:gap-2 mt-auto pt-1">
+                    <span className="text-emerald-600 font-black text-xs md:text-sm">{priceDisplay}</span>
+                    {item.variants?.length > 1 && <span className="text-[8px] md:text-[9px] bg-slate-100 px-1.5 md:px-2 py-1 rounded-md font-bold text-slate-500 flex items-center gap-1"><Layers className="w-2.5 h-2.5 md:w-3 md:h-3" /> {item.variants.length} Sizes</span>}
                 </div>
             </div>
             
-            <div className="flex gap-2 border-t border-slate-100 pt-3 mt-4">
-                <button onClick={onToggle} className={`flex-1 h-10 rounded-xl text-xs font-black text-white transition-all shadow-sm active:scale-95 uppercase tracking-wider ${item.is_available ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'}`}>
-                    {item.is_available ? "Disable" : "Enable"}
+            {/* COMPACT ACTIONS FOR MOBILE 2-COL GRID */}
+            <div className="flex gap-1.5 md:gap-2 border-t border-slate-100 pt-2.5 md:pt-3 mt-3">
+                <button onClick={onToggle} className={`flex-1 h-9 md:h-10 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black text-white transition-all shadow-sm active:scale-95 uppercase tracking-wider ${item.is_available ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'}`}>
+                    {item.is_available ? "Hide" : "Show"}
                 </button>
-                <button onClick={onEdit} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-500 hover:bg-slate-900 hover:text-white transition-all border border-slate-200 hover:border-slate-900 active:scale-95"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={onDelete} className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-100 hover:border-red-500 active:scale-95"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={onEdit} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-50 text-slate-500 hover:bg-slate-900 hover:text-white transition-all border border-slate-200 hover:border-slate-900 active:scale-95 shrink-0"><Edit2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
+                <button onClick={onDelete} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg md:rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-100 hover:border-red-500 active:scale-95 shrink-0"><Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
             </div>
         </motion.div>
     );

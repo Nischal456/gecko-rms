@@ -6,7 +6,8 @@ import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "
 import { 
   ChefHat, Clock, CheckCircle2, Flame, Bell, Utensils, 
   X, LogOut, RefreshCcw, Check, CheckCheck, 
-  Volume2, VolumeX, LayoutGrid, FileBarChart, Ban, AlertTriangle, Play, GripVertical, ChevronRight
+  Volume2, VolumeX, LayoutGrid, FileBarChart, Ban, AlertTriangle, Play, GripVertical, ChevronRight,
+  Layers, StickyNote
 } from "lucide-react";
 import { toast } from "sonner";
 import { getKitchenTickets, updateTicketStatus, updateItemStatus, disableMenuItem } from "@/app/actions/kitchen";
@@ -15,15 +16,17 @@ import NepaliDate from 'nepali-date-converter';
 
 // --- CONFIG ---
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
-const SWIPE_THRESHOLD = 100; // Pixel distance to trigger swipe
+const SWIPE_THRESHOLD = 80; 
 
 // --- TYPES ---
 interface KitchenItem {
     id: string;
+    unique_id?: string;
     name: string;
     quantity: number;
     notes?: string;
-    status: string; // 'pending' | 'cooking' | 'ready' | 'served'
+    variant?: string;
+    status: string; 
     station: string;
 }
 
@@ -73,7 +76,7 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
 }
 
 // --- HEADER ---
-function KDSHeader({ count, latestOrderTable, onStopAlert, muted, toggleMute }: any) {
+function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
@@ -90,25 +93,24 @@ function KDSHeader({ count, latestOrderTable, onStopAlert, muted, toggleMute }: 
 
     return (
         <header className="flex-shrink-0 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shadow-sm transition-all">
-            {/* ALERT BANNER */}
             <AnimatePresence>
-                {latestOrderTable && (
+                {alertingTable && (
                     <motion.div 
                         initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
                         className="absolute inset-0 bg-red-500 flex items-center justify-between px-6 z-50 text-white shadow-xl cursor-pointer"
-                        onClick={onStopAlert}
+                        onClick={onAcknowledge}
                     >
                         <div className="flex items-center gap-4 animate-pulse">
                             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
                                 <Bell className="w-5 h-5 fill-current" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold opacity-90 uppercase tracking-widest">New Order</p>
-                                <h3 className="text-xl md:text-3xl font-black leading-none">{latestOrderTable}</h3>
+                                <p className="text-[10px] font-bold opacity-90 uppercase tracking-widest">New Order Pending</p>
+                                <h3 className="text-xl md:text-3xl font-black leading-none">{alertingTable}</h3>
                             </div>
                         </div>
-                        <button onClick={onStopAlert} className="bg-white text-red-600 px-4 py-1.5 rounded-full font-black text-[10px] md:text-xs shadow-lg uppercase tracking-wider">
-                            Dismiss
+                        <button onClick={(e) => { e.stopPropagation(); onAcknowledge(); }} className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
+                            Acknowledge
                         </button>
                     </motion.div>
                 )}
@@ -141,8 +143,7 @@ function KDSHeader({ count, latestOrderTable, onStopAlert, muted, toggleMute }: 
     )
 }
 
-// --- DOCK (CENTERED) ---
-// --- PREMIUM KITCHEN DOCK ---
+// --- DOCK ---
 function KitchenDock({ onRefresh }: any) {
     const handleLogout = () => {
         toast.custom((t) => (
@@ -182,13 +183,10 @@ function KitchenDock({ onRefresh }: any) {
         ), { duration: 8000 });
     };
 
-    // The wrapper ensures perfect, bulletproof centering regardless of screen size
     return (
         <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
             <motion.div 
-                initial={{ y: 100, opacity: 0 }} 
-                animate={{ y: 0, opacity: 1 }} 
-                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10"
             >
                 <DockButton icon={<RefreshCcw className="w-[18px] h-[18px]" />} onClick={onRefresh} label="Sync Feed" />
@@ -206,11 +204,7 @@ function DockButton({ icon, onClick, label }: any) {
     return (
         <button onClick={onClick} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
             <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
-            
-            {/* Premium Tooltip */}
-            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
-                {label}
-            </span>
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
         </button>
     )
 }
@@ -219,11 +213,7 @@ function DockLink({ href, icon, label }: any) {
     return (
         <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
             <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
-            
-            {/* Premium Tooltip */}
-            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
-                {label}
-            </span>
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
         </Link>
     )
 }
@@ -234,12 +224,17 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
   
-  // Logic Refs
-  const prevTicketIds = useRef<Set<string>>(new Set());
+  // High-Speed Optimistic Locking
+  const processingItems = useRef<Set<string>>(new Set()); 
+  
+  // --- REACTIVE NOTIFICATION ENGINE ---
   const [systemReady, setSystemReady] = useState(false);
-  const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const acknowledgedIds = useRef<Set<string>>(new Set());
+  const currentlyAlertingId = useRef<string | null>(null);
+  const [alertingTable, setAlertingTable] = useState<string | null>(null);
 
   useEffect(() => {
       const isInit = sessionStorage.getItem("gecko_kitchen_init");
@@ -247,47 +242,78 @@ export default function KitchenPage() {
           setSystemReady(true);
           const audio = new Audio(ALERT_SOUND);
           audio.volume = 1.0;
+          audio.loop = true; 
           audioRef.current = audio;
           loadData();
       }
   }, []);
 
-  // FAST POLLING: 3 Seconds
+  // ULTRA FAST POLLING (2.5 Seconds)
   useEffect(() => {
     if (!systemReady) return;
     loadData();
-    const interval = setInterval(loadData, 3000); // Fast fetch, no reload
+    const interval = setInterval(loadData, 2500); 
     return () => clearInterval(interval);
   }, [systemReady]);
+
+  // SMART ALERT EVALUATOR (Triggers strictly based on state)
+  useEffect(() => {
+      if (!systemReady) return;
+
+      const pending = tickets.filter(t => t.status === 'pending');
+      const unacknowledged = pending.find(t => !acknowledgedIds.current.has(t.id));
+
+      if (unacknowledged) {
+          if (currentlyAlertingId.current !== unacknowledged.id) {
+              currentlyAlertingId.current = unacknowledged.id;
+              setAlertingTable(unacknowledged.table_name);
+              
+              if (!muted && audioRef.current) {
+                  audioRef.current.play().catch(e => {
+                      console.warn("Audio blocked by browser, requiring user interaction.");
+                      setSystemReady(false); // Force them back to Start screen to unlock audio!
+                      sessionStorage.removeItem("gecko_kitchen_init");
+                  });
+              }
+          }
+      } else {
+          // If no unacknowledged pending tickets exist, quiet down immediately.
+          if (currentlyAlertingId.current) {
+              currentlyAlertingId.current = null;
+              setAlertingTable(null);
+              if (audioRef.current) {
+                  audioRef.current.pause();
+                  audioRef.current.currentTime = 0;
+              }
+          }
+      }
+  }, [tickets, systemReady, muted]);
 
   const initializeSystem = () => {
       const audio = new Audio(ALERT_SOUND); 
       audio.volume = 1.0;
+      audio.loop = true;
       audioRef.current = audio;
+      
       audio.play().then(() => {
           audio.pause();
           audio.currentTime = 0;
-      }).catch(err => console.log("Audio Permission Needed:", err));
+      }).catch(err => console.log("Audio Init Blocked"));
 
       sessionStorage.setItem("gecko_kitchen_init", "true");
       setSystemReady(true);
       loadData();
   };
 
-  const triggerAlert = (tableName: string) => {
-      setLatestOrderTable(tableName);
-      if (!muted && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(e => console.error("Sound play failed", e));
-      }
-      setTimeout(() => setLatestOrderTable(null), 8000);
-  };
-
-  const stopAlert = () => {
-      setLatestOrderTable(null);
-      if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
+  const handleAcknowledge = () => {
+      if (currentlyAlertingId.current) {
+          acknowledgedIds.current.add(currentlyAlertingId.current);
+          currentlyAlertingId.current = null;
+          setAlertingTable(null);
+          if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+          }
       }
   };
 
@@ -295,24 +321,20 @@ export default function KitchenPage() {
     const kdsRes = await getKitchenTickets();
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
         const rawData = kdsRes.data as any[]; 
-        // Logic: Exclude 'served' orders from view entirely if backend returns them
         const activeOrders = rawData.filter(t => t.status !== 'served');
         
         const sorted = activeOrders.sort((a, b) => {
-            const statusOrder = { 'pending': 0, 'cooking': 1, 'ready': 2, 'served': 3 };
+            const statusOrder = { 'pending': 0, 'preparing': 1, 'cooking': 1, 'ready': 2, 'served': 3 };
             const statusDiff = (statusOrder[a.status as keyof typeof statusOrder] || 0) - (statusOrder[b.status as keyof typeof statusOrder] || 0);
             if (statusDiff !== 0) return statusDiff;
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         });
-        setTickets(sorted as KitchenTicket[]);
         
-        if (systemReady) {
-            const currentIds = new Set(sorted.map(t => t.id));
-            const newTicket = sorted.find(t => 
-                t.status === 'pending' && !prevTicketIds.current.has(t.id)
-            );
-            if (newTicket) triggerAlert(newTicket.table_name);
-            prevTicketIds.current = currentIds;
+        setTickets(sorted as KitchenTicket[]);
+
+        if (selectedTicket) {
+            const freshTicket = sorted.find(t => t.id === selectedTicket.id);
+            if (freshTicket) setSelectedTicket(freshTicket as KitchenTicket);
         }
     }
     setLoading(false);
@@ -320,18 +342,39 @@ export default function KitchenPage() {
 
   // --- ACTIONS ---
   const handleItemClick = async (item: KitchenItem, ticketId: string) => {
-      // 1. KITCHEN GUARD: STOP AT READY
-      if (item.status === 'served' || item.status === 'ready') {
-          return; // Cannot move beyond ready
-      }
+      const safeStatus = (item.status || '').toLowerCase().trim();
+      if (safeStatus === 'served' || safeStatus === 'ready') return; 
+
+      const uniqueLockId = item.unique_id || item.id;
+      if (processingItems.current.has(uniqueLockId)) return; // Double-click protection
+      
+      processingItems.current.add(uniqueLockId);
 
       const statusCycle: Record<string, string> = { 'pending': 'cooking', 'cooking': 'ready' };
-      const nextStatus = statusCycle[item.status] || 'pending';
+      const nextStatus = statusCycle[safeStatus] || 'pending';
       
-      setTickets(prev => prev.map(t => t.id !== ticketId ? t : { ...t, order_items: t.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i) }));
-      if(selectedTicket?.id === ticketId) setSelectedTicket(prev => prev ? ({...prev, order_items: prev.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i)}) : null);
+      // INSTANT OPTIMISTIC UPDATE
+      const newTickets = tickets.map(t => {
+          if (t.id !== ticketId) return t;
+          const newItems = t.order_items.map(i => (i.unique_id || i.id) === uniqueLockId ? { ...i, status: nextStatus } : i);
+          
+          // Auto-upgrade ticket status if an item starts cooking
+          const isCookingNow = newItems.some(i => i.status === 'cooking' || i.status === 'ready');
+          const newTicketStatus = (t.status === 'pending' && isCookingNow) ? 'cooking' : t.status;
+          
+          return { ...t, status: newTicketStatus as any, order_items: newItems };
+      });
+      setTickets(newTickets);
+      
+      // Update Modal
+      if(selectedTicket?.id === ticketId) {
+          const matchedTicket = newTickets.find(t => t.id === ticketId);
+          if (matchedTicket) setSelectedTicket(matchedTicket);
+      }
 
-      await updateItemStatus(item.id, nextStatus, ticketId);
+      await updateItemStatus(uniqueLockId, nextStatus, ticketId);
+      
+      processingItems.current.delete(uniqueLockId);
       loadData(); 
   };
 
@@ -343,13 +386,14 @@ export default function KitchenPage() {
   };
 
   const handleMoveTicket = async (ticketId: string, newStatus: string) => {
-      // 2. KITCHEN GUARD: CANNOT SERVE
       if (newStatus === 'served') {
           toast.error("Kitchen cannot Serve. Mark Ready only.");
           return;
       }
       
+      // INSTANT OPTIMISTIC UPDATE (Will clear alarm immediately)
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus as any } : t));
+
       await updateTicketStatus(ticketId, newStatus);
       loadData();
   };
@@ -369,23 +413,20 @@ export default function KitchenPage() {
 
   return (
     <div className="flex h-[100dvh] bg-[#F1F5F9] font-sans text-slate-900 overflow-hidden flex-col">
-      <KDSHeader count={tickets.length} latestOrderTable={latestOrderTable} onStopAlert={stopAlert} muted={muted} toggleMute={() => setMuted(!muted)} />
+      <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} />
 
-      {/* --- KANBAN BOARD (VERTICAL STACK MOBILE, HORIZONTAL DESKTOP) --- */}
+      {/* --- KANBAN BOARD --- */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth">
-          {/* Changed Layout: Flex-Col on Mobile, Flex-Row on Desktop */}
           <div className="flex flex-col md:flex-row gap-8 md:gap-6 h-auto md:h-full min-w-full md:min-w-[1200px] justify-center">
               
-              {/* PENDING COLUMN */}
               <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
                     title="NEW ORDERS" count={pendingTickets.length} tickets={pendingTickets} status="pending"
                     color="bg-blue-50/50 border-blue-100" badgeColor="bg-blue-600 text-white"
-                    onOpen={setSelectedTicket} onSwipe={handleMoveTicket}
+                    onOpen={(t:any) => { handleAcknowledge(); setSelectedTicket(t); }} onSwipe={handleMoveTicket}
                 />
               </div>
 
-              {/* COOKING COLUMN */}
               <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
                     title="COOKING" count={cookingTickets.length} tickets={cookingTickets} status="cooking"
@@ -394,7 +435,6 @@ export default function KitchenPage() {
                 />
               </div>
 
-              {/* READY COLUMN */}
               <div className="flex-1 min-h-[50vh] md:min-h-0 md:h-full">
                 <TicketColumn 
                     title="READY FOR SERVICE" count={readyTickets.length} tickets={readyTickets} status="ready"
@@ -408,83 +448,90 @@ export default function KitchenPage() {
 
       <KitchenDock onRefresh={loadData} />
 
-      {/* --- DETAIL MODAL --- */}
+      {/* --- PREMIUM DETAIL MODAL --- */}
       <AnimatePresence>
           {selectedTicket && (
               <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4">
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTicket(null)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
                   <motion.div 
                       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                      className="bg-white w-full md:w-[600px] rounded-t-[2rem] md:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh] md:max-h-[90vh] border border-white/20"
+                      className="bg-white w-full md:w-[600px] rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col h-[85vh] md:h-auto md:max-h-[90vh] border border-white/20"
                   >
-                      {/* Header */}
-                      <div className="bg-slate-50 p-6 border-b border-slate-200 flex justify-between items-start sticky top-0 z-10">
+                      <div className="bg-slate-50 p-6 md:p-8 border-b border-slate-200 flex justify-between items-start sticky top-0 z-10 shrink-0">
                           <div>
-                              <h2 className="text-3xl font-black text-slate-900 tracking-tight">{selectedTicket.table_name}</h2>
-                              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Order #{selectedTicket.id.slice(0,6)}</p>
+                              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none mb-1">{selectedTicket.table_name}</h2>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Order #{selectedTicket.id.slice(0,6)}</p>
                           </div>
-                          <button onClick={() => setSelectedTicket(null)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all"><X className="w-5 h-5" /></button>
+                          <button onClick={() => setSelectedTicket(null)} className="w-12 h-12 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all active:scale-90 shadow-sm"><X className="w-6 h-6" /></button>
                       </div>
 
-                      {/* Items List */}
-                      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 custom-scrollbar bg-white">
-                          {selectedTicket.order_items.map((item) => (
-                              <div 
-                                  key={item.id} 
-                                  className={`p-4 rounded-2xl border flex justify-between items-start transition-all ${
-                                      item.status === 'served' ? 'bg-slate-50 border-slate-100 opacity-60 pointer-events-none' : // DISABLE POINTER EVENTS IF SERVED
-                                      'bg-white border-slate-100 shadow-sm hover:border-emerald-200'
-                                  }`}
-                              >
-                                  <div className="flex gap-4 flex-1 cursor-pointer" onClick={() => handleItemClick(item, selectedTicket.id)}>
-                                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-700">{item.quantity}x</div>
-                                      <div className="flex-1">
-                                          <h4 className={`font-bold text-lg leading-tight ${item.status === 'served' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
-                                          {item.notes && (
-                                              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-100 animate-pulse">
-                                                  <AlertTriangle className="w-4 h-4 fill-red-100" />
-                                                  <span className="text-xs font-black uppercase tracking-wide">{item.notes}</span>
+                      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 md:space-y-4 custom-scrollbar bg-white">
+                          {selectedTicket.order_items.map((item) => {
+                              const safeStatus = (item.status || '').toLowerCase().trim();
+                              const isCompleted = safeStatus === 'served' || safeStatus === 'ready';
+
+                              return (
+                                  <div 
+                                      key={item.unique_id || item.id} 
+                                      className={`p-5 rounded-2xl border flex justify-between items-center transition-all shadow-sm ${
+                                          isCompleted ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-emerald-300'
+                                      }`}
+                                  >
+                                      <div 
+                                          className={`flex gap-4 flex-1 ${isCompleted ? 'cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}`} 
+                                          onClick={() => handleItemClick(item, selectedTicket.id)}
+                                      >
+                                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shrink-0 ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-md'}`}>
+                                              {item.quantity}x
+                                          </div>
+                                          <div className="flex flex-col justify-center min-w-0 pr-2">
+                                              <h4 className={`font-black text-lg md:text-xl leading-tight truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
+                                              
+                                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                  {item.variant && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wider">{item.variant}</span>}
+                                                  {item.notes && (
+                                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100">
+                                                          <AlertTriangle className="w-3 h-3" />
+                                                          <span className="text-[10px] font-black uppercase tracking-wide">{item.notes}</span>
+                                                      </span>
+                                                  )}
                                               </div>
-                                          )}
+                                          </div>
+                                      </div>
+                                      
+                                      <div className="flex flex-col gap-2 items-end shrink-0">
+                                          <button 
+                                              disabled={isCompleted}
+                                              onClick={() => handleItemClick(item, selectedTicket.id)}
+                                              className={`px-4 py-3 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-colors ${
+                                                  safeStatus === 'served' ? 'bg-slate-200 text-slate-400' :
+                                                  safeStatus === 'ready' ? 'bg-emerald-100 text-emerald-700' : 
+                                                  safeStatus === 'cooking' ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-100 shadow-sm' : 
+                                                  'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                          }`}>
+                                              {safeStatus === 'served' ? <Check className="w-4 h-4"/> : safeStatus === 'ready' ? <CheckCheck className="w-4 h-4" /> : safeStatus === 'cooking' ? <Flame className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                                              {safeStatus}
+                                          </button>
                                       </div>
                                   </div>
-                                  
-                                  <div className="flex flex-col gap-2 items-end">
-                                      <button 
-                                          onClick={() => handleItemClick(item, selectedTicket.id)}
-                                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors ${
-                                              item.status === 'served' ? 'bg-slate-200 text-slate-400' :
-                                              item.status === 'ready' ? 'bg-emerald-100 text-emerald-700' : 
-                                              item.status === 'cooking' ? 'bg-orange-100 text-orange-700' : 
-                                              'bg-slate-100 text-slate-500'
-                                      }`}>
-                                          {item.status === 'served' ? <Check className="w-3 h-3"/> : item.status === 'ready' ? <CheckCheck className="w-3 h-3" /> : item.status === 'cooking' ? <Flame className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                          {item.status}
-                                      </button>
-                                      {item.status !== 'served' && item.status !== 'ready' && (
-                                        <button onClick={(e) => { e.stopPropagation(); handleDisableItem(item.name); }} className="text-[9px] font-bold text-slate-300 hover:text-red-500 flex items-center gap-1"><Ban className="w-3 h-3" /> Item</button>
-                                      )}
-                                  </div>
-                              </div>
-                          ))}
+                              )
+                          })}
                       </div>
 
-                      {/* Footer Actions */}
-                      <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-200 flex gap-3 safe-area-pb">
+                      <div className="p-5 md:p-6 bg-slate-50 border-t border-slate-200 flex gap-4 shrink-0 pb-safe">
                           {selectedTicket.status !== 'cooking' && selectedTicket.status !== 'ready' && (
-                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'cooking')} className="flex-1 py-3.5 rounded-xl bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-200 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                  <Flame className="w-4 h-4" /> Start Cooking
+                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'cooking')} className="flex-1 py-4 md:py-5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm md:text-base shadow-xl shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest">
+                                  <Flame className="w-5 h-5" /> Start Cooking
                               </button>
                           )}
                           {selectedTicket.status !== 'ready' && (
-                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'ready')} className="flex-1 py-3.5 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-200 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4" /> Mark Ready
+                              <button onClick={() => handleMoveTicket(selectedTicket.id, 'ready')} className="flex-1 py-4 md:py-5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm md:text-base shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest">
+                                  <CheckCircle2 className="w-5 h-5" /> All Ready
                               </button>
                           )}
-                          {/* SERVE BUTTON REMOVED FOR KITCHEN STAFF */}
                           {selectedTicket.status === 'ready' && (
-                              <div className="flex-1 py-3.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed">
-                                  <Check className="w-4 h-4" /> Awaiting Waiter
+                              <div className="flex-1 py-4 md:py-5 rounded-2xl bg-slate-200 text-slate-500 font-black text-sm md:text-base flex items-center justify-center gap-2 cursor-not-allowed uppercase tracking-widest">
+                                  <Check className="w-5 h-5" /> Awaiting Waiter
                               </div>
                           )}
                       </div>
@@ -501,7 +548,6 @@ export default function KitchenPage() {
 function TicketColumn({ title, count, tickets, status, color, badgeColor, onOpen, onSwipe }: any) {
     return (
         <div className={`w-full flex-1 flex flex-col h-full md:rounded-[2.5rem] md:border-2 md:border-dashed ${color} overflow-hidden transition-all duration-300 relative bg-transparent md:bg-white/50 backdrop-blur-sm`}>
-            {/* Desktop Header */}
             <div className="flex px-6 py-5 justify-between items-center sticky top-0 z-10 bg-white/50 backdrop-blur-md border-b border-slate-100">
                 <h3 className="font-black text-slate-500 text-xs flex items-center gap-2 uppercase tracking-wider">
                     {status === 'pending' ? <Bell className="w-4 h-4" /> : status === 'cooking' ? <Flame className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -539,16 +585,14 @@ function TicketColumn({ title, count, tickets, status, color, badgeColor, onOpen
 // --- SWIPEABLE TICKET ---
 function SwipeableTicket({ ticket, status, onSwipe, onOpen }: any) {
     const x = useMotionValue(0);
-    const opacity = useTransform(x, [0, 200], [1, 0]);
+    const opacity = useTransform(x, [0, 150], [1, 0]);
     
     let nextStatus = '';
     let actionLabel = '';
     let actionColor = '';
     
-    // LOGIC GUARD: NO 'SERVE' OPTION
     if (status === 'pending') { nextStatus = 'cooking'; actionLabel = 'Cook'; actionColor = 'bg-orange-500'; }
     else if (status === 'cooking') { nextStatus = 'ready'; actionLabel = 'Ready'; actionColor = 'bg-emerald-500'; }
-    // NO NEXT STATUS FOR READY IN KITCHEN VIEW
 
     const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         if (info.offset.x > SWIPE_THRESHOLD && status !== 'ready') {
@@ -559,7 +603,7 @@ function SwipeableTicket({ ticket, status, onSwipe, onOpen }: any) {
     return (
         <motion.div 
             style={{ x, opacity }}
-            drag={status !== 'ready' ? "x" : false} // DISABLE DRAG IF READY
+            drag={status !== 'ready' ? "x" : false} 
             dragConstraints={{ left: 0, right: 0 }} 
             dragElastic={{ left: 0, right: 0.5 }} 
             onDragEnd={handleDragEnd}
@@ -567,7 +611,6 @@ function SwipeableTicket({ ticket, status, onSwipe, onOpen }: any) {
             onClick={() => onOpen(ticket)}
             className="cursor-pointer relative touch-pan-y"
         >
-            {/* Background Action Indicator */}
             {status !== 'ready' && (
                 <div className={`absolute inset-0 ${actionColor} rounded-[1.8rem] flex items-center justify-start px-8 text-white font-black uppercase tracking-widest z-0`}>
                     <div className="flex items-center gap-2">
@@ -577,7 +620,6 @@ function SwipeableTicket({ ticket, status, onSwipe, onOpen }: any) {
                 </div>
             )}
 
-            {/* Foreground Card */}
             <div className="relative bg-white z-10 p-5 rounded-[1.8rem] shadow-sm hover:shadow-md border border-slate-100 transition-all active:scale-[0.98]">
                 <TicketCardContent ticket={ticket} />
             </div>
@@ -595,57 +637,67 @@ function TicketCardContent({ ticket }: { ticket: KitchenTicket }) {
             const diff = Math.floor((new Date().getTime() - new Date(ticket.created_at).getTime()) / 1000);
             const m = Math.floor(diff / 60);
             setElapsed(`${m}m`);
-            setIsLate(m > 20);
+            setIsLate(m > 20); 
         };
         update();
         const interval = setInterval(update, 60000);
         return () => clearInterval(interval);
     }, [ticket.created_at]);
 
-    const readyItems = ticket.order_items.filter(i => i.status === 'ready' || i.status === 'served').length;
-    const totalItems = ticket.order_items.length;
+    const readyItems = ticket.order_items.filter(i => {
+        const s = (i.status || '').toLowerCase().trim();
+        return s === 'ready' || s === 'served';
+    }).length;
+    
+    const validItems = ticket.order_items.filter(i => {
+        const s = (i.status || '').toLowerCase().trim();
+        return s !== 'cancelled' && s !== 'void' && i.quantity > 0;
+    });
+
+    const totalItems = validItems.length;
     const progress = totalItems > 0 ? Math.round((readyItems / totalItems) * 100) : 0;
-    const hasNotes = ticket.order_items.some(i => i.notes);
+    const hasNotes = validItems.some(i => i.notes);
 
     return (
         <div className={`w-full ${isLate ? 'ring-2 ring-red-100 rounded-[1.8rem]' : ''}`}>
-            {/* Header */}
-            <div className="flex justify-between items-start mb-3">
+            <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-slate-50 rounded-xl"><GripVertical className="w-4 h-4 text-slate-300" /></div>
+                    <div className="p-2.5 bg-slate-50 rounded-xl"><GripVertical className="w-4 h-4 text-slate-300" /></div>
                     <div>
-                        <span className="text-xl font-black text-slate-900 block leading-none">{ticket.table_name}</span>
+                        <span className="text-xl md:text-2xl font-black text-slate-900 block leading-none">{ticket.table_name}</span>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1 block">#{ticket.id.slice(0,4)}</span>
                     </div>
                 </div>
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black ${isLate ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
-                    <Clock className="w-3 h-3" /> {elapsed}
+                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-black ${isLate ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                    <Clock className="w-3.5 h-3.5" /> {elapsed}
                 </div>
             </div>
 
-            {/* Item Summary */}
-            <div className="space-y-1.5 mb-4 pl-2">
-                {ticket.order_items.slice(0, 3).map((item, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs">
-                        <div className="flex items-center gap-2">
-                            <span className="font-black text-slate-600 bg-slate-50 px-1.5 rounded-md min-w-[20px] text-center">{item.quantity}</span> 
-                            <span className={`font-bold truncate max-w-[120px] ${item.status === 'ready' || item.status === 'served' ? 'text-emerald-600 line-through' : 'text-slate-700'}`}>{item.name}</span>
+            <div className="space-y-2 mb-5 pl-2">
+                {validItems.slice(0, 3).map((item, i) => {
+                    const s = (item.status || '').toLowerCase().trim();
+                    const isDone = s === 'ready' || s === 'served';
+                    return (
+                        <div key={i} className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2.5">
+                                <span className="font-black text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md min-w-[24px] text-center">{item.quantity}</span> 
+                                <span className={`font-bold truncate max-w-[140px] md:max-w-[180px] ${isDone ? 'text-emerald-600 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                            </div>
+                            {item.notes && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm" />}
                         </div>
-                        {item.notes && <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
-                    </div>
-                ))}
-                {ticket.order_items.length > 3 && <p className="text-[10px] text-slate-400 font-bold pl-1">+ {ticket.order_items.length - 3} more items...</p>}
+                    )
+                })}
+                {validItems.length > 3 && <p className="text-[10px] text-slate-400 font-black pl-1 uppercase tracking-widest pt-1">+ {validItems.length - 3} MORE</p>}
             </div>
 
-            {/* Footer */}
-            <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
                 {hasNotes ? (
-                    <div className="flex items-center gap-1 text-[9px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md">
+                    <div className="flex items-center gap-1.5 text-[10px] font-black text-red-500 bg-red-50 px-2.5 py-1 rounded-md tracking-wider">
                         <AlertTriangle className="w-3 h-3" /> NOTE
                     </div>
                 ) : <div />}
                 
-                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }} />
                 </div>
             </div>

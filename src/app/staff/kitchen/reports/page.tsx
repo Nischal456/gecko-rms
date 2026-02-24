@@ -5,17 +5,27 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ChefHat, History, FileText, Calendar, DollarSign, 
-  LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ArrowUpRight, Check, AlertTriangle
+  LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ChevronDown, ChevronUp, Check, AlertTriangle, Utensils
 } from "lucide-react";
 import { getKitchenStats, getKitchenTickets } from "@/app/actions/kitchen";
 import { logoutStaff } from "@/app/actions/staff-auth";
 import { toast } from "sonner";
+import React from "react";
+import NepaliDate from 'nepali-date-converter';
 
 // --- CONFIG ---
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- UTILS ---
 const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP').format(amount);
+
+const toBS = (dateStr: string) => { 
+    try { 
+        const date = new Date(dateStr);
+        const bsDate = new NepaliDate(date);
+        return bsDate.format('YYYY/MM/DD'); 
+    } catch { return "---"; }
+};
 
 // --- PREMIUM DOCK ---
 function KitchenDock() {
@@ -99,8 +109,9 @@ function DockLink({ href, icon, label }: any) {
 export default function KitchenReportsPage() {
     const [data, setData] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'daily' | 'leaves' | 'payroll'>('daily');
+    const [expandedBill, setExpandedBill] = useState<string | null>(null);
     
-    // Notification State
+    // Notification State (Persistent loop)
     const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
     const prevTicketIds = useRef<Set<string>>(new Set());
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -110,6 +121,7 @@ export default function KitchenReportsPage() {
         // Init Audio
         const audio = new Audio(ALERT_SOUND);
         audio.volume = 1.0;
+        audio.loop = true; 
         audioRef.current = audio;
 
         // Load Reports
@@ -119,7 +131,7 @@ export default function KitchenReportsPage() {
 
         // Start Live Order Polling
         pollForNewOrders();
-        const pollInterval = setInterval(pollForNewOrders, 4000);
+        const pollInterval = setInterval(pollForNewOrders, 3000);
         return () => clearInterval(pollInterval);
     }, []);
 
@@ -129,7 +141,6 @@ export default function KitchenReportsPage() {
             if (kdsRes.success && Array.isArray(kdsRes.data)) {
                 const currentIds = new Set(kdsRes.data.map(t => t.id));
                 
-                // Don't alert on the very first load
                 if (!isFirstLoad.current) {
                     const newTicket = kdsRes.data.find(t => 
                         t.status === 'pending' && !prevTicketIds.current.has(t.id)
@@ -149,9 +160,16 @@ export default function KitchenReportsPage() {
         setLatestOrderTable(tableName);
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(e => console.log("Audio play blocked (Interact with page first)", e));
+            audioRef.current.play().catch(e => console.log("Audio play blocked", e));
         }
-        setTimeout(() => setLatestOrderTable(null), 8000);
+    };
+
+    const stopAlert = () => {
+        setLatestOrderTable(null);
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
     };
 
     if(!data) return (
@@ -161,8 +179,11 @@ export default function KitchenReportsPage() {
         </div>
     );
 
+    const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+    const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
+
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 pb-[120px] relative overflow-x-hidden">
+        <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 pb-[120px] relative overflow-x-hidden custom-scrollbar">
             
             {/* LIVE ALERT BANNER */}
             <AnimatePresence>
@@ -170,7 +191,7 @@ export default function KitchenReportsPage() {
                     <motion.div 
                         initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
                         className="fixed top-0 left-0 right-0 bg-red-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer"
-                        onClick={() => setLatestOrderTable(null)}
+                        onClick={stopAlert}
                     >
                         <div className="flex items-center gap-4 animate-pulse">
                             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
@@ -181,8 +202,8 @@ export default function KitchenReportsPage() {
                                 <h3 className="text-xl md:text-2xl font-black leading-none">{latestOrderTable}</h3>
                             </div>
                         </div>
-                        <button className="bg-white text-red-600 px-4 py-2 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
-                            Dismiss
+                        <button className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
+                            Acknowledge
                         </button>
                     </motion.div>
                 )}
@@ -206,51 +227,126 @@ export default function KitchenReportsPage() {
                 </div>
             </header>
 
-            <div className="p-6 max-w-5xl mx-auto space-y-6 md:space-y-8 mt-4">
+            <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6 md:space-y-8 mt-4">
                 
                 {/* DAILY SALES VIEW */}
                 {activeTab === 'daily' && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 md:space-y-8">
+                    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 md:space-y-8">
                         
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                            <StatCard label="Total Orders" value={data.stats.total} color="bg-blue-50 text-blue-600 border-blue-100" icon={<ChefHat className="w-5 h-5"/>} />
-                            <StatCard label="Completed" value={data.stats.completed} color="bg-emerald-50 text-emerald-600 border-emerald-100" icon={<CheckCircle2 className="w-5 h-5"/>} />
-                            <StatCard label="Pending" value={data.stats.pending} color="bg-orange-50 text-orange-600 border-orange-100" icon={<Clock className="w-5 h-5"/>} />
-                            <StatCard label="Est. Revenue" value={formatRs(data.stats.revenue)} color="bg-slate-900 text-white border-slate-800" icon={<DollarSign className="w-5 h-5 text-emerald-400"/>} />
+                            <motion.div variants={itemVariants}><StatCard label="Total Orders" value={data.stats.total} color="bg-blue-50 text-blue-600 border-blue-100" icon={<ChefHat className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Completed" value={data.stats.completed} color="bg-emerald-50 text-emerald-600 border-emerald-100" icon={<CheckCircle2 className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Pending" value={data.stats.pending} color="bg-orange-50 text-orange-600 border-orange-100" icon={<Clock className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Est. Revenue" value={formatRs(data.stats.revenue)} color="bg-slate-900 text-white border-slate-800" icon={<DollarSign className="w-5 h-5 text-emerald-400"/>} /></motion.div>
                         </div>
 
-                        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                            <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
-                                <h2 className="font-black text-xl text-slate-900">Today's Log</h2>
+                        <motion.div variants={itemVariants} className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                            <div className="px-6 md:px-8 py-6 border-b border-slate-50 flex items-center justify-between">
+                                <h2 className="font-black text-xl text-slate-900">Recent Kitchen Log</h2>
                                 <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">{data.history.length} Records</span>
                             </div>
-                            <div className="divide-y divide-slate-50">
-                                {data.history.map((order: any) => (
-                                    <div key={order.id} className="px-8 py-5 flex justify-between items-center hover:bg-slate-50 transition-colors group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-500 shadow-inner group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
-                                                <Check className="w-6 h-6" />
+                            
+                            <div className="divide-y divide-slate-100">
+                                {data.history.map((order: any) => {
+                                    const isExpanded = expandedBill === order.id;
+                                    
+                                    // Robust parsing for valid items and quantities
+                                    const validItems = order.order_items.filter((i:any) => {
+                                        const qty = i.qty || i.quantity || 1;
+                                        const s = (i.status || '').toLowerCase().trim();
+                                        return qty > 0 && s !== 'cancelled' && s !== 'void';
+                                    });
+
+                                    // Dynamic Badge Status based on backend real status
+                                    const os = (order.status || '').toLowerCase().trim();
+                                    let statusLabel = "Completed";
+                                    let badgeColor = "bg-purple-50 text-purple-700 border-purple-200";
+                                    
+                                    if (os === 'ready') {
+                                        statusLabel = "Ready";
+                                        badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
+                                    } else if (os === 'served') {
+                                        statusLabel = "Served";
+                                        badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                    }
+
+                                    return (
+                                        <div key={order.id} className="flex flex-col">
+                                            {/* Row Header */}
+                                            <div 
+                                                onClick={() => setExpandedBill(isExpanded ? null : order.id)} 
+                                                className={`px-6 md:px-8 py-5 flex justify-between items-center cursor-pointer transition-colors group ${isExpanded ? 'bg-slate-50/80' : 'hover:bg-slate-50'}`}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-colors ${isExpanded ? 'bg-slate-200 text-slate-700 shadow-inner' : 'bg-slate-100 text-slate-500 shadow-inner group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
+                                                        <Check className="w-6 h-6" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-black text-lg text-slate-900 leading-none">{order.table_name}</p>
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">#{order.id.slice(0,5)}</span>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                                                            <Clock className="w-3 h-3" /> {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {toBS(order.created_at)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border ${badgeColor}`}>
+                                                        {statusLabel}
+                                                    </span>
+                                                    <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-600 text-[10px] font-black uppercase tracking-wider border border-slate-200">
+                                                        <Utensils className="w-3 h-3"/> {validItems.length} Items
+                                                    </span>
+                                                    <div className={`p-2 rounded-full transition-colors ${isExpanded ? 'bg-slate-200 text-slate-700' : 'group-hover:bg-slate-200 text-slate-400'}`}>
+                                                        {isExpanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="font-black text-lg text-slate-900">{order.table_name}</p>
-                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                            </div>
+
+                                            {/* Expanded Details */}
+                                            <AnimatePresence>
+                                                {isExpanded && (
+                                                    <motion.div 
+                                                        initial={{ opacity: 0, height: 0 }} 
+                                                        animate={{ opacity: 1, height: 'auto' }} 
+                                                        exit={{ opacity: 0, height: 0 }} 
+                                                        className="bg-slate-50 border-t border-b border-slate-100 px-6 md:px-8 py-5 overflow-hidden"
+                                                    >
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                                                            {validItems.map((item:any, idx:number) => {
+                                                                const qty = item.qty || item.quantity || 1;
+                                                                const s = (item.status || '').toLowerCase().trim();
+                                                                const isItemDone = ['ready', 'served', 'completed', 'paid'].includes(s);
+
+                                                                return (
+                                                                    <div key={idx} className={`p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-colors ${isItemDone ? 'bg-white border-slate-200' : 'bg-orange-50/50 border-orange-200'}`}>
+                                                                        <span className={`font-black px-2 py-1 rounded-lg text-xs border shrink-0 ${isItemDone ? 'bg-slate-50 text-slate-600 border-slate-100' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>{qty}x</span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className={`text-sm font-bold leading-tight ${isItemDone ? 'text-slate-800' : 'text-slate-900'}`}>{item.name}</span>
+                                                                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                                {item.variant && <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{item.variant}</span>}
+                                                                                {item.note && <span className="text-[9px] text-orange-600 font-bold uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> {item.note}</span>}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
-                                        <div className="text-right">
-                                            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-100">
-                                                Served
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                                 {data.history.length === 0 && (
-                                    <div className="p-12 flex flex-col items-center justify-center text-slate-300">
-                                        <History className="w-12 h-12 mb-3 opacity-20" />
-                                        <p className="font-bold">No orders processed yet today.</p>
+                                    <div className="p-16 flex flex-col items-center justify-center text-slate-300">
+                                        <History className="w-16 h-16 mb-4 opacity-20" />
+                                        <p className="font-bold uppercase tracking-widest text-xs">No orders processed yet today.</p>
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </motion.div>
                     </motion.div>
                 )}
 
@@ -273,9 +369,9 @@ export default function KitchenReportsPage() {
                                         </span>
                                     </div>
                                 )) : (
-                                    <div className="p-12 flex flex-col items-center justify-center text-slate-300">
-                                        <Calendar className="w-12 h-12 mb-3 opacity-20" />
-                                        <p className="font-bold">No leave records found.</p>
+                                    <div className="p-16 flex flex-col items-center justify-center text-slate-300">
+                                        <Calendar className="w-16 h-16 mb-4 opacity-20" />
+                                        <p className="font-bold uppercase tracking-widest text-xs">No leave records found.</p>
                                     </div>
                                 )}
                             </div>
@@ -295,17 +391,17 @@ export default function KitchenReportsPage() {
                                     <div key={pay.id} className="px-8 py-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
                                         <div>
                                             <p className="font-black text-lg text-slate-900">{pay.staff_name || "Kitchen Staff"}</p>
-                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Paid on: {new Date(pay.payment_date).toLocaleDateString()}</p>
+                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Paid on: {toBS(pay.payment_date)}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="font-black text-xl text-emerald-600">{formatRs(pay.amount)}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Salary</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Base Salary</p>
                                         </div>
                                     </div>
                                 )) : (
-                                    <div className="p-12 flex flex-col items-center justify-center text-slate-300">
-                                        <DollarSign className="w-12 h-12 mb-3 opacity-20" />
-                                        <p className="font-bold">No payroll records found.</p>
+                                    <div className="p-16 flex flex-col items-center justify-center text-slate-300">
+                                        <DollarSign className="w-16 h-16 mb-4 opacity-20" />
+                                        <p className="font-bold uppercase tracking-widest text-xs">No payroll records found.</p>
                                     </div>
                                 )}
                             </div>
@@ -336,7 +432,7 @@ function TabButton({ label, icon, active, onClick }: any) {
     return (
         <button 
             onClick={onClick}
-            className={`whitespace-nowrap px-5 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all ${active ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 transform scale-105' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+            className={`whitespace-nowrap px-5 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-sm ${active ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 transform scale-105' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
         >
             {icon} {label}
         </button>

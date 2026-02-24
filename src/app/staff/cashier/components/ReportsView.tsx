@@ -5,17 +5,16 @@ import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, 
 import React from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import NepaliDate from 'nepali-date-converter'; // CRITICAL FIX: Using actual library instead of manual calculation
 
 const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP').format(amount);
 
-// Reliable BS Converter
+// --- 100% ACCURATE NEPALI DATE CONVERTER ---
 const toBS = (dateStr: string) => { 
     try { 
-        const d = new Date(dateStr); 
-        d.setDate(d.getDate() + 17); 
-        d.setMonth(d.getMonth() + 8); 
-        d.setFullYear(d.getFullYear() + 56); 
-        return `${d.getFullYear()}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`; 
+        const date = new Date(dateStr);
+        const bsDate = new NepaliDate(date);
+        return bsDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
 };
 

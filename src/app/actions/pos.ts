@@ -5,10 +5,37 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 // --- HELPERS ---
-async function getTenantId(): Promise<number> {
+function getSafeId(id: string | null | undefined): number {
+  return id && !isNaN(Number(id)) ? Number(id) : 5;
+}
+
+function safeParse(data: any): any[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+    } catch (e) {
+      console.error("JSON Parse Error:", e);
+      return [];
+    }
+  }
+  return [];
+}
+
+async function getTenantId() {
   const cookieStore = await cookies();
-  const rawId = cookieStore.get("gecko_tenant_id")?.value;
-  return rawId && !isNaN(Number(rawId)) ? Number(rawId) : 5;
+  const tenantCookie = cookieStore.get("gecko_tenant_id");
+  const rawId = tenantCookie?.value;
+  if (rawId) return getSafeId(rawId);
+
+  const staffCookie = cookieStore.get("gecko_staff_token");
+  const staffToken = staffCookie?.value;
+  if (staffToken) {
+      try { return getSafeId(JSON.parse(staffToken).tenant_id); } catch (e) {}
+  }
+  return 5; 
 }
 
 // --- 1. GET LIVE STATS (SELF-HEALING + ORDERS LIST) ---
@@ -17,14 +44,12 @@ export async function getPOSStats() {
   const today = new Date().toISOString().split('T')[0];
 
   try {
-      // 1. Fetch ALL Tables with VISUAL DATA
       const { data: tables } = await supabaseAdmin
           .from("restaurant_tables")
           .select("id, label, status, section, shape, seats, x, y, width, height, rotation") 
           .eq("tenant_id", tenantId)
           .order("label", { ascending: true });
 
-      // 2. Fetch Today's Orders
       const { data: logs } = await supabaseAdmin
           .from("daily_order_logs")
           .select("orders_data")
@@ -35,14 +60,12 @@ export async function getPOSStats() {
 
       const orders = logs && Array.isArray(logs.orders_data) ? logs.orders_data : [];
       
-      // 3. IDENTIFY REALITY
       const activeOrders = orders.filter((o: any) => 
           !['cancelled', 'completed', 'paid'].includes(o.status)
       );
       
       const activeTableLabels = new Set(activeOrders.map((o: any) => o.tbl));
 
-      // 4. AUTO-HEAL DATABASE
       const updates = [];
 
       const tablesToOccupy = tables?.filter(t => activeTableLabels.has(t.label) && t.status === 'free').map(t => t.label) || [];
@@ -67,7 +90,6 @@ export async function getPOSStats() {
 
       if (updates.length > 0) await Promise.all(updates);
 
-      // 5. CALCULATE STATS
       const finalTables = tables?.map(t => {
           if (activeTableLabels.has(t.label)) return { ...t, status: 'occupied' };
           if (t.status === 'occupied' && !activeTableLabels.has(t.label)) return { ...t, status: 'free' };
@@ -129,16 +151,13 @@ export async function getPOSMenu() {
   return { categories, items: allItems.filter(i => i.is_available) };
 }
 
-// --- 3. GET POS DATA (AGGREGATOR FOR FRONTEND) ---
-// *** THIS FUNCTION WAS MISSING, NOW ADDED ***
+// --- 3. GET POS DATA ---
 export async function getPOSData() {
     try {
         const [menu, stats] = await Promise.all([getPOSMenu(), getPOSStats()]);
-        
-        // Map tables for POS view (ensure name exists)
         const tables = stats.stats?.tables.map((t: any) => ({
             ...t,
-            name: t.label // Ensure 'name' property exists for frontend compatibility
+            name: t.label 
         })) || [];
 
         return {
@@ -152,131 +171,225 @@ export async function getPOSData() {
     }
 }
 
-// --- 4. SUBMIT ORDER (RPC + TAKEAWAY) ---
+// --- 4. SUBMIT ORDER (3-DAY WINDOW + APPEND LOGIC) ---
 export async function submitOrder(tableId: string, cartItems: any[], total: number) {
-  const tenantId = await getTenantId(); 
-  const today = new Date().toISOString().split('T')[0];
-  
-  // 1. CHECK TAKEAWAY
-  const isTakeaway = tableId.startsWith("TAKEAWAY");
+    const tenantId = await getTenantId();
+    const todayStr = new Date().toISOString().split('T')[0];
 
-  let staffName = "Server";
-  try {
-      const cookieStore = await cookies();
-      const token = cookieStore.get("gecko_staff_token")?.value;
-      if (token) staffName = JSON.parse(token).name;
-  } catch (e) {}
+    // 3-Day Window for finding existing pending orders
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const orderId = crypto.randomUUID().split('-')[0].toUpperCase();
-  const newOrder = {
-      id: orderId,
-      tbl: tableId, 
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      items: cartItems.map((item: any) => ({
-          id: item.id,
-          qty: item.qty,
-          name: item.name,
-          note: item.note || "",
-          price: item.price,
-          status: 'pending',
-          variant: item.variantName || ""
-      })),
-      staff: staffName,
-      total: total,
-      status: 'pending',
-      timestamp: new Date().toISOString()
-  };
+    const datesToCheck = [
+        yesterday.toISOString().split('T')[0],
+        todayStr,
+        tomorrow.toISOString().split('T')[0]
+    ];
 
-  // 2. SAVE TO DB (RPC)
-  const { error: rpcError } = await supabaseAdmin.rpc('upsert_order_log', {
-      p_tenant_id: tenantId,
-      p_date: today,
-      p_order_data: newOrder
-  });
+    const isTakeaway = tableId.startsWith("TAKEAWAY");
 
-  if (rpcError) {
-      console.error("[POS] RPC Error:", rpcError);
-      return { success: false, msg: "Save Failed: " + rpcError.message };
-  }
+    let staffName = "Server";
+    try {
+        const cookieStore = await cookies();
+        const token = cookieStore.get("gecko_staff_token")?.value;
+        if (token) staffName = JSON.parse(token).name;
+    } catch (e) {}
 
-  // 3. UPDATE TABLE STATUS
-  if (!isTakeaway) {
-      await supabaseAdmin
-          .from("restaurant_tables")
-          .update({ status: 'occupied' }) 
-          .eq("label", tableId)
-          .eq("tenant_id", tenantId); 
-  }
+    const compactItems = cartItems.map((i: any) => ({
+        id: i.id,
+        unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+        name: i.name,
+        price: i.price,
+        qty: i.qty,
+        variant: i.variantName || "",
+        note: i.note || "",
+        status: "pending"
+    }));
 
-  // 4. INVENTORY SYNC
-  (async () => {
-      try {
-          const itemNames = cartItems.map((i: any) => i.name);
-          const { data: inv } = await supabaseAdmin.from("inventory").select("*").eq("tenant_id", tenantId).in("item_name", itemNames);
-          if (inv) {
-              for (const cartItem of cartItems) {
-                  const stock = inv.find(i => i.item_name.toLowerCase() === cartItem.name.toLowerCase());
-                  if (stock) await supabaseAdmin.from("inventory").update({ quantity: Math.max(0, stock.quantity - cartItem.qty) }).eq("id", stock.id);
-              }
-          }
-      } catch (e) {}
-  })();
+    try {
+        const { data: logs } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("date, orders_data")
+            .eq("tenant_id", tenantId)
+            .in("date", datesToCheck);
 
-  revalidatePath("/staff/waiter");
-  return { success: true, orderId };
+        let orderAppended = false;
+        let targetDate = todayStr;
+        let finalOrdersForTargetDate: any[] = [];
+
+        // 1. Try to append to an existing pending order for the same table (Dine In only)
+        if (!isTakeaway && logs && logs.length > 0) {
+            for (const log of logs) {
+                const currentOrders = safeParse(log.orders_data);
+                let foundInThisLog = false;
+
+                const updatedOrders = currentOrders.map((order: any) => {
+                    if (order.tbl === tableId && order.status === 'pending') {
+                        foundInThisLog = true;
+                        orderAppended = true;
+                        targetDate = log.date;
+                        return {
+                            ...order,
+                            items: [...order.items, ...compactItems],
+                            total: Number(order.total) + total,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                    return order;
+                });
+
+                if (foundInThisLog) {
+                    finalOrdersForTargetDate = updatedOrders;
+                    break;
+                }
+            }
+        }
+
+        // 2. If no pending order to append to, create a brand new order in TODAY's log
+        if (!orderAppended) {
+            const orderId = Date.now().toString(36).toUpperCase();
+            const type = isTakeaway ? 'takeaway' : 'dine_in';
+            const finalTableId = isTakeaway ? `TAKEAWAY-${orderId.slice(-4)}` : tableId;
+
+            const newOrder = {
+                id: orderId,
+                tbl: finalTableId,
+                items: compactItems,
+                total: total,
+                status: 'pending',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                staff: staffName,
+                type,
+                timestamp: new Date().toISOString()
+            };
+
+            const todayLog = logs?.find(l => l.date === todayStr);
+            const existingTodayOrders = safeParse(todayLog?.orders_data);
+            finalOrdersForTargetDate = [...existingTodayOrders, newOrder];
+            targetDate = todayStr;
+
+            if (type === 'dine_in') {
+                await supabaseAdmin.from("restaurant_tables").update({ status: 'occupied' }).eq("label", finalTableId).eq("tenant_id", tenantId);
+            }
+        }
+
+        // 3. Save the log 
+        const { error } = await supabaseAdmin.from("daily_order_logs").upsert({
+            tenant_id: tenantId,
+            date: targetDate,
+            orders_data: finalOrdersForTargetDate
+        }, { onConflict: 'tenant_id, date' });
+
+        if (error) throw error;
+
+        // 4. INVENTORY SYNC
+        (async () => {
+            try {
+                const itemNames = cartItems.map((i: any) => i.name);
+                const { data: inv } = await supabaseAdmin.from("inventory").select("*").eq("tenant_id", tenantId).in("item_name", itemNames);
+                if (inv) {
+                    for (const cartItem of cartItems) {
+                        const stock = inv.find(i => i.item_name.toLowerCase() === cartItem.name.toLowerCase());
+                        if (stock) await supabaseAdmin.from("inventory").update({ quantity: Math.max(0, stock.quantity - cartItem.qty) }).eq("id", stock.id);
+                    }
+                }
+            } catch (e) {}
+        })();
+
+        revalidatePath("/staff/waiter");
+        revalidatePath("/staff/cashier");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, msg: e.message };
+    }
 }
 
-// --- 5. MODIFY ORDER ---
-export async function modifyOrder(orderId: string, cartItems: any[], total: number) {
+// --- 5. MODIFY ORDER (CRITICAL FIX: 3-DAY WINDOW & STRICT STRING MATCHING) ---
+export async function modifyOrder(orderId: string, updatedItems: any[], newTotal: number) {
     const tenantId = await getTenantId();
-    const today = new Date().toISOString().split('T')[0];
+    const targetId = String(orderId).trim();
+    
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const datesToCheck = [
+        yesterday.toISOString().split('T')[0],
+        today.toISOString().split('T')[0],
+        tomorrow.toISOString().split('T')[0]
+    ];
 
-    // 1. Fetch Today's Log
-    const { data: log } = await supabaseAdmin
-        .from("daily_order_logs")
-        .select("id, orders_data")
-        .eq("tenant_id", tenantId)
-        .eq("date", today)
-        .single();
+    try {
+        const { data: logs } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("date, orders_data") 
+            .eq("tenant_id", tenantId)
+            .in("date", datesToCheck);
 
-    if (!log) return { success: false, msg: "Order not found today" };
+        if (!logs || logs.length === 0) return { success: false, msg: "No logs found" };
 
-    // 2. Find the specific Order
-    let orders = Array.isArray(log.orders_data) ? log.orders_data : [];
-    const orderIndex = orders.findIndex((o: any) => o.id === orderId);
+        let foundDate = null;
+        let modifiedOrders = null;
 
-    if (orderIndex === -1) return { success: false, msg: "Order ID not found" };
+        for (const log of logs) {
+            const currentOrders = safeParse(log.orders_data);
+            let found = false;
 
-    // 3. SAFETY LOCK
-    const currentStatus = orders[orderIndex].status;
-    if (['cooking', 'ready', 'served', 'paid', 'completed'].includes(currentStatus)) {
-        return { success: false, msg: `Cannot modify! Order is ${currentStatus.toUpperCase()}` };
+            const updatedOrders = currentOrders.map((order: any) => {
+                if (String(order.id || "").trim() === targetId) {
+                    found = true;
+                    foundDate = log.date; 
+                    
+                    // Maintain existing item IDs if they had them, otherwise generate new ones
+                    const itemsWithStatus = updatedItems.map(item => ({
+                        ...item,
+                        unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+                        status: item.status || 'pending'
+                    }));
+
+                    // Recalculate parent status dynamically
+                    const hasPending = itemsWithStatus.some((i:any) => (i.status||'').toLowerCase().trim() === 'pending');
+                    const hasCooking = itemsWithStatus.some((i:any) => (i.status||'').toLowerCase().trim() === 'cooking');
+                    const hasReady = itemsWithStatus.some((i:any) => (i.status||'').toLowerCase().trim() === 'ready');
+                    
+                    let newStatus = 'payment_pending';
+                    if (hasReady) newStatus = 'ready';
+                    else if (hasCooking) newStatus = 'cooking';
+                    else if (hasPending) newStatus = 'pending';
+
+                    return { 
+                        ...order, 
+                        items: itemsWithStatus, 
+                        total: newTotal,
+                        status: newStatus,
+                        timestamp: new Date().toISOString()
+                    };
+                }
+                return order;
+            });
+
+            if (found) {
+                modifiedOrders = updatedOrders;
+                break; 
+            }
+        }
+
+        if (!foundDate || !modifiedOrders) {
+            return { success: false, msg: "Order not found. It may be from an older session." };
+        }
+
+        await supabaseAdmin
+            .from("daily_order_logs")
+            .update({ orders_data: modifiedOrders })
+            .eq("tenant_id", tenantId)
+            .eq("date", foundDate); 
+
+        revalidatePath("/staff/waiter");
+        revalidatePath("/staff/cashier");
+        return { success: true };
+
+    } catch (e: any) {
+        return { success: false, msg: e.message };
     }
-
-    // 4. Update the Order Data
-    orders[orderIndex] = {
-        ...orders[orderIndex],
-        items: cartItems.map((item: any) => ({
-            id: item.id,
-            qty: item.qty,
-            name: item.name,
-            note: item.note || "",
-            price: item.price,
-            status: 'pending',
-            variant: item.variantName || ""
-        })),
-        total: total,
-        timestamp: new Date().toISOString()
-    };
-
-    // 5. Save Changes
-    const { error } = await supabaseAdmin
-        .from("daily_order_logs")
-        .update({ orders_data: orders })
-        .eq("id", log.id);
-
-    if (error) return { success: false, msg: "Update failed: " + error.message };
-
-    revalidatePath("/staff/waiter");
-    return { success: true };
 }
