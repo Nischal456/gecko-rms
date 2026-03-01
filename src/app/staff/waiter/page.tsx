@@ -175,7 +175,7 @@ function UnavailableHeroCard({ items, delay }: any) {
                         {items.map((item: any, idx: number) => (
                             <div key={idx} className="bg-white/80 px-3 py-1.5 rounded-xl border border-red-100/50 flex items-center justify-between shadow-sm">
                                 <span className="text-[11px] font-bold text-red-900 truncate max-w-[70%]">{item.title}</span>
-                                <span className="text-[9px] bg-red-100 text-red-600 px-1.5 rounded-md font-bold">86'd</span>
+                                <span className="text-[9px] bg-red-100 text-red-600 px-1.5 rounded-md font-bold">Disabled</span>
                             </div>
                         ))}
                     </div>

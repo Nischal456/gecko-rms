@@ -171,7 +171,7 @@ export async function getPOSData() {
     }
 }
 
-// --- 4. SUBMIT ORDER (3-DAY WINDOW + APPEND LOGIC) ---
+// --- 4. SUBMIT ORDER ---
 export async function submitOrder(tableId: string, cartItems: any[], total: number) {
     const tenantId = await getTenantId();
     const todayStr = new Date().toISOString().split('T')[0];
@@ -196,6 +196,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         if (token) staffName = JSON.parse(token).name;
     } catch (e) {}
 
+    // EXACTLY AS YOU PROVIDED IT. DO NOT CHANGE THIS.
     const compactItems = cartItems.map((i: any) => ({
         id: i.id,
         unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
@@ -275,37 +276,64 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         }
 
         // 3. Save the log 
-        const { error } = await supabaseAdmin.from("daily_order_logs").upsert({
+        const { error: upsertError } = await supabaseAdmin.from("daily_order_logs").upsert({
             tenant_id: tenantId,
             date: targetDate,
             orders_data: finalOrdersForTargetDate
         }, { onConflict: 'tenant_id, date' });
 
-        if (error) throw error;
+        if (upsertError) throw upsertError;
 
-        // 4. INVENTORY SYNC
-        (async () => {
-            try {
-                const itemNames = cartItems.map((i: any) => i.name);
-                const { data: inv } = await supabaseAdmin.from("inventory").select("*").eq("tenant_id", tenantId).in("item_name", itemNames);
-                if (inv) {
-                    for (const cartItem of cartItems) {
-                        const stock = inv.find(i => i.item_name.toLowerCase() === cartItem.name.toLowerCase());
-                        if (stock) await supabaseAdmin.from("inventory").update({ quantity: Math.max(0, stock.quantity - cartItem.qty) }).eq("id", stock.id);
+        // --- INVENTORY SYNC INJECTION (DOES NOT TOUCH POS LOGIC) ---
+        try {
+            const { data: inventoryItems } = await supabaseAdmin
+                .from("inventory")
+                .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
+                .eq("tenant_id", tenantId);
+
+            if (inventoryItems && inventoryItems.length > 0) {
+                const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                for (const cartItem of cartItems) {
+                    const rawName = cartItem.name || cartItem.n || "";
+                    const rawQty = Number(cartItem.qty || cartItem.q || 1);
+                    const cartClean = superClean(rawName);
+                    
+                    const stockItem = inventoryItems.find(i => {
+                        const invClean = superClean(i.name);
+                        const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
+                        return invClean === cartClean || 
+                               (linkedClean !== "" && linkedClean === cartClean) ||
+                               (linkedClean !== "" && cartClean.includes(linkedClean)) ||
+                               (invClean !== "" && cartClean.includes(invClean));
+                    });
+                    
+                    if (stockItem) {
+                        const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
+                        const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
+                        const newStock = Math.max(0, Number(currentStock) - deductionAmount);
+                        
+                        await supabaseAdmin.from("inventory")
+                            .update({ stock: newStock, quantity: newStock })
+                            .eq("id", stockItem.id);
                     }
                 }
-            } catch (e) {}
-        })();
+            }
+        } catch (invError) {
+            console.error("Inventory Sync Error:", invError);
+        }
+        // --- END INVENTORY SYNC ---
 
         revalidatePath("/staff/waiter");
         revalidatePath("/staff/cashier");
         return { success: true };
     } catch (e: any) {
+        console.error("Submit Order Error:", e);
         return { success: false, msg: e.message };
     }
 }
 
-// --- 5. MODIFY ORDER (CRITICAL FIX: 3-DAY WINDOW & STRICT STRING MATCHING) ---
+// --- 5. MODIFY ORDER ---
 export async function modifyOrder(orderId: string, updatedItems: any[], newTotal: number) {
     const tenantId = await getTenantId();
     const targetId = String(orderId).trim();

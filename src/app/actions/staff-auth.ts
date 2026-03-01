@@ -60,22 +60,22 @@ export async function staffLogin(staffId: string, pin: string) {
     login_time: Date.now()
   });
 
-  // C. Set Cookie
+  // C. Set Cookie (CRITICAL FIX: secure: false)
   cookieStore.set("gecko_staff_token", sessionData, { 
     path: "/", 
     httpOnly: true, 
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: false, 
     maxAge: 60 * 60 * 24 * 7 
   });
 
-  // D. ROUTING LOGIC (Updated for Cashier)
+  // D. ROUTING LOGIC
   let redirectUrl = "/staff/pos"; // Default fallback
   
   if (staff.role === "waiter") redirectUrl = "/staff/waiter";
   if (staff.role === "chef") redirectUrl = "/staff/kitchen";
   if (staff.role === "manager") redirectUrl = "/staff/manager";
-  if (staff.role === "cashier") redirectUrl = "/staff/cashier"; // <--- NEW ROUTE
+  if (staff.role === "cashier") redirectUrl = "/staff/cashier"; 
   
   return { success: true, role: staff.role, url: redirectUrl };
 }
@@ -98,10 +98,12 @@ export async function linkDeviceToRestaurant(code: string) {
   if (!tenant) return { success: false, error: "Invalid Code" };
 
   const cookieStore = await cookies();
+  
+  // CRITICAL FIX: secure: false
   cookieStore.set("gecko_tenant_id", tenant.id.toString(), { 
     path: "/", 
     httpOnly: true, 
-    secure: process.env.NODE_ENV === "production",
+    secure: false, 
     maxAge: 60 * 60 * 24 * 365 
   });
 

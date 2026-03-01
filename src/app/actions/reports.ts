@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { unstable_noStore as noStore } from 'next/cache';
 
 export type ReportRange = "today" | "7d" | "30d" | "90d" | "1y";
 
@@ -30,6 +31,7 @@ async function getTenantId(): Promise<number> {
 
 // --- MAIN REPORT ACTION ---
 export async function getReportData(range: ReportRange) {
+  noStore(); 
   const tenantId = await getTenantId();
   
   // 1. Calculate Date Ranges
@@ -38,7 +40,6 @@ export async function getReportData(range: ReportRange) {
   let prevStartDate = new Date();
   let prevEndDate = new Date();
   
-  // Reset time for accurate daily comparisons
   now.setHours(23, 59, 59, 999); 
 
   switch (range) {
@@ -76,7 +77,6 @@ export async function getReportData(range: ReportRange) {
   const prevEndStr = prevEndDate.toISOString().split('T')[0];
 
   try {
-      // --- A. FETCH DATA ---
       const { data: logs } = await supabaseAdmin
           .from("daily_order_logs")
           .select("date, orders_data, paid_history") 
@@ -91,18 +91,19 @@ export async function getReportData(range: ReportRange) {
           .gte("date", prevStartStr)
           .lte("date", prevEndStr);
 
-      let expenses: any[] = [];
+      let financialLogs: any[] = [];
       try {
           const { data: expData } = await supabaseAdmin
-              .from("staff_payments") // Ensure this table exists, or change to operating_expenses
+              .from("expenses") 
               .select("*")
               .eq("tenant_id", tenantId)
-              .gte("payment_date", currentStartStr)
-              .order("payment_date", { ascending: false });
-          if (expData) expenses = expData;
-      } catch (e) {}
+              .gte("date", currentStartStr)
+              .order("created_at", { ascending: false });
+          if (expData) financialLogs = expData;
+      } catch (e) {
+          console.error("Failed to fetch expenses", e);
+      }
 
-      // --- AGGREGATION CONTAINERS ---
       let totalRevenue = 0;
       let prevRevenue = 0;
       let totalExpense = 0;
@@ -110,11 +111,11 @@ export async function getReportData(range: ReportRange) {
       
       const itemMap: Record<string, { qty: number, sales: number }> = {};
       const dailyMap: Record<string, { revenue: number, expense: number }> = {};
-      const paymentMethods: Record<string, number> = {}; // Built dynamically
+      const paymentMethods: Record<string, number> = {}; 
       const staffPerformance: Record<string, number> = {};
       const allTransactions: any[] = [];
 
-      // 1. Process Current Data
+      // 1. Process Current POS Data
       (logs || []).forEach((log: any) => {
           const dateKey = log.date; 
           if (!dailyMap[dateKey]) dailyMap[dateKey] = { revenue: 0, expense: 0 };
@@ -122,43 +123,36 @@ export async function getReportData(range: ReportRange) {
           const activeOrders = safeParse(log.orders_data);
           const paidOrders = safeParse(log.paid_history);
           
-          // Merge Active and Paid
-          // Filter out cancelled. 
           const validActive = activeOrders.filter((o: any) => o.status !== 'cancelled');
           const allSales = [...validActive, ...paidOrders];
           
           allSales.forEach((order: any) => {
-              // --- STATUS CHECK ---
-              // Is this order strictly paid?
-              // 'paid_history' items are always paid. Active items need status check.
-              const isPaid = paidOrders.includes(order) || ['paid', 'completed'].includes(order.status);
-              
+              // Safe Check if Paid
+              const isFromPaidHistory = paidOrders.some(po => po.id === order.id || po.invoice_no === order.invoice_no);
+              const isPaid = isFromPaidHistory || ['paid', 'completed'].includes(order.status);
               const amount = Number(order.grandTotal || order.total || 0);
               
-              // Only add to Total Revenue if PAID
+              let finalMethod = "Pending";
+
               if (isPaid) {
                   totalRevenue += amount;
                   dailyMap[dateKey].revenue += amount;
 
-                  // Payment Method Tracking (Only for paid)
-                  let method = order.payment_method || "Cash";
-                  // Normalize
-                  if (method.toLowerCase().includes("qr")) method = "QR";
-                  else if (method.toLowerCase().includes("card") || method.toLowerCase().includes("visa")) method = "Card";
-                  else if (method.toLowerCase().includes("cash")) method = "Cash";
+                  // Extract precise payment method
+                  let rawMethod = String(order.payment_method || order.method || "Cash").toLowerCase();
+                  if (rawMethod.includes("qr") || rawMethod.includes("esewa") || rawMethod.includes("fonepay")) finalMethod = "QR";
+                  else if (rawMethod.includes("card") || rawMethod.includes("visa") || rawMethod.includes("pos")) finalMethod = "Card";
+                  else if (rawMethod.includes("cash")) finalMethod = "Cash";
+                  else finalMethod = order.payment_method || "Cash";
                   
-                  paymentMethods[method] = (paymentMethods[method] || 0) + amount;
+                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + amount;
 
-                  // Staff Tracking (Only for paid)
-                  // Default to 'Cashier' if missing (e.g. direct POS orders often lack served_by)
-                  const staff = order.served_by || "Cashier"; 
+                  const staff = order.served_by || order.staff || "Cashier"; 
                   staffPerformance[staff] = (staffPerformance[staff] || 0) + amount;
               }
 
-              // Count total orders (including pending, excluding cancelled)
               orderCount += 1;
 
-              // Item Tracking (All valid orders)
               if (Array.isArray(order.items)) {
                   order.items.forEach((item: any) => {
                       const iName = item.name || item.n || "Unknown";
@@ -171,43 +165,65 @@ export async function getReportData(range: ReportRange) {
                   });
               }
 
-              // Add to Transaction List
               allTransactions.push({
                   id: order.invoice_no || order.id || `ORD-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
                   date: order.paid_at || order.timestamp || log.date,
                   amount: amount,
-                  type: "Income",
-                  method: order.payment_method || (isPaid ? "Cash" : "Pending"),
+                  type: "POS Bill",
+                  method: finalMethod,
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
-                  status: isPaid ? 'Completed' : 'Pending', // Explicit Status
+                  status: isPaid ? 'Completed' : 'Pending', 
                   items: order.items || [], 
                   customer: { name: order.customer_name, address: order.customer_address }
               });
           });
       });
 
-      // 2. Process Expenses
-      expenses.forEach((exp: any) => {
-          const amount = Number(exp.amount) || 0;
-          totalExpense += amount;
+      // 2. Process Manual Financial Logs (Income & Expenses)
+      financialLogs.forEach((log: any) => {
+          const amount = Number(log.amount) || 0;
+          const categoryStr = String(log.category || "").toUpperCase();
+          const dateKey = log.date ? log.date.split('T')[0] : ""; 
           
-          const dateKey = exp.payment_date ? exp.payment_date.split('T')[0] : ""; 
-          if (dateKey) {
-              if (!dailyMap[dateKey]) dailyMap[dateKey] = { revenue: 0, expense: 0 };
-              dailyMap[dateKey].expense += amount; 
+          if (dateKey && !dailyMap[dateKey]) dailyMap[dateKey] = { revenue: 0, expense: 0 };
+          
+          const isIncome = categoryStr.includes('[INC]') || categoryStr.includes('INCOME') || categoryStr.includes('DEPOSIT') || categoryStr.includes('CATERING');
+          const cleanCategory = log.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_/g, ' ').trim();
+
+          if (isIncome) {
+              totalRevenue += amount;
+              if (dateKey) dailyMap[dateKey].revenue += amount;
+              
+              // Track Manual Income as a Payment Method too!
+              paymentMethods["Manual Income"] = (paymentMethods["Manual Income"] || 0) + amount;
+              
+              allTransactions.push({
+                  id: `INC-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
+                  date: log.created_at || log.date,
+                  amount: amount,
+                  type: "Manual Income",
+                  method: "Manual Log",
+                  details: cleanCategory,
+                  status: "Completed",
+                  items: [],
+                  note: log.description 
+              });
+          } else {
+              totalExpense += amount;
+              if (dateKey) dailyMap[dateKey].expense += amount;
+              
+              allTransactions.push({
+                  id: `EXP-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
+                  date: log.created_at || log.date,
+                  amount: amount,
+                  type: "Manual Expense",
+                  method: "Deduction",
+                  details: cleanCategory,
+                  status: "Completed",
+                  items: [],
+                  note: log.description 
+              });
           }
-          
-          allTransactions.push({
-              id: `EXP-${(exp.id || Math.random()).toString().slice(-4)}`,
-              date: exp.payment_date,
-              amount: amount,
-              type: "Expense",
-              method: "Transfer",
-              details: exp.type || "Expense",
-              status: "Paid",
-              items: [],
-              note: exp.notes
-          });
       });
 
       // 3. Calculate Previous Revenue
@@ -239,6 +255,7 @@ export async function getReportData(range: ReportRange) {
           .sort((a, b) => b.sales - a.sales)
           .slice(0, 5);
 
+      // Sort all transactions by newest
       const sortedTransactions = allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return {

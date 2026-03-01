@@ -43,13 +43,11 @@ export async function getDashboardData() {
 
     // FETCH EVERYTHING IN PARALLEL
     const [tenantRes, logsRes, notifRes] = await Promise.all([
-      supabaseAdmin.from("tenants").select("name, code, logo_url, plan, custom_price, created_at").eq("id", tenantId).single(),
-      // CRITICAL FIX: Added 'paid_history' to the selection
+      // 👇 CHANGED TO feature_flags 👇
+      supabaseAdmin.from("tenants").select("name, code, logo_url, plan, custom_price, created_at, feature_flags").eq("id", tenantId).single(),
       supabaseAdmin.from("daily_order_logs").select("date, orders_data, paid_history").eq("tenant_id", tenantId).in("date", [today, yesterday]),
-      // Fetch Notifications
       supabaseAdmin.from("notifications").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(10)
     ]);
-
     const tenant = tenantRes.data;
     if (!tenant) return null;
 

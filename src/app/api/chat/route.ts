@@ -1,70 +1,90 @@
 import { NextResponse } from "next/server";
 import { Groq } from "groq-sdk";
 
-// Initialize Groq safely
+// Initialize Groq safely from Environment Variables
 const groq = process.env.GROQ_API_KEY 
   ? new Groq({ apiKey: process.env.GROQ_API_KEY }) 
   : null;
 
+/**
+ * THE BRAIN OF GECKO AI
+ * Engineered for Premium SaaS Conversion & Professional Support
+ */
 const SYSTEM_PROMPT = `
-You are Gecko AI, the elite virtual assistant for GeckoRMS, a premium Restaurant Management System.
+You are Gecko RMS, the elite virtual assistant for GeckoRMS, a premium Restaurant Management System developed by Gecko Works Nepal.
 
-**COMPANY INFO:**
-- **Developer:** Gecko Works Nepal, a top-tier software company based in Kathmandu.
-- **Product:** GeckoRMS - The fastest, cloud-based POS system with zero lag, smart offline caching, and instant Kitchen Display Sync (KDS).
+**CORE IDENTITY & CREDENTIALS:**
+- **Developer:** Gecko Works Nepal (Based in Kathmandu).
+- **Website:** https://www.geckoworksnepal.com/
+- **Main Product:** GeckoRMS — Nepal's fastest, zero-lag, cloud-based operating system for modern restaurants.
 
-**PRICING PLANS:**
-1. **Starter Plan:** Perfect for small cafes and cloud kitchens. Basic inventory, digital QR menu, single terminal.
-2. **Standard Plan:** Ideal for high-volume restaurants. Includes Kitchen Display System (KDS), multi-terminal sync, and advanced inventory.
-3. **Business Plan:** For multi-location chains. Centralized analytics, unlimited outlets, VIP support, and custom APIs.
+**GECKO-RMS POWER FEATURES:**
+- **Speed:** Instant cloud-syncing with smart offline caching.
+- **KDS:** Zero-paper Kitchen Display System with real-time order tracking.
+- **Inventory:** Master-level peg tracking, ingredient deduction, and automated low-stock alerts.
+- **Analytics:** High-fidelity financial reports, live profit tracking, and automated ledger management.
+- **Hardware:** Seamless integration with touch terminals, thermal printers, and QR scanners.
 
-**YOUR GOAL & TONE:**
-- Tone: Professional, ultra-fast, helpful, and welcoming (Silicon Valley meets Nepali hospitality).
-- Keep responses short and scannable (use bullet points if listing features or plans).
-- If they ask for specific prices, demo, or want to buy: Direct them to our WhatsApp VIP line: +977 9765009755.
+**SUBSCRIPTION PLANS:**
+1. **Starter Plan:** Perfect for small cafes/bakeries. Includes digital QR menu and basic inventory.
+2. **Standard Plan:** Ideal for busy restaurants. Adds KDS and multi-terminal sync.
+3. **Business Plan:** Built for multi-location chains. Features centralized analytics and custom APIs.
 
-**RULES:**
-- NEVER say "I don't know". Say "I can have a human engineer explain that. Reach out on WhatsApp: +977 9765009755".
-- Don't output massive paragraphs. Be concise.
+**YOUR OPERATIONAL RULES:**
+- **Tone:** Professional, helpful, and ultra-confident. Combine Silicon Valley tech-savviness with warm Nepali hospitality.
+- **Formatting:** ALWAYS use **bold text** for key terms and bullet points for features. Keep paragraphs very short.
+- **Conversion:** If a user asks about price, demo, or buying, professionally direct them to:
+  - **WhatsApp:** +977 9765009755
+  - **Signup Page:** /signup
+- **Zero Failure:** Never say "I don't know." If a technical question is too complex, suggest a human consultation via WhatsApp.
 `;
 
 export async function POST(req: Request) {
   try {
-    const { message, history } = await req.json();
+    const body = await req.json();
+    const { message, history } = body;
 
+    // Guard: Ensure API Key exists
     if (!groq) {
-        // Fallback if API key is missing
-        await new Promise(r => setTimeout(r, 800)); 
+        console.error("GROQ_API_KEY is missing in your .env.local file.");
         return NextResponse.json({ 
-            reply: "I am currently running in offline simulation mode. GeckoRMS offers Starter, Standard, and Business plans. For live pricing or a demo, please WhatsApp our team at **+977 9765009755**!" 
+            reply: "Gecko AI is currently in offline mode. Please check the API configuration." 
         });
     }
 
-    // CRITICAL FIX: Groq expects 'assistant' instead of 'ai', and 'content' instead of 'text'
-    const formattedHistory = history.slice(-4).map((msg: any) => ({
-        role: msg.role === 'ai' ? 'assistant' : 'user',
-        content: msg.text
-    }));
+    // Format conversation history for Groq's strictly typed SDK
+    const safeHistory = Array.isArray(history) ? history : [];
+    const formattedHistory = safeHistory
+        .slice(-6) // Maintain context of the last 6 messages
+        .map((msg: any) => ({
+            role: ((msg.role === 'ai' || msg.role === 'assistant') ? 'assistant' : 'user') as 'assistant' | 'user',
+            content: String(msg.text || "")
+        }))
+        .filter((msg) => msg.content.trim() !== ""); 
 
+    // Execute Chat Completion using the flagship Llama 3.3 model
     const chatCompletion = await groq.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system" as const, content: SYSTEM_PROMPT },
         ...formattedHistory,
-        { role: "user", content: message },
+        { role: "user" as const, content: message },
       ],
-      model: "llama3-8b-8192", // Extremely fast and capable model
-      temperature: 0.6,
-      max_tokens: 250,
+      model: "llama-3.3-70b-versatile", // Latest high-performance model
+      temperature: 0.4, // Lower temperature for more factual and professional output
+      max_tokens: 500,
     });
 
-    const reply = chatCompletion.choices[0]?.message?.content || "System busy. Please WhatsApp us.";
+    const reply = chatCompletion.choices[0]?.message?.content || 
+                  "System optimizing. For immediate assistance, please reach out via WhatsApp at +977 9765009755.";
 
     return NextResponse.json({ reply });
 
-  } catch (error) {
-    console.error("AI Error:", error);
+  } catch (error: any) {
+    // Exact error logging for your VSCode Terminal
+    console.error("❌ GECKO AI API ERROR:", error?.message || error);
+    
     return NextResponse.json({ 
-        reply: "My servers are optimizing. 🚀 Please message us directly on WhatsApp: +977 9765009755 for immediate help." 
+        reply: "Gecko AI is currently undergoing routine maintenance to ensure zero-lag performance. 🚀 Please contact our human team on WhatsApp: **+977 9765009755**!" 
     });
   }
 }

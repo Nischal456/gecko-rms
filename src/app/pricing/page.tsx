@@ -15,6 +15,8 @@ function useIsTouchDevice() {
     return isTouch;
 }
 
+
+
 // --- 1. COMPONENT: SPOTLIGHT PRICING CARD ---
 function PricingCard({ plan, isAnnual, index }: any) {
   const isTouch = useIsTouchDevice();

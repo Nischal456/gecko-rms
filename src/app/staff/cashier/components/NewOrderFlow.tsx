@@ -231,8 +231,17 @@ export function CashierPOS({ data, onClose, onSubmit, preSelectedTable, orderTyp
     const handleSubmit = () => {
         if(newItemsCount === 0) return toast.error("Add new items first");
         
-        // Filter ONLY new items to send to the backend
-        const itemsToSubmit = cart.filter(i => !i.isExisting);
+        // Strict format for pos.ts
+        const itemsToSubmit = cart.filter(i => !i.isExisting).map(i => ({
+            id: i.id,
+            name: i.name,
+            price: i.price,
+            qty: i.qty,
+            variantName: i.variantName,
+            notes: i.note,
+            status: 'pending'
+        }));
+        
         onSubmit(orderType === 'takeaway' ? 'TK' : preSelectedTable, itemsToSubmit, orderType);
     };
 

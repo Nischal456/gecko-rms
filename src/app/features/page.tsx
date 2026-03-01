@@ -24,6 +24,7 @@ function useIsTouchDevice() {
     return isTouch;
 }
 
+
 // --- 1. COMPONENT: MAGNETIC BACK BUTTON ---
 function BackButton() {
     const ref = useRef<HTMLAnchorElement>(null);

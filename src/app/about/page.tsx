@@ -23,6 +23,7 @@ function MagneticButton({ children, className, variant = "primary" }: { children
     const ref = useRef<HTMLButtonElement>(null);
     const x = useMotionValue(0);
     const y = useMotionValue(0);
+    // Added a state to disable physics on mobile touch for zero lag
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -33,12 +34,12 @@ function MagneticButton({ children, className, variant = "primary" }: { children
     const mouseY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
 
     const handleMouse = (e: React.MouseEvent) => {
-        if (isMobile) return;
+        if (isMobile) return; // Prevent layout thrashing on mobile
         const { left, top, width, height } = ref.current!.getBoundingClientRect();
         const centerX = left + width / 2;
         const centerY = top + height / 2;
-        x.set((e.clientX - centerX) * 0.2); 
-        y.set((e.clientY - centerY) * 0.2);
+        x.set((e.clientX - centerX) * 0.3);
+        y.set((e.clientY - centerY) * 0.3);
     };
 
     const reset = () => {
@@ -56,17 +57,17 @@ function MagneticButton({ children, className, variant = "primary" }: { children
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className={cn(
-                "relative flex items-center justify-center font-bold transition-colors duration-300 overflow-hidden isolate transform-gpu",
-                variant === "primary" ? "bg-slate-900 text-white shadow-2xl hover:bg-black" : 
-                variant === "outline" ? "bg-transparent text-slate-900 border border-slate-200 hover:bg-slate-50" :
-                "bg-transparent text-slate-600 hover:text-slate-900",
+                "relative flex items-center justify-center gap-2 transition-colors duration-300 overflow-hidden isolate transform-gpu",
+                variant === "primary" ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/30 hover:shadow-slate-900/50" :
+                    variant === "outline" ? "bg-white text-slate-900 border border-slate-200 shadow-sm hover:border-slate-300 hover:bg-slate-50" :
+                        "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100",
                 className
             )}
         >
-            {variant === "primary" && <div className="absolute inset-0 bg-white/10 -translate-x-full hover:animate-[shimmer_1s_infinite] pointer-events-none" />}
+            <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-500" />
             <span className="relative z-10 flex items-center gap-2 whitespace-nowrap">{children}</span>
         </motion.button>
-    );
+    )
 }
 
 function SpotlightCard({ title, desc, icon: Icon, delay = 0 }: { title: string, desc: string, icon: any, delay?: number }) {
@@ -162,18 +163,24 @@ export default function AboutPage() {
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
             
             {/* NAVBAR */}
-            <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6">
-                <motion.div 
+             <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6">
+                <motion.div
                     initial={{ y: -100, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                     className="w-full max-w-6xl h-14 md:h-16 bg-white/90 backdrop-blur-xl border border-slate-200/60 shadow-lg shadow-slate-200/10 rounded-full flex items-center justify-between px-3 md:px-6 transform-gpu shrink-0"
                 >
-                    <div className="flex items-center gap-2 md:gap-3 shrink-0">
-                        <img src="/paw.png" alt="Gecko" className="w-6 h-6 md:w-8 md:h-8 object-contain shrink-0" />
-                        <span className="font-black text-lg md:text-xl tracking-tight text-slate-900 z-50 relative shrink-0">Gecko<span className="text-emerald-500">RMS</span></span>
-                    </div>
-                    
+                    <Link href="/" className="flex items-center gap-2 md:gap-3 shrink-0">
+                        <img
+                            src="/paw.png"
+                            alt="Gecko"
+                            className="w-6 h-6 md:w-8 md:h-8 object-contain shrink-0"
+                        />
+                        <span className="font-black text-lg md:text-xl tracking-tight text-slate-900 z-50 relative shrink-0">
+                            Gecko<span className="text-emerald-500">RMS</span>
+                        </span>
+                    </Link>
+
                     <div className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-500 uppercase tracking-widest shrink-0">
                         {["Features", "Pricing", "About"].map(item => (
                             <Link key={item} href={`/${item.toLowerCase()}`} className="hover:text-emerald-600 transition-colors relative group whitespace-nowrap">
@@ -193,11 +200,12 @@ export default function AboutPage() {
                             </MagneticButton>
                         </Link>
                         <button className="md:hidden p-2 bg-slate-100 rounded-full text-slate-900 z-50 relative hover:bg-slate-200 transition-colors shrink-0" onClick={() => setMobileMenuOpen(true)}>
-                            <Menu className="w-4 h-4 sm:w-5 sm:h-5"/>
+                            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                     </div>
                 </motion.div>
             </nav>
+
 
             {/* --- HERO: THE VISION --- */}
             <section className="relative pt-32 md:pt-48 pb-16 md:pb-20 flex flex-col items-center justify-center text-center px-4 md:px-6 min-h-[70vh] md:min-h-[85vh] overflow-hidden">
