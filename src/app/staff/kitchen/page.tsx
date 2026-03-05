@@ -6,8 +6,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "
 import { 
   ChefHat, Clock, CheckCircle2, Flame, Bell, Utensils, 
   X, LogOut, RefreshCcw, Check, CheckCheck, 
-  Volume2, VolumeX, LayoutGrid, FileBarChart, Ban, AlertTriangle, Play, GripVertical, ChevronRight,
-  Layers, StickyNote
+  Volume2, VolumeX, LayoutGrid, FileBarChart, AlertTriangle, Play, GripVertical, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { getKitchenTickets, updateTicketStatus, updateItemStatus, disableMenuItem } from "@/app/actions/kitchen";
@@ -392,7 +391,26 @@ export default function KitchenPage() {
       }
       
       // INSTANT OPTIMISTIC UPDATE (Will clear alarm immediately)
-      setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus as any } : t));
+      // FIX: Ensure we do not downgrade items that are already 'served' or 'cancelled' during the optimistic UI state update.
+      const newTickets = tickets.map(t => {
+          if (t.id === ticketId) {
+              const updatedItems = t.order_items.map(i => {
+                  const currentItemStatus = (i.status || '').toLowerCase().trim();
+                  if (['served', 'cancelled', 'void'].includes(currentItemStatus)) {
+                      return i;
+                  }
+                  return { ...i, status: newStatus };
+              });
+              return { ...t, status: newStatus as any, order_items: updatedItems };
+          }
+          return t;
+      });
+      setTickets(newTickets);
+      
+      if(selectedTicket?.id === ticketId) {
+          const matchedTicket = newTickets.find(t => t.id === ticketId);
+          if (matchedTicket) setSelectedTicket(matchedTicket);
+      }
 
       await updateTicketStatus(ticketId, newStatus);
       loadData();

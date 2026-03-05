@@ -118,7 +118,14 @@ export async function updateTicketStatus(orderId: string, status: string) {
                 found = true;
                 targetLog = log;
                 
-                const newItems = (order.items || []).map((i: any) => ({ ...i, status }));
+                // FIX: Do not downgrade items that are already 'served', 'void', or 'cancelled'
+                const newItems = (order.items || []).map((i: any) => {
+                    const currentItemStatus = (i.status || '').toLowerCase().trim();
+                    if (['served', 'cancelled', 'void'].includes(currentItemStatus)) {
+                        return i;
+                    }
+                    return { ...i, status };
+                });
                 
                 return { ...order, status, items: newItems };
             }
