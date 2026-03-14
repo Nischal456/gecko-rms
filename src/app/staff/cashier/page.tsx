@@ -292,31 +292,34 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
             >
                 <div className="w-full h-8 absolute top-0 left-0 z-50 flex items-center justify-center md:hidden touch-none" onPointerDown={(e) => dragControls.start(e)}><div className="w-12 h-1.5 bg-slate-300 rounded-full" /></div>
 
-                {/* LEFT: BILL PREVIEW */}
-                <div className="w-full md:w-[40%] lg:w-[35%] bg-slate-50/80 p-5 md:p-8 pt-10 md:pt-8 flex flex-col border-r border-slate-200 backdrop-blur-sm h-[40%] md:h-full">
-                    <div className="flex justify-between items-center mb-6 shrink-0">
-                        <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none">Table {table.label}</h2>
+                {/* LEFT: BILL PREVIEW (Fully Scrollable) */}
+                <div className="w-full md:w-[45%] lg:w-[40%] bg-slate-50/80 flex flex-col border-r border-slate-200 backdrop-blur-sm h-[45%] md:h-full shrink-0">
+                    <div className="p-5 md:p-6 pt-10 md:pt-6 pb-4 shrink-0 flex justify-between items-center border-b border-slate-200/60">
+                        <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">Table {table.label}</h2>
                         <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm ${isPayable ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>{safeStatus}</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                    
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
                         {displayItems.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between text-sm p-3 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-slate-200">
+                            <div key={i} className="flex justify-between items-start text-sm p-3 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-slate-200">
                                 <div className="flex gap-3 w-full pr-2">
                                     <span className="font-black text-slate-400 bg-slate-50 w-7 h-7 flex items-center justify-center rounded-lg shrink-0">{item.qty}</span> 
-                                    <div className="flex flex-col justify-center w-full">
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="flex flex-col justify-center w-full mt-0.5">
+                                        <div className="flex items-center gap-2 flex-wrap mb-1">
                                             <span className="font-bold text-slate-900 leading-tight">{item.name}</span>
+                                            {/* ADDED: Full Food Status per Item */}
+                                            {renderSmallStatus(item.status)}
                                         </div>
-                                        {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{item.variant}</span>}
+                                        {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
                                     </div>
                                 </div>
-                                <span className="font-black text-slate-900 flex items-center shrink-0">{formatRs(item.price * item.qty)}</span>
+                                <span className="font-black text-slate-900 flex items-center shrink-0 mt-0.5">{formatRs(item.price * item.qty)}</span>
                             </div>
                         ))}
                     </div>
                     
-                    {/* FINANCIALS PANEL */}
-                    <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-300 shrink-0">
+                    {/* FINANCIALS PANEL (Pinned to bottom of left column) */}
+                    <div className="p-4 md:p-6 bg-white border-t border-slate-200 shrink-0">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Subtotal</span>
                             <span className="text-sm font-black text-slate-700">{formatRs(subTotal)}</span>
@@ -328,7 +331,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                 value={discountInput} 
                                 onChange={e => setDiscountInput(e.target.value)} 
                                 placeholder="0" 
-                                className="w-24 p-1.5 bg-white border border-slate-200 rounded-lg text-sm font-black text-right outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-red-500" 
+                                className="w-24 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-right outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-red-500" 
                             />
                         </div>
                         <div className="flex justify-between items-end bg-slate-900 p-4 rounded-2xl shadow-lg">
@@ -338,88 +341,97 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                     </div>
                 </div>
                 
-                {/* RIGHT: PAYMENT ACTIONS */}
-                <div className="flex-1 p-5 md:p-8 bg-white flex flex-col relative h-[60%] md:h-full overflow-y-auto custom-scrollbar pb-safe">
-                    <div className="flex justify-between items-center mb-6 shrink-0">
-                        <h3 className="text-2xl font-black flex items-center gap-2 text-slate-900"><Wallet className="w-7 h-7 text-emerald-500"/> Checkout</h3>
+                {/* RIGHT: PAYMENT ACTIONS (Scrollable Body, Pinned Footer) */}
+                <div className="flex-1 bg-white flex flex-col h-[55%] md:h-full relative shrink-0">
+                    
+                    {/* Right Panel Header */}
+                    <div className="flex justify-between items-center p-4 md:p-6 border-b border-slate-100 shrink-0">
+                        <h3 className="text-xl md:text-2xl font-black flex items-center gap-2 text-slate-900"><Wallet className="w-6 h-6 md:w-7 md:h-7 text-emerald-500"/> Checkout</h3>
                         <div className="flex items-center gap-2 md:gap-3">
-                            <button onClick={handlePrint} className="px-4 py-2.5 md:px-5 md:py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg active:scale-95 border border-slate-900"><Printer className="w-4 h-4"/> Print Bill</button>
-                            <button onClick={onClose} className="hidden md:flex p-2.5 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors border border-slate-200 hover:border-red-200"><X className="w-5 h-5"/></button>
+                            <button onClick={handlePrint} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg active:scale-95 border border-slate-900"><Printer className="w-4 h-4"/> Print Bill</button>
+                            <button onClick={onClose} className="hidden md:flex p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors border border-slate-200 hover:border-red-200"><X className="w-5 h-5"/></button>
                         </div>
                     </div>
                     
-                    <div className="grid grid-cols-4 gap-2 md:gap-3 mb-6 shrink-0">
-                        {paymentMethods.map((m: any) => (
-                            <button key={m.keyStr} onClick={() => setMethod(m.name)} className={`h-24 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${method===m.name ? `border-${m.color}-500 bg-${m.color}-50 text-${m.color}-700 shadow-md transform scale-[1.02]` : 'border-slate-100 bg-slate-50/50 hover:border-slate-300 text-slate-500'}`}>
-                                <m.icon className="w-7 h-7" />
-                                <span className="text-[9px] font-black uppercase tracking-widest px-1 truncate w-full text-center">{m.name}</span>
-                            </button>
-                        ))}
-                    </div>
+                    {/* Scrollable Form Area */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-5">
+                        
+                        <div className="grid grid-cols-4 gap-2 md:gap-3 shrink-0">
+                            {paymentMethods.map((m: any) => (
+                                <button key={m.keyStr} onClick={() => setMethod(m.name)} className={`h-20 md:h-24 rounded-2xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${method===m.name ? `border-${m.color}-500 bg-${m.color}-50 text-${m.color}-700 shadow-md transform scale-[1.02]` : 'border-slate-100 bg-slate-50/50 hover:border-slate-300 text-slate-500'}`}>
+                                    <m.icon className="w-5 h-5 md:w-6 md:h-6" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest px-1 truncate w-full text-center">{m.name}</span>
+                                </button>
+                            ))}
+                        </div>
 
-                    <div className="flex-1 min-h-[160px] w-full bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center mb-6 relative overflow-hidden shrink-0 p-4">
-                        <AnimatePresence mode="wait">
-                            {activeMethod?.qr ? (
-                                <motion.div key="qr" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} onClick={() => setExpandedQr(true)} className="w-full h-full flex flex-col items-center justify-center cursor-pointer group">
-                                    <img src={activeMethod.qr} className="w-full h-full max-w-[200px] max-h-[200px] object-contain mix-blend-multiply drop-shadow-sm rounded-2xl group-hover:scale-105 transition-transform duration-500" />
-                                    <div className="absolute bottom-3 flex items-center gap-1.5 px-4 py-2 bg-white/95 backdrop-blur-md border border-slate-200 rounded-full shadow-lg group-hover:border-emerald-300 group-hover:text-emerald-600 transition-all text-slate-500 scale-90 md:scale-100">
-                                        <ZoomIn className="w-4 h-4" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Tap to Enlarge</span>
-                                    </div>
-                                </motion.div>
-                            ) : (
-                                <motion.div key="cash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-slate-400 w-full px-6">
-                                    {method === "Credit" ? (
-                                        <div className="flex flex-col items-center">
-                                            <BookOpen className="w-16 h-16 mx-auto mb-3 text-blue-500/30"/>
-                                            <div className="w-full max-w-xs bg-white border border-slate-200 p-4 rounded-2xl shadow-sm text-left focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Advance Received (Rs)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={tenderedInput} 
-                                                    onChange={e=>setTenderedInput(e.target.value)} 
-                                                    placeholder="0" 
-                                                    className="w-full bg-transparent font-black text-2xl text-slate-900 outline-none" 
-                                                />
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 font-bold max-w-xs text-center mt-3">Customer Name is strictly required below to record this Khata balance.</p>
+                        <div className="w-full bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center relative overflow-hidden shrink-0 p-6 min-h-[160px]">
+                            <AnimatePresence mode="wait">
+                                {activeMethod?.qr ? (
+                                    <motion.div key="qr" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} onClick={() => setExpandedQr(true)} className="w-full h-full flex flex-col items-center justify-center cursor-pointer group py-2">
+                                        <img src={activeMethod.qr} className="w-full h-full max-w-[150px] md:max-w-[200px] max-h-[150px] md:max-h-[200px] object-contain mix-blend-multiply drop-shadow-sm rounded-2xl group-hover:scale-105 transition-transform duration-500" />
+                                        <div className="absolute bottom-3 flex items-center gap-1.5 px-4 py-2 bg-white/95 backdrop-blur-md border border-slate-200 rounded-full shadow-lg group-hover:border-emerald-300 group-hover:text-emerald-600 transition-all text-slate-500 scale-90 md:scale-100">
+                                            <ZoomIn className="w-4 h-4" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Tap to Enlarge</span>
                                         </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center w-full">
-                                            <Banknote className="w-16 h-16 mx-auto mb-3 text-emerald-500/20"/>
-                                            <div className="w-full max-w-xs bg-white border border-slate-200 p-4 rounded-2xl shadow-sm text-left focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cash Received (Rs)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={tenderedInput} 
-                                                    onChange={e=>setTenderedInput(e.target.value)} 
-                                                    placeholder="0" 
-                                                    className="w-full bg-transparent font-black text-2xl text-slate-900 outline-none" 
-                                                />
-                                            </div>
-                                            {Number(tenderedInput) > 0 && (
-                                                <div className="w-full max-w-xs mt-3 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex justify-between items-center shadow-inner">
-                                                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Return Change</span>
-                                                    <span className="text-2xl font-black text-amber-600">Rs {changeDue}</span>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div key="cash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-slate-400 w-full">
+                                        {method === "Credit" ? (
+                                            <div className="flex flex-col items-center">
+                                                <BookOpen className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 text-blue-500/30"/>
+                                                <div className="w-full max-w-xs bg-white border border-slate-200 p-3 md:p-4 rounded-2xl shadow-sm text-left focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Advance Received (Rs)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={tenderedInput} 
+                                                        onChange={e=>setTenderedInput(e.target.value)} 
+                                                        placeholder="0" 
+                                                        className="w-full bg-transparent font-black text-xl md:text-2xl text-slate-900 outline-none" 
+                                                    />
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                    
-                    <div className="space-y-4 shrink-0">
-                        <div className="flex flex-col sm:flex-row gap-3">
+                                                <p className="text-[10px] text-slate-500 font-bold max-w-xs text-center mt-3">Customer Name is strictly required below to record this Khata balance.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center w-full">
+                                                <Banknote className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 text-emerald-500/20"/>
+                                                <div className="w-full max-w-xs bg-white border border-slate-200 p-3 md:p-4 rounded-2xl shadow-sm text-left focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cash Received (Rs)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={tenderedInput} 
+                                                        onChange={e=>setTenderedInput(e.target.value)} 
+                                                        placeholder="0" 
+                                                        className="w-full bg-transparent font-black text-xl md:text-2xl text-slate-900 outline-none" 
+                                                    />
+                                                </div>
+                                                {Number(tenderedInput) > 0 && (
+                                                    <div className="w-full max-w-xs mt-3 bg-amber-50 border border-amber-200 p-3 md:p-4 rounded-2xl flex justify-between items-center shadow-inner">
+                                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Return Change</span>
+                                                        <span className="text-xl md:text-2xl font-black text-amber-600">Rs {changeDue}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row gap-3 shrink-0 pb-4">
                             <input value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder={method === 'Credit' ? "* Customer Name (REQUIRED)" : "Customer Name (Optional)"} className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}/>
                             <input value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} placeholder="Phone / Address (Optional)" className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none"/>
                         </div>
-                        <div className="flex gap-4">
-                            {isCancellable && <button onClick={() => onCancel(order.id, table.label)} className="flex-1 py-4 md:py-5 rounded-2xl font-black text-red-500 bg-red-50 hover:bg-red-100 transition-all flex items-center justify-center gap-2 border border-red-100 active:scale-95 text-sm uppercase tracking-wider"><Trash2 className="w-5 h-5"/> Cancel</button>}
-                            <button disabled={!isPayable} onClick={handleConfirmCheckout} className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-sm uppercase tracking-wider ${isPayable ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>{isPayable ? <><CheckCircle2 className="w-6 h-6"/> Confirm Payment</> : <><Clock className="w-6 h-6"/> Awaiting Service</>}</button>
+                    </div>
+
+                    {/* PINNED FOOTER ACTION BUTTONS */}
+                    <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-200 shrink-0 pb-safe">
+                        <div className="flex gap-3 md:gap-4">
+                            {isCancellable && <button onClick={() => onCancel(order.id, table.label)} className="flex-1 py-4 md:py-5 rounded-2xl font-black text-red-500 bg-white hover:bg-red-50 transition-all flex items-center justify-center gap-2 border border-red-200 active:scale-95 text-xs md:text-sm uppercase tracking-wider shadow-sm"><Trash2 className="w-5 h-5"/> Cancel</button>}
+                            <button disabled={!isPayable} onClick={handleConfirmCheckout} className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>{isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}</button>
                         </div>
                     </div>
+
                 </div>
             </motion.div>
         </div>

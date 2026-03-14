@@ -143,7 +143,7 @@ export default function PricingPage() {
   const plan = {
     name: "Gecko Pro",
     desc: "Everything you need to run your restaurant, fully unlocked.",
-    monthlyPrice: "1,599",
+    monthlyPrice: "1,499",
     annualPrice: "1,199",
     features: [
       "Unlimited Terminals & Users", 
@@ -237,7 +237,7 @@ export default function PricingPage() {
           </div>
           
           <div className="text-emerald-700 bg-emerald-100 border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm animate-pulse">
-              Save up to 25%
+              Save up to 20%
           </div>
         </motion.div>
       </section>

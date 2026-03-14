@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/app/staff/waiter/Sidebar";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import { 
   TrendingUp, Users, ShoppingBag, Clock, 
   ArrowUpRight, ArrowDownRight, Calendar, Crown, 
@@ -51,7 +51,7 @@ function SystemLoader() {
 function FloatingDock({ router, dockStatus }: any) {
     const handleLogout = () => {
         toast.custom((t) => (
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
                 <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
                         <LogOut className="w-5 h-5 ml-1" />
@@ -91,7 +91,8 @@ function FloatingDock({ router, dockStatus }: any) {
             initial={{ y: 100, opacity: 0 }} 
             animate={{ y: 0, opacity: 1 }} 
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="md:hidden fixed bottom-[90px] left-0 right-0 mx-auto w-[92%] max-w-[400px] z-[100] bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_20px_50px_-10px_rgba(0,200,83,0.15)] rounded-full p-1.5 flex justify-between items-center"
+            /* FIX: Lifted to bottom-[110px] for that premium floating aesthetic */
+            className="md:hidden fixed bottom-[110px] left-0 right-0 mx-auto w-[92%] max-w-[400px] z-[9999] bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_20px_50px_-10px_rgba(0,200,83,0.15)] rounded-full p-1.5 flex justify-between items-center"
         >
             <button onClick={() => router.push('/staff/waiter')} className="flex flex-col items-center justify-center w-[22%] h-[52px] rounded-full text-emerald-600 bg-emerald-50 shadow-sm transition-all group">
                 <Home className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />
@@ -129,7 +130,7 @@ function PremiumDateCard() {
         });
     }, []);
     return (
-        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4 bg-white pl-2 pr-6 py-2 rounded-[1.5rem] border border-emerald-100/50 shadow-sm hover:shadow-md transition-all cursor-default group min-w-[280px]">
+        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4 bg-white pl-2 pr-6 py-2 rounded-[1.5rem] border border-emerald-100/50 shadow-sm hover:shadow-md transition-all cursor-default group min-w-[280px] transform-gpu">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl flex flex-col items-center justify-center text-emerald-700 border border-emerald-200/50 shadow-inner group-hover:scale-105 transition-transform"><Calendar className="w-5 h-5 mb-0.5" /></div>
             <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-0.5"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> {dateInfo.english}</span>
@@ -154,7 +155,7 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: delay, duration: 0.4 }}
-            className="bg-white pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-[200px] flex flex-col justify-between"
+            className="bg-white pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-[200px] flex flex-col justify-between transform-gpu"
         >
             <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-${color}-100`} />
 
@@ -184,7 +185,7 @@ function UnavailableHeroCard({ items, delay }: any) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: delay, duration: 0.4 }}
-            className="bg-red-50 pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-red-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group flex flex-col h-[200px] col-span-2 lg:col-span-1"
+            className="bg-red-50 pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-red-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group flex flex-col h-[200px] col-span-2 lg:col-span-1 transform-gpu"
         >
             <div className="flex items-center justify-between mb-3 relative z-10 shrink-0">
                 <div className="flex items-center gap-2">
@@ -207,7 +208,7 @@ function UnavailableHeroCard({ items, delay }: any) {
                 ) : (
                     <div className="space-y-1.5 pb-2">
                         {items.map((item: any, idx: number) => (
-                            <div key={idx} className="bg-white/80 px-3 py-1.5 rounded-xl border border-red-100/50 flex items-center justify-between shadow-sm">
+                            <div key={idx} className="bg-white/80 px-3 py-1.5 rounded-xl border border-red-100/50 flex items-center justify-between shadow-sm transform-gpu">
                                 <span className="text-[11px] font-bold text-red-900 truncate max-w-[70%]">
                                     {item.title}
                                 </span>
@@ -236,6 +237,7 @@ function UnavailableHeroCard({ items, delay }: any) {
         </motion.div>
     )
 }
+
 function ViewerTable({ data, onClick }: any) {
     const isPacked = data.status === 'occupied';
     const isToClean = data.status === 'payment' || data.status === 'dirty';
@@ -243,18 +245,20 @@ function ViewerTable({ data, onClick }: any) {
     const isFree = data.status === 'available' || data.status === 'free';
     
     let containerStyle = 'bg-white border-slate-200 text-slate-700 shadow-lg';
-    let seatColor = 'bg-slate-100 border-slate-300';
 
-    if (isPacked) { containerStyle = 'bg-gradient-to-br from-red-50 to-white border-red-200 text-red-600 shadow-xl shadow-red-500/20 ring-2 ring-red-100'; seatColor = 'bg-red-200 border-red-300'; }
-    else if (isToClean) { containerStyle = 'bg-gradient-to-br from-amber-50 to-white border-amber-200 text-amber-600 shadow-xl shadow-amber-500/20 ring-2 ring-amber-100 animate-pulse'; seatColor = 'bg-amber-200 border-amber-300'; }
-    else if (isReady) { containerStyle = 'bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-400 text-white shadow-2xl shadow-emerald-500/40 ring-4 ring-emerald-300/50 animate-pulse scale-105 z-20'; seatColor = 'bg-emerald-400 border-emerald-300'; }
+    if (isPacked) { containerStyle = 'bg-gradient-to-br from-red-50 to-white border-red-200 text-red-600 shadow-xl shadow-red-500/20 ring-2 ring-red-100'; }
+    else if (isToClean) { containerStyle = 'bg-gradient-to-br from-amber-50 to-white border-amber-200 text-amber-600 shadow-xl shadow-amber-500/20 ring-2 ring-amber-100 animate-pulse'; }
+    else if (isReady) { containerStyle = 'bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-400 text-white shadow-2xl shadow-emerald-500/40 ring-4 ring-emerald-300/50 animate-pulse scale-105 z-20'; }
     else { containerStyle = 'bg-white border-2 border-slate-200/60 text-slate-700 shadow-md hover:border-emerald-400 hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300'; }
 
     return (
         <motion.div
-            layout={false} initial={{ scale: 0 }} animate={{ scale: 1, width: data.width, height: data.height, borderRadius: data.shape === 'round' ? '50%' : '24px', rotate: data.rotation || 0 }}
-            style={{ x: data.x, y: data.y }} onClick={(e) => { e.stopPropagation(); onClick(); }}
-            className={`absolute flex flex-col items-center justify-center border-2 select-none cursor-pointer group touch-none backdrop-blur-sm ${containerStyle}`}
+            layout={false} 
+            initial={{ scale: 0 }} 
+            animate={{ scale: 1, width: data.width, height: data.height, borderRadius: data.shape === 'round' ? '50%' : '24px', rotate: data.rotation || 0 }}
+            style={{ x: data.x, y: data.y }} 
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            className={`absolute flex flex-col items-center justify-center border-2 select-none cursor-pointer group touch-none backdrop-blur-sm transform-gpu will-change-transform ${containerStyle}`}
         >
             <h3 className="font-black text-xl leading-none">{data.label}</h3>
             {isReady && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-white text-emerald-600 shadow-md"><Utensils className="w-3 h-3" /><span className="text-[10px] font-bold">READY</span></div>}
@@ -280,9 +284,18 @@ export default function WaiterDashboard() {
   const [disabledItems, setDisabledItems] = useState<any[]>([]); 
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   
+  // --- 0-LAG HARDWARE ACCELERATED PAN STATE ---
   const [scale, setScale] = useState(0.8);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panX = useMotionValue(0);
+  const panY = useMotionValue(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+  
+  // Custom Touch Handlers Logic
+  const isPanning = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const [showTwoFingerMsg, setShowTwoFingerMsg] = useState(false);
+  const twoFingerTimeout = useRef<NodeJS.Timeout | null>(null);
+
   const [time, setTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -300,6 +313,21 @@ export default function WaiterDashboard() {
     loadAllData();
     if(window.innerWidth < 768) setScale(0.5); 
     return () => { clearInterval(timer); clearInterval(dataTimer); };
+  }, []);
+
+  // --- NATIVE 2-FINGER SCROLL LOCK ---
+  useEffect(() => {
+      const mapEl = canvasRef.current;
+      if (!mapEl) return;
+
+      const onTouchMove = (e: TouchEvent) => {
+          if (e.touches.length === 2) {
+              e.preventDefault(); // ONLY lock the screen if 2 fingers are down (so they can pan)
+          }
+      };
+
+      mapEl.addEventListener('touchmove', onTouchMove, { passive: false });
+      return () => mapEl.removeEventListener('touchmove', onTouchMove);
   }, []);
 
   useEffect(() => {
@@ -386,12 +414,10 @@ export default function WaiterDashboard() {
       loadAllData();
   };
 
-  // --- ITEM-LEVEL SERVING FROM DASHBOARD ---
   const handleServe = async (orderId: string, tableLabel: string, rawItems: any[]) => {
       const readyItems = rawItems.filter((i: any) => i.status === 'ready');
       if (readyItems.length === 0) return toast.info("No items are ready to serve yet.");
 
-      // Secure digital signature
       const readyItemIdentifiers = readyItems.map((i: any) => i.unique_id || i.id || `${i.name}||${i.variant || ''}`);
 
       const hasCooking = rawItems.some((i: any) => i.status === 'cooking' || i.status === 'pending');
@@ -408,6 +434,59 @@ export default function WaiterDashboard() {
           toast.error("Failed to mark as served");
           loadAllData(); 
       }
+  };
+
+  // --- CUSTOM TOUCH/MOUSE HANDLERS (0-LAG) ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+          setShowTwoFingerMsg(true);
+          if (twoFingerTimeout.current) clearTimeout(twoFingerTimeout.current);
+          twoFingerTimeout.current = setTimeout(() => setShowTwoFingerMsg(false), 2000);
+      } else if (e.touches.length === 2) {
+          setShowTwoFingerMsg(false);
+          isPanning.current = true;
+          lastPos.current = {
+              x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+              y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+          };
+      }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (e.touches.length === 2 && isPanning.current) {
+          const currentX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          const currentY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          const deltaX = currentX - lastPos.current.x;
+          const deltaY = currentY - lastPos.current.y;
+          
+          panX.set(panX.get() + deltaX);
+          panY.set(panY.get() + deltaY);
+          lastPos.current = { x: currentX, y: currentY };
+      }
+  };
+
+  const handleTouchEnd = () => {
+      isPanning.current = false;
+      setShowTwoFingerMsg(false);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+      isPanning.current = true;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (isPanning.current) {
+          const deltaX = e.clientX - lastPos.current.x;
+          const deltaY = e.clientY - lastPos.current.y;
+          panX.set(panX.get() + deltaX);
+          panY.set(panY.get() + deltaY);
+          lastPos.current = { x: e.clientX, y: e.clientY };
+      }
+  };
+
+  const handleMouseUp = () => {
+      isPanning.current = false;
   };
 
   const firstName = staff.name ? staff.name.split(' ')[0] : "Team";
@@ -441,9 +520,10 @@ export default function WaiterDashboard() {
         <>
             <Sidebar tenantName={tenant?.name} tenantCode={tenant?.code} logo={tenant?.logo_url} />
             
-            {/* FULL NATIVE SCROLL ON MOBILE, FIXED ON DESKTOP */}
-            <main className="flex-1 flex flex-col h-full overflow-y-auto lg:overflow-hidden relative pb-[120px] lg:pb-0 bg-[#F8FAFC]">
-                <header className="px-5 md:px-8 py-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-white/90 backdrop-blur-xl sticky top-0 z-30 border-b border-slate-200/80 shadow-sm shrink-0 gap-3">
+            {/* FULL NATIVE SCROLL OUT ON MOBILE (Scrolls smoothly to the very bottom) */}
+            {/* FIX: Increased padding-bottom to 160px so content perfectly clears the floating dock */}
+            <main className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar relative pb-[160px] md:pb-0 bg-[#F8FAFC]">
+                <header className="px-5 md:px-8 py-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-white/90 backdrop-blur-xl sticky top-0 z-30 border-b border-slate-200/80 shadow-sm shrink-0 gap-3 transform-gpu">
                     <div>
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-emerald-600 font-bold text-xs mb-1 uppercase tracking-wider">
                             <CloudSun className="w-4 h-4" /> {greeting}, {firstName}
@@ -456,9 +536,9 @@ export default function WaiterDashboard() {
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0 transform-gpu">
                         {sections.map(section => (
-                            <button key={section} onClick={() => setCurrentSection(section)} className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all border ${currentSection === section ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                            <button key={section} onClick={() => setCurrentSection(section)} className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all border active:scale-95 ${currentSection === section ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                                 {section}
                             </button>
                         ))}
@@ -468,7 +548,7 @@ export default function WaiterDashboard() {
                 </header>
 
                 <div className="px-4 md:px-8 pt-6 pb-2 grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[2rem] md:rounded-[2.5rem] p-5 text-white shadow-2xl col-span-2 lg:col-span-1">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[2rem] md:rounded-[2.5rem] p-5 text-white shadow-2xl col-span-2 lg:col-span-1 transform-gpu">
                         <div className="flex items-center justify-between mb-2">
                             <span className="flex items-center gap-2 text-emerald-100 text-xs font-bold uppercase tracking-widest"><IndianRupee className="w-4 h-4" /> My Sales</span>
                         </div>
@@ -479,11 +559,11 @@ export default function WaiterDashboard() {
                     <UnavailableHeroCard items={disabledItems} delay={0.4} />
                 </div>
 
-                {/* MAIN CONTENT GRID (Natively expands on Mobile) */}
-                <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 p-4 md:px-8 gap-6 pb-6 lg:overflow-hidden shrink-0 lg:shrink">
+                {/* MAIN CONTENT GRID */}
+                <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 p-4 md:px-8 gap-6 pb-8 shrink-0 lg:shrink">
                     
-                    {/* LEFT: MAP */}
-                    <div className="relative bg-[#F1F5F9] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-inner h-[450px] md:h-[500px] lg:h-full lg:col-span-2 flex flex-col shrink-0">
+                    {/* LEFT: MAP (WITH CUSTOM ZERO-LAG PAN HANDLERS) */}
+                    <div className="relative bg-[#F1F5F9] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-inner h-[450px] md:h-[500px] lg:h-full lg:col-span-2 flex flex-col shrink-0 group">
                         <div className="absolute top-4 left-4 z-20 flex gap-2 pointer-events-none">
                             <span className="bg-white/90 backdrop-blur px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-slate-400 shadow-sm border border-slate-100">Live Floor</span>
                         </div>
@@ -491,21 +571,52 @@ export default function WaiterDashboard() {
                         <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 pointer-events-auto">
                             <div className="bg-white/90 backdrop-blur rounded-xl shadow-lg border border-white/50 flex flex-col overflow-hidden">
                                 <button onClick={() => setScale(s => Math.min(3, s + 0.1))} className="p-3 hover:bg-slate-50 border-b border-slate-100 active:bg-slate-100"><ZoomIn className="w-5 h-5 text-slate-600" /></button>
-                                <button onClick={() => { setScale(0.8); setPan({x:0, y:0}); }} className="p-3 hover:bg-slate-50 border-b border-slate-100 active:bg-slate-100"><RotateCcw className="w-5 h-5 text-slate-600" /></button>
+                                <button onClick={() => { setScale(0.8); panX.set(0); panY.set(0); }} className="p-3 hover:bg-slate-50 border-b border-slate-100 active:bg-slate-100"><RotateCcw className="w-5 h-5 text-slate-600" /></button>
                                 <button onClick={() => setScale(s => Math.max(0.4, s - 0.1))} className="p-3 hover:bg-slate-50 active:bg-slate-100"><ZoomOut className="w-5 h-5 text-slate-600" /></button>
                             </div>
                         </div>
 
-                        <motion.div ref={canvasRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" drag dragMomentum={false} onDrag={(e, info) => setPan(p => ({ x: p.x + info.delta.x, y: p.y + info.delta.y }))}>
-                            <motion.div className="absolute top-0 left-0 w-full h-full origin-center" style={{ x: pan.x, y: pan.y, scale: scale }}>
+                        {/* CUSTOM TOUCH HANDLER CONTAINER */}
+                        <div 
+                            ref={canvasRef} 
+                            className="w-full h-full cursor-grab active:cursor-grabbing relative"
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseUp}
+                        >
+                            {/* Educational Two Finger Overlay */}
+                            <AnimatePresence>
+                                {showTwoFingerMsg && (
+                                    <motion.div 
+                                        initial={{ opacity: 0 }} 
+                                        animate={{ opacity: 1 }} 
+                                        exit={{ opacity: 0 }}
+                                        className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/5 pointer-events-none"
+                                    >
+                                        <div className="bg-slate-900/80 backdrop-blur-md text-white px-5 py-3 rounded-full font-bold text-xs tracking-wider shadow-xl flex items-center gap-3">
+                                            <Layers className="w-4 h-4" /> Use two fingers to pan map
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* GPU ACCELERATED MAP LAYER */}
+                            <motion.div 
+                                className="absolute top-0 left-0 w-full h-full origin-center transform-gpu will-change-transform" 
+                                style={{ x: panX, y: panY, scale: scale }}
+                            >
                                 <div className="absolute inset-[-500%] pointer-events-none bg-[#F1F5F9]" style={{ backgroundImage: `radial-gradient(#cbd5e1 1px, transparent 1px)`, backgroundSize: '30px 30px' }} />
                                 {visibleTables.map((t) => <ViewerTable key={t.id} data={t} onClick={() => handleTableClick(t)} />)}
                             </motion.div>
-                        </motion.div>
+                        </div>
                     </div>
 
                     {/* RIGHT: SMART READY ORDERS */}
-                    <div className="bg-white rounded-[2.5rem] flex flex-col border border-slate-100 shadow-sm shrink-0 lg:h-full lg:overflow-hidden">
+                    <div className="bg-white rounded-[2.5rem] flex flex-col border border-slate-100 shadow-sm shrink-0 lg:h-full lg:overflow-hidden min-h-[400px]">
                         <div className="p-5 md:p-6 pb-4 border-b border-slate-50 shrink-0">
                             <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
                                 <Bell className="w-5 h-5 text-emerald-500" /> Ready to Serve
@@ -514,7 +625,7 @@ export default function WaiterDashboard() {
                         </div>
                         <div className="p-4 md:p-6 flex-1 lg:overflow-y-auto custom-scrollbar space-y-4">
                             {notifications.length === 0 ? (
-                                <div className="h-48 lg:h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
+                                <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
                                     <ChefHat className="w-12 h-12 mb-3" />
                                     <span className="text-xs font-bold uppercase tracking-widest">Kitchen Clear</span>
                                 </div>
@@ -527,7 +638,7 @@ export default function WaiterDashboard() {
                                         <motion.div 
                                             key={order.id}
                                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                            className="p-5 rounded-[1.5rem] bg-white border border-emerald-200 shadow-lg shadow-emerald-500/10 group relative overflow-hidden flex flex-col gap-3"
+                                            className="p-5 rounded-[1.5rem] bg-white border border-emerald-200 shadow-lg shadow-emerald-500/10 group relative overflow-hidden flex flex-col gap-3 transform-gpu"
                                         >
                                             <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-teal-500 animate-pulse" />
                                             
