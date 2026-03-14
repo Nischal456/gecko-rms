@@ -204,9 +204,9 @@ export default function AdminInventoryPage() {
       
       <AnimatePresence>
           {deleteTarget && (
-              <>
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200]" onClick={() => setDeleteTarget(null)} />
-                  <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-0 m-auto w-[90%] max-w-sm h-fit bg-white rounded-[2.5rem] shadow-2xl z-[210] p-8 text-center border border-slate-100 overflow-hidden">
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+                  <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-8 text-center border border-slate-100 overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
                       <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
                           <Trash2 className="w-10 h-10" />
@@ -220,7 +220,7 @@ export default function AdminInventoryPage() {
                           <button onClick={confirmDelete} className="flex-1 py-4 rounded-2xl font-bold text-white bg-red-500 hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20 active:scale-95">Delete</button>
                       </div>
                   </motion.div>
-              </>
+              </div>
           )}
       </AnimatePresence>
 
@@ -345,9 +345,9 @@ export default function AdminInventoryPage() {
         {/* --- ADD FINANCIAL LOG MODAL (ULTRA PREMIUM) --- */}
         <AnimatePresence>
             {isExpenseModalOpen && (
-                <>
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsExpenseModalOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100]" />
-                    <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="fixed inset-x-4 md:inset-0 m-auto w-full max-w-lg h-fit max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl z-[110] p-6 md:p-8 border border-slate-100 overflow-y-auto custom-scrollbar">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsExpenseModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+                    <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl p-6 md:p-8 border border-slate-100 overflow-y-auto max-h-[90vh] custom-scrollbar">
                         
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-black text-slate-900">Log Cashflow</h2>
@@ -433,16 +433,16 @@ export default function AdminInventoryPage() {
                             </div>
                         </form>
                     </motion.div>
-                </>
+                </div>
             )}
         </AnimatePresence>
 
         {/* --- ADD STOCK MODAL --- */}
         <AnimatePresence>
             {isModalOpen && (
-                <>
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]" />
-                    <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="fixed inset-x-4 md:inset-0 m-auto w-full max-w-2xl h-fit max-h-[90vh] overflow-y-auto bg-white rounded-[2.5rem] shadow-2xl z-[110] p-6 md:p-8 border border-slate-100 custom-scrollbar">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                    <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl p-6 md:p-8 border border-slate-100 overflow-y-auto max-h-[90vh] custom-scrollbar">
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-2xl font-black">Register New Stock</h2>
                             <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
@@ -504,7 +504,7 @@ export default function AdminInventoryPage() {
                             </div>
                         </form>
                     </motion.div>
-                </>
+                </div>
             )}
         </AnimatePresence>
 

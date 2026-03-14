@@ -59,9 +59,16 @@ export async function getManagerDashboard() {
     // Calculate Base Revenue from POS
     let totalRevenue = 0;
     
-    // Add up finalized bills (Real Cash)
+    // Add up finalized bills (Real Cash only)
     paidBills.forEach((bill: any) => {
-        totalRevenue += Number(bill.grandTotal || bill.total || 0);
+        const method = String(bill.payment_method || bill.method || "Cash").toLowerCase();
+        
+        // FIXED: Only count the tendered amount if it's a Credit payment
+        if (method.includes('credit')) {
+            totalRevenue += Number(bill.tendered || 0);
+        } else {
+            totalRevenue += Number(bill.grandTotal || bill.total || 0);
+        }
     });
 
     // Add up active orders (Projected Cash)
@@ -167,7 +174,13 @@ export async function getManagerDashboard() {
         const date = new Date(b.paid_at || b.timestamp || new Date());
         const hour = date.getHours();
         const key = `${hour}:00`;
-        hourlyData[key] = (hourlyData[key] || 0) + (Number(b.grandTotal || b.total) || 0);
+        
+        // FIXED: Only plot real revenue on chart
+        const method = String(b.payment_method || b.method || "Cash").toLowerCase();
+        let value = Number(b.grandTotal || b.total || 0);
+        if (method.includes('credit')) value = Number(b.tendered || 0);
+
+        hourlyData[key] = (hourlyData[key] || 0) + value;
     });
 
     // Process Active Orders for Chart

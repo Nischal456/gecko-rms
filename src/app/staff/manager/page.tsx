@@ -5,11 +5,11 @@ import Sidebar from "@/app/staff/manager/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   TrendingUp, Users, ShoppingBag, Clock, 
-  ArrowUpRight, ArrowDownRight, Calendar, CreditCard, Sun, 
-  Zap, Crown, Box, ShieldCheck, Activity, IndianRupee, Star, 
-  Bell, Info, AlertTriangle, CheckCircle, Check, X, CheckCheck, 
+  ArrowUpRight, ArrowDownRight, Calendar, CreditCard, 
+  Box, ShieldCheck, Activity, IndianRupee, Star, 
+  Bell, Check, X, 
   Globe, CloudSun, ChefHat, Map, Utensils, Wallet, FileBarChart,
-  TrendingDown, RefreshCcw, Leaf, Receipt, LogOut, Home 
+  TrendingDown, RefreshCcw, Leaf, LogOut
 } from "lucide-react";
 import { getManagerDashboard } from "@/app/actions/manager"; 
 import { logoutStaff } from "@/app/actions/staff-auth"; 
@@ -31,6 +31,7 @@ const formatRs = (amount: number) => {
     return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
 };
 
+// --- 1. SYSTEM LOADER ---
 function SystemLoader() {
     return (
         <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="fixed inset-0 bg-[#F8FAFC] z-[100] flex flex-col items-center justify-center">
@@ -44,7 +45,7 @@ function SystemLoader() {
     )
 }
 
-// --- 1. PREMIUM DATE CARD ---
+// --- 2. PREMIUM DATE CARD ---
 function PremiumDateCard() {
     const [dateInfo, setDateInfo] = useState({ nepali: "", english: "" });
 
@@ -79,31 +80,63 @@ function PremiumDateCard() {
     )
 }
 
-// --- 2. METRIC CARD ---
+// --- 3. PREMIUM METRIC CARD (Fixed Rs Alignment) ---
 function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
+    const hasTrend = trend !== 0;
     const isPositive = trend >= 0;
-    const themeColor = color === 'blue' ? 'text-blue-600 bg-blue-50' : 
-                       color === 'orange' ? 'text-orange-600 bg-orange-50' :
-                       color === 'red' ? 'text-red-600 bg-red-50' : 
-                       'text-emerald-600 bg-emerald-50';
+    
+    const themeMap: Record<string, string> = {
+        emerald: "text-emerald-600 bg-emerald-50 border-emerald-100",
+        blue: "text-blue-600 bg-blue-50 border-blue-100",
+        amber: "text-amber-600 bg-amber-50 border-amber-100",
+        violet: "text-violet-600 bg-violet-50 border-violet-100",
+        red: "text-red-600 bg-red-50 border-red-100",
+        orange: "text-orange-600 bg-orange-50 border-orange-100"
+    };
+
+    const theme = themeMap[color] || "text-slate-600 bg-slate-50 border-slate-100";
+    
+    // Premium Currency Alignment Logic
+    const isCurrency = typeof value === 'string' && value.startsWith('Rs');
+    const valString = isCurrency ? value.replace('Rs ', '') : value;
 
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay, duration: 0.4 }} className="bg-white p-5 md:p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group">
-            <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 ${color === 'red' ? 'bg-red-100' : 'bg-emerald-100'}`} />
-            <div className="relative z-10 flex justify-between items-start mb-6">
-                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-inner ${themeColor}`}><Icon className="w-6 h-6 md:w-7 md:h-7" /></div>
-                <div className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-full ${isPositive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-                    {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {Math.abs(trend)}%
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: delay, duration: 0.4 }} 
+            className="bg-white p-5 md:p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full transform-gpu"
+        >
+            <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-${color}-100 pointer-events-none`} />
+            
+            <div className="relative z-10 flex flex-col justify-between h-full">
+                <div className="flex justify-between items-start mb-6">
+                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-inner ${theme}`}>
+                        <Icon className="w-6 h-6 md:w-7 md:h-7" />
+                    </div>
+                    {hasTrend ? (
+                        <div className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-full backdrop-blur-sm border ${isPositive ? 'bg-emerald-50/80 text-emerald-700 border-emerald-100' : 'bg-red-50/80 text-red-700 border-red-100'}`}>
+                            {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                            {Math.abs(trend)}%
+                        </div>
+                    ) : (
+                        <div className="px-2.5 py-1 bg-slate-50 text-slate-400 rounded-full text-[10px] font-bold border border-slate-100">-</div>
+                    )}
+                </div>
+                <div>
+                    <div className="flex items-baseline gap-1.5 mb-1">
+                        {isCurrency && <span className={`text-sm font-black opacity-70 ${theme.split(' ')[0]}`}>Rs</span>}
+                        <h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter leading-none">{valString}</h3>
+                    </div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
                 </div>
             </div>
-            <div className="relative z-10"><h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter mb-1">{value}</h3><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p></div>
         </motion.div>
     )
 }
 
-// --- 3. ACTION CARD ---
-function ActionCard({ title, desc, icon: Icon, color, onClick, delay }: any) {
+// --- 4. ACTION CARD ---
+function ActionCard({ title, desc, icon: Icon, onClick, delay }: any) {
     return (
         <motion.button 
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay }}
@@ -143,7 +176,6 @@ export default function ManagerPage() {
         setLoading(false);
     }
 
-    // PREMIUM SONNER LOGOUT TOAST FOR MOBILE DOCK
     const handleLogout = () => {
         toast.custom((t) => (
             <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
@@ -199,7 +231,7 @@ export default function ManagerPage() {
         staffOnline: 0, 
         lowStock: 0, 
         pendingKitchen: 0, 
-        occupancy: 0 
+        occupancy: 0
     };
     const chartData = data?.chartData || [];
 
@@ -211,10 +243,10 @@ export default function ManagerPage() {
                     <Sidebar tenantName={data.tenant?.name} tenantCode={data.tenant?.code} logo={data.tenant?.logo_url} />
                     
                     {/* PB-[140px] ensures scrolling perfectly clears BOTH bottom nav bars */}
-                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-[140px] md:pb-8 relative">
+                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-[140px] md:pb-8 relative custom-scrollbar">
                         
                         {/* HEADER */}
-                        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
+                        <header className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-10">
                             <div>
                                 <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-emerald-600 font-bold text-xs mb-1 uppercase tracking-wider">
                                     <CloudSun className="w-4 h-4" /> {greeting}, Manager
@@ -228,7 +260,9 @@ export default function ManagerPage() {
                                     </button>
                                 </motion.div>
                             </div>
-                            <PremiumDateCard />
+                            <div className="flex items-center gap-4 shrink-0 w-full xl:w-auto">
+                                <PremiumDateCard />
+                            </div>
                         </header>
 
                         {/* FINANCIAL OVERVIEW */}
@@ -245,7 +279,10 @@ export default function ManagerPage() {
                                                 <TrendingUp className="w-3 h-3" /> Today
                                             </span>
                                         </div>
-                                        <h2 className="text-4xl lg:text-5xl font-black tracking-tight mt-1">{formatRs(stats.revenue)}</h2>
+                                        <div className="flex items-baseline gap-1.5 mt-1">
+                                            <span className="text-xl font-black text-emerald-300/80">Rs</span>
+                                            <h2 className="text-4xl lg:text-5xl font-black tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.revenue)}</h2>
+                                        </div>
                                     </div>
                                     <div className="h-12 w-full mt-4 opacity-80">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -269,7 +306,10 @@ export default function ManagerPage() {
                                     <div className="flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase tracking-widest"><TrendingDown className="w-4 h-4" /> Expenses</div>
-                                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">{formatRs(stats.expenses)}</h2>
+                                            <div className="flex items-baseline gap-1.5 mt-1">
+                                                <span className="text-sm font-black text-orange-500">Rs</span>
+                                                <h2 className="text-3xl font-black text-slate-900 tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.expenses)}</h2>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                                             <span className="w-2 h-2 rounded-full bg-orange-400" /> Real-time Cost
@@ -285,7 +325,10 @@ export default function ManagerPage() {
                                     <div className="flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex items-center gap-2 mb-2 text-emerald-600 text-xs font-bold uppercase tracking-widest"><Leaf className="w-4 h-4" /> Net Profit</div>
-                                            <h2 className="text-3xl font-black text-emerald-700 tracking-tight">{formatRs(stats.profit)}</h2>
+                                            <div className="flex items-baseline gap-1.5 mt-1">
+                                                <span className="text-sm font-black text-emerald-600">Rs</span>
+                                                <h2 className="text-3xl font-black text-emerald-700 tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.profit)}</h2>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600">
                                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {stats.margin}% Margin
@@ -297,7 +340,7 @@ export default function ManagerPage() {
                         </div>
 
                         {/* METRICS & ACTIONS */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-10">
                             <MetricCard title="Active Orders" value={stats.orders} trend={0} icon={ShoppingBag} color="blue" delay={0.5} />
                             <MetricCard title="Total Today" value={stats.totalOrders} trend={0} icon={Map} color="emerald" delay={0.55} />
                             <MetricCard title="Staff Active" value={stats.staffOnline} trend={0} icon={Users} color="orange" delay={0.6} />
@@ -316,7 +359,7 @@ export default function ManagerPage() {
 
                         {/* Recent Activity Section */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm">
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm">
                                 <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100"><Activity className="w-5 h-5 text-emerald-600" /></div>
@@ -325,7 +368,7 @@ export default function ManagerPage() {
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live Feed from Floor</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => router.push('/staff/manager/floor')} className="text-xs font-bold bg-white border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 px-4 py-2 rounded-xl transition-colors text-slate-500 shadow-sm">View Floor</button>
+                                    <button onClick={() => router.push('/staff/manager/floor')} className="text-xs font-bold bg-white border border-slate-200 hover:border-emerald-200 hover:text-emerald-700 px-4 py-2 rounded-xl transition-colors text-slate-500 shadow-sm hidden sm:block">View Floor</button>
                                 </div>
                                 <div className="space-y-3">
                                     {recentActivity.length === 0 ? (
@@ -341,7 +384,7 @@ export default function ManagerPage() {
                                                         {order.status === 'paid' ? <Check className="w-5 h-5 text-emerald-600"/> : <Clock className="w-5 h-5 text-orange-500"/>}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-slate-900 text-sm">{order.table_name.startsWith('T-') ? `Table ${order.table_name}` : order.table_name}</h4>
+                                                        <h4 className="font-bold text-slate-900 text-sm">{order.table_name?.startsWith('T-') ? `Table ${order.table_name}` : order.table_name || 'Order'}</h4>
                                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">{new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {order.status}</p>
                                                     </div>
                                                 </div>
@@ -353,7 +396,7 @@ export default function ManagerPage() {
                             </motion.div>
 
                             {/* Kitchen Status */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-2xl shadow-slate-900/10">
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="bg-slate-900 rounded-[2.5rem] p-6 md:p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-2xl shadow-slate-900/10">
                                 <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-600 rounded-full blur-[80px] opacity-20" />
                                 <div>
                                     <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -389,7 +432,6 @@ export default function ManagerPage() {
                         transition={{ delay: 1.2, type: "spring", stiffness: 200, damping: 20 }}
                         className="md:hidden fixed bottom-[85px] left-0 right-0 mx-auto w-[90%] max-w-[320px] z-[100] bg-white/90 backdrop-blur-xl border border-white/50 shadow-[0_12px_40px_-10px_rgba(0,200,83,0.2)] rounded-full p-1.5 flex justify-between items-center"
                     >
-                        {/* CHANGED TO REPORTS */}
                         <button 
                             onClick={() => router.push('/staff/manager/reports')} 
                             className="flex flex-col items-center justify-center w-[30%] h-12 rounded-full text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all group"

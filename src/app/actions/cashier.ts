@@ -90,8 +90,13 @@ export async function getCashierData() {
     let pendingBills = 0;
     const tableOrderMap = new Map();
 
+    // FIXED: Only count ACTUAL received money in Total Sales
     paidHistory.forEach((bill: any) => {
-        if(bill.grandTotal) totalRevenue += Number(bill.grandTotal);
+        if (bill.payment_method === 'Credit') {
+            totalRevenue += Number(bill.tendered || 0); // Only add advance paid
+        } else {
+            totalRevenue += Number(bill.grandTotal || 0); // Cash/QR is fully paid
+        }
     });
 
     activeOrders.forEach((order: any) => {
@@ -175,7 +180,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
         qty: i.qty,
         variant: i.variantName || "", 
         note: i.note || "", 
-        status: "pending"             
+        status: "pending"              
     }));
     const newTotal = compactItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
 
@@ -224,7 +229,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     return { success: true };
 }
 
-// --- 3. CANCEL ORDER (TYPE COERCION FIX) ---
+// --- 3. CANCEL ORDER ---
 export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string) {
     const tenantId = await getTenantId();
     
@@ -265,7 +270,6 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                         let itemCancelled = false; 
                         
                         const newItems = order.items.map((i:any) => {
-                            // CRITICAL FIX: Wrap in String() to prevent 123 === "123" failure
                             const sig = String(i.unique_id || i.id || `${i.name}||${i.variant || ''}`).trim();
                             const targetSig = String(itemIdToCancel).trim();
                             const safeStatus = (i.status || '').toLowerCase().trim();
@@ -341,7 +345,7 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
     }
 }
 
-// --- 4. SERVE ORDER (TYPE COERCION FIX) ---
+// --- 4. SERVE ORDER ---
 export async function serveOrder(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
@@ -370,7 +374,6 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
         let foundDate = null;
         let modifiedOrders = null;
 
-        // Force itemIdentifiers into strings just in case
         const stringIdentifiers = (itemIdentifiers || []).map(id => String(id).trim());
 
         for (const log of logs) {
@@ -448,8 +451,8 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
     }
 }
 
-// --- 5. FINALIZE (Checkout) ---
-export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, amount: number, tenantInfo: any, customerDetails?: any) {
+// --- 5. FINALIZE (Checkout with Discount & Payment Details) ---
+export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, paymentDetails: any, tenantInfo: any, customerDetails?: any) {
     const tenantId = await getTenantId();
     const today = new Date().toISOString().split('T')[0];
     
@@ -474,7 +477,13 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
                 table_no: tableId,
                 restaurant_name: tenantInfo?.name,
                 items: order.items,
-                grandTotal: amount, 
+                // Advanced Payment fields
+                subTotal: paymentDetails.subTotal || 0,
+                discount: paymentDetails.discount || 0,
+                grandTotal: paymentDetails.grandTotal || 0, 
+                tendered: paymentDetails.tendered || 0,
+                change: paymentDetails.change || 0,
+                credit_due: paymentDetails.creditDue || 0, 
                 payment_method: paymentMethod,
                 served_by: order.staff || "Cashier",
                 paid_at: new Date().toISOString(),
@@ -511,7 +520,7 @@ export async function updateStoreSettings(profile: any, accounts: any[]) {
     return { success: true };
 }
 
-// --- 7. REPORTS ---
+// --- 7. REPORTS & CREDIT ACCOUNTS ---
 export async function getCashierReports(days: number) {
     const tenantId = await getTenantId();
     const startDate = new Date(); startDate.setDate(startDate.getDate() - days);
@@ -522,27 +531,118 @@ export async function getCashierReports(days: number) {
         if (!logs) return { success: true, bills: [], summary: {}, chartData: [] };
 
         const allBills: any[] = [];
-        const summary: any = { total: 0, count: 0, byMethod: {}, byStaff: {} };
+        const summary: any = { total: 0, count: 0, byMethod: {}, byStaff: {}, creditAccounts: {} };
         const chartData: any[] = [];
 
         logs.forEach((log: any) => {
             const history = safeParse(log.paid_history);
             let dailyTotal = 0;
             history.forEach((bill: any) => {
-                if(bill && bill.grandTotal) {
+                if(bill && bill.grandTotal !== undefined) {
                     allBills.push(bill);
                     const amt = Number(bill.grandTotal);
-                    dailyTotal += amt;
-                    summary.total += amt;
-                    summary.count++;
+                    const tendered = Number(bill.tendered) || 0;
                     const method = bill.payment_method || "Cash";
-                    if(summary.byMethod[method]) summary.byMethod[method] += amt; else summary.byMethod[method] = amt;
+                    
+                    // FIXED: Only count actual paid money in Total Sales
+                    const actualRevenue = method === 'Credit' ? tendered : amt;
+                    
+                    dailyTotal += actualRevenue;
+                    summary.total += actualRevenue;
+                    summary.count++;
+                    
+                    if(summary.byMethod[method]) summary.byMethod[method] += actualRevenue; else summary.byMethod[method] = actualRevenue;
+                    
                     const staff = bill.served_by || "Cashier";
-                    if(summary.byStaff[staff]) summary.byStaff[staff] += amt; else summary.byStaff[staff] = amt;
+                    if(summary.byStaff[staff]) summary.byStaff[staff] += actualRevenue; else summary.byStaff[staff] = actualRevenue;
+
+                    // PERFECT CASE-INSENSITIVE GROUPING FOR CREDIT LEDGER
+                    if (method === 'Credit') {
+                        const rawName = (bill.customer_name || "Unknown Customer").trim();
+                        const cName = rawName.toUpperCase(); 
+                        
+                        const amountOwedOnThisBill = bill.credit_due !== undefined ? Number(bill.credit_due) : Math.max(0, amt - tendered);
+                        
+                        if (!summary.creditAccounts[cName]) {
+                            summary.creditAccounts[cName] = { displayName: rawName, total: 0, bills: [], phone: bill.customer_address || "" };
+                        }
+                        
+                        summary.creditAccounts[cName].total += amountOwedOnThisBill;
+                        summary.creditAccounts[cName].bills.push({ ...bill, due_amount: amountOwedOnThisBill });
+                    }
                 }
             });
             chartData.push({ label: log.date, value: dailyTotal });
         });
         return { success: true, bills: allBills.reverse(), summary, chartData };
     } catch (e) { return { success: false }; }
+}
+
+// --- 8. PROCESS CREDIT / KHATA PAYMENTS (NEW & FIXED) ---
+export async function processCreditPayment(customerName: string, amountToPay: number) {
+    const tenantId = await getTenantId();
+    let remainingPayment = Number(amountToPay);
+    
+    // Fetch last 60 days to find unpaid bills
+    const startDate = new Date(); startDate.setDate(startDate.getDate() - 60);
+    const startStr = startDate.toISOString().split('T')[0];
+
+    try {
+        const { data: logs, error: fetchErr } = await supabaseAdmin.from("daily_order_logs")
+            .select("date, paid_history").eq("tenant_id", tenantId).gte("date", startStr).order("date", { ascending: true });
+
+        if (fetchErr || !logs) return { success: false, error: fetchErr?.message || "No records found" };
+
+        let totalUpdated = 0;
+        const targetName = customerName.trim().toUpperCase();
+        
+        for (const log of logs) {
+            if (remainingPayment <= 0) break;
+
+            const history = safeParse(log.paid_history);
+            let logModified = false;
+
+            const newHistory = history.map((bill: any) => {
+                if (remainingPayment <= 0) return bill;
+                
+                const method = bill.payment_method || "";
+                const cName = (bill.customer_name || "").trim().toUpperCase();
+                
+                if (method === 'Credit' && cName === targetName) {
+                    const grandTotal = Number(bill.grandTotal) || 0;
+                    const previouslyTendered = Number(bill.tendered) || 0;
+                    const currentDue = bill.credit_due !== undefined ? Number(bill.credit_due) : Math.max(0, grandTotal - previouslyTendered);
+                    
+                    if (currentDue > 0) {
+                        const deductAmt = Math.min(currentDue, remainingPayment);
+                        remainingPayment -= deductAmt;
+                        logModified = true;
+                        totalUpdated += deductAmt;
+
+                        return { ...bill, tendered: previouslyTendered + deductAmt, credit_due: currentDue - deductAmt };
+                    }
+                }
+                return bill;
+            });
+
+            if (logModified) {
+                // FIXED: Use tenant_id and date for bulletproof update targeting
+                const { error: updateErr } = await supabaseAdmin.from("daily_order_logs")
+                    .update({ paid_history: newHistory })
+                    .eq("tenant_id", tenantId)
+                    .eq("date", log.date); 
+                    
+                if (updateErr) throw new Error(updateErr.message);
+            }
+        }
+
+        if (totalUpdated === 0) {
+            return { success: false, error: "No outstanding balance found to clear for this customer." };
+        }
+
+        revalidatePath("/staff/cashier");
+        return { success: true, amountCleared: totalUpdated };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
 }

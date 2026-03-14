@@ -941,17 +941,17 @@ export default function Home() {
                         <SpotlightCard className="col-span-1 md:col-span-3">
                             <div className="p-6 sm:p-10 h-full flex flex-col md:flex-row items-center gap-8 md:gap-12 text-center md:text-left">
                                 <div className="flex-1">
-                                    <h3 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3 md:mb-4">Inventory Intelligence</h3>
-                                    <p className="text-slate-500 text-base md:text-lg">Real-time stock deduction. Get alerts when you're running low on Momos or Beer.</p>
+                                    <h3 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3 md:mb-4">Disabled Menus</h3>
+                                    <p className="text-slate-500 text-base md:text-lg">Real-time menu updates. Get alert when the menus is disabled or unavailable.</p>
                                 </div>
                                 <div className="flex-1 w-full max-w-md bg-white border border-slate-100 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-xl shrink-0">
                                     <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-red-50 rounded-lg md:rounded-xl border border-red-100">
                                         <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-red-500 shrink-0" />
                                         <div className="flex-1 text-left min-w-0">
-                                            <p className="text-[10px] md:text-xs font-bold text-red-800 uppercase truncate">Low Stock Alert</p>
-                                            <p className="text-xs md:text-sm font-bold text-slate-900 truncate">Tuborg Beer (650ml)</p>
+                                            <p className="text-[10px] md:text-xs font-bold text-red-800 uppercase truncate">Disabled Menus</p>
+                                            <p className="text-xs md:text-sm font-bold text-slate-900 truncate">Open Momo</p>
                                         </div>
-                                        <span className="text-lg md:text-xl font-black text-red-500 shrink-0">04</span>
+                                        <span className="text-lg md:text-xl font-black text-red-500 shrink-0">01</span>
                                     </div>
                                 </div>
                             </div>

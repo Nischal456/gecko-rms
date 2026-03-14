@@ -1,35 +1,35 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useDeferredValue } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { getPublicMenuData } from "@/app/actions/menu-optimized";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { 
     Search, X, ChefHat, Info, ChevronRight, Layers, Beef, Leaf, 
-    GlassWater, Utensils, ShoppingBag, Plus, Sun, Moon, Sunrise, 
+    GlassWater, Utensils, ShoppingBag, Sun, Moon, Sunrise, 
     Clock, Wind, Cigarette, AlertCircle, ImageIcon, CheckCircle2 
 } from "lucide-react";
 import NepaliDate from 'nepali-date-converter';
 
-// --- ULTRA-FAST, BUTTERY ANIMATION VARIANTS ---
+// --- ULTRA-FAST, HARDWARE-ACCELERATED ANIMATIONS ---
 const containerVar: Variants = {
     hidden: { opacity: 0 },
     show: { 
         opacity: 1, 
-        transition: { staggerChildren: 0.03, delayChildren: 0.01 } 
+        transition: { staggerChildren: 0.02, delayChildren: 0.01 } 
     }
 };
 
 const itemVar: Variants = {
-    hidden: { opacity: 0, y: 15, scale: 0.95 },
+    hidden: { opacity: 0, y: 20, scale: 0.98 },
     show: { 
         opacity: 1, 
         y: 0, 
         scale: 1,
-        // Snappy spring for zero-lag feel
-        transition: { type: "spring", stiffness: 260, damping: 20 } 
+        // Extremely snappy spring (low mass = fast acceleration)
+        transition: { type: "spring", stiffness: 350, damping: 25, mass: 0.4 } 
     },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.1 } }
+    exit: { opacity: 0, scale: 0.96, transition: { duration: 0.1 } }
 };
 
 // --- UTILS ---
@@ -39,6 +39,44 @@ const toBS = (dateStr: string) => {
         const bsDate = new NepaliDate(date);
         return bsDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
+};
+
+// --- ISOLATED MICRO-COMPONENT (Fixes the 1-second lag stutter completely) ---
+const LiveHeaderBadge = () => {
+    const [time, setTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const hour = time.getHours();
+    let greeting = "Good Evening"; let GreetingIcon = Moon;
+    if (hour < 12) { greeting = "Good Morning"; GreetingIcon = Sunrise; }
+    else if (hour < 17) { greeting = "Good Afternoon"; GreetingIcon = Sun; }
+
+    return (
+        <motion.div 
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+            className="flex flex-wrap items-center gap-1.5 mt-1.5 overflow-hidden"
+        >
+            {/* Mobile-only Live Badge */}
+            <div className="sm:hidden flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 shadow-sm mr-1">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest">Live</span>
+            </div>
+
+            <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-emerald-700 bg-emerald-100/80 backdrop-blur-md px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-200/50 shadow-sm">
+                <GreetingIcon className="w-2.5 h-2.5 md:w-3 md:h-3" /> {greeting}
+            </span>
+            <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-slate-600 bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-md uppercase tracking-widest border border-slate-200/60 shadow-sm tabular-nums">
+                <Clock className="w-2.5 h-2.5 md:w-3 md:h-3" /> {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+        </motion.div>
+    );
 };
 
 export default function PublicMenuPage() {
@@ -54,22 +92,13 @@ export default function PublicMenuPage() {
     
     const [activeCategory, setActiveCategory] = useState("All");
     const [search, setSearch] = useState("");
+    
+    // FIX: Deferred value prevents keyboard typing lag on slow devices!
+    const deferredSearch = useDeferredValue(search); 
+
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [selectedVariant, setSelectedVariant] = useState<any>(null);
     const [isScrolled, setIsScrolled] = useState(false);
-
-    // --- LIVE TIME & GREETING ---
-    const [currentTime, setCurrentTime] = useState(new Date());
-
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    const hour = currentTime.getHours();
-    let greeting = "Good Evening"; let GreetingIcon = Moon;
-    if (hour < 12) { greeting = "Good Morning"; GreetingIcon = Sunrise; }
-    else if (hour < 17) { greeting = "Good Afternoon"; GreetingIcon = Sun; }
 
     // --- DATA FETCHING ---
     useEffect(() => {
@@ -92,14 +121,34 @@ export default function PublicMenuPage() {
         }
     }, [params.id]);
 
-    // --- SCROLL LISTENER ---
+    // --- OPTIMIZED SCROLL LISTENER (Fixes Scroll Lag & Flicker) ---
     useEffect(() => {
-        const handleScroll = () => setIsScrolled(window.scrollY > 20);
-        window.addEventListener("scroll", handleScroll);
+        let ticking = false;
+        const handleScroll = () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    const scrolled = window.scrollY > 20;
+                    setIsScrolled((prev) => {
+                        if (prev !== scrolled) return scrolled;
+                        return prev;
+                    });
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+        window.addEventListener("scroll", handleScroll, { passive: true });
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
-    // --- ROBUST FILTERING LOGIC ---
+    // --- NATIVE MODAL SCROLL LOCK ---
+    useEffect(() => {
+        if (selectedItem) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = 'unset';
+        return () => { document.body.style.overflow = 'unset'; };
+    }, [selectedItem]);
+
+    // --- ROBUST FILTERING LOGIC (Using deferredSearch for 0 lag) ---
     const filteredItems = useMemo(() => {
         let items: any[] = [];
         if (activeCategory === "All") items = menu.flatMap(cat => cat.items || []);
@@ -108,15 +157,15 @@ export default function PublicMenuPage() {
             items = category ? category.items : [];
         }
 
-        if (search.trim()) {
-            const lowerSearch = search.toLowerCase().trim();
+        if (deferredSearch.trim()) {
+            const lowerSearch = deferredSearch.toLowerCase().trim();
             items = items.filter(item => 
                 (item.name || "").toLowerCase().includes(lowerSearch) ||
                 (item.description || "").toLowerCase().includes(lowerSearch)
             );
         }
         return items;
-    }, [menu, activeCategory, search]);
+    }, [menu, activeCategory, deferredSearch]);
 
     // --- LOADING STATE ---
     if (loading) return (
@@ -132,17 +181,21 @@ export default function PublicMenuPage() {
     return (
         <div className="min-h-[100dvh] bg-[#f4f7f6] font-sans text-slate-900 pb-40 relative selection:bg-emerald-200">
             
-            {/* --- PREMIUM HERO HEADER --- */}
-            <div className={`sticky top-0 z-30 transition-all duration-300 ease-out ${isScrolled ? "bg-white/80 backdrop-blur-2xl border-b border-slate-200/50 shadow-sm pt-4 pb-3" : "bg-transparent pt-6 md:pt-10 pb-2"}`}>
-                <div className="max-w-[1400px] mx-auto px-4 md:px-8">
+            {/* --- FLICKER-FREE PREMIUM HERO HEADER --- */}
+            <header className="sticky top-0 z-40 w-full transform-gpu">
+                {/* GPU-Accelerated Background Overlay (Fades in smoothly) */}
+                <div className={`absolute inset-0 bg-white/85 backdrop-blur-2xl border-b border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-opacity duration-300 ease-out pointer-events-none ${isScrolled ? "opacity-100" : "opacity-0"}`} />
+                
+                {/* Header Content */}
+                <div className={`relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 transition-all duration-300 ease-out ${isScrolled ? "pt-3 pb-2.5" : "pt-6 md:pt-10 pb-2"}`}>
                     
                     {/* Brand Row */}
-                    <div className={`flex items-center justify-between transition-all duration-500 ${isScrolled ? "mb-3" : "mb-8"}`}>
+                    <div className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? "mb-3" : "mb-8"}`}>
                         <div className="flex items-center gap-3 md:gap-4 group cursor-default">
                             {/* Transparent Floating Logo */}
                             <motion.div 
                                 layout
-                                className={`relative shrink-0 flex items-center justify-center transition-all duration-500 ${isScrolled ? "w-10 h-10" : "w-14 h-14 md:w-[72px] md:h-[72px]"}`}
+                                className={`relative shrink-0 flex items-center justify-center transition-all duration-300 ${isScrolled ? "w-10 h-10" : "w-14 h-14 md:w-[72px] md:h-[72px]"}`}
                             >
                                 {!isScrolled && <div className="absolute inset-0 bg-emerald-500 rounded-full blur-2xl opacity-15 group-hover:opacity-30 transition-opacity duration-700" />}
                                 {restaurantLogo ? (
@@ -157,7 +210,7 @@ export default function PublicMenuPage() {
                             {/* Name & Live Time */}
                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                 <motion.div layout className="flex items-center gap-2">
-                                    <h1 className={`font-black text-slate-900 leading-none truncate tracking-tight transition-all duration-500 ${isScrolled ? "text-xl" : "text-2xl md:text-3xl"}`}>
+                                    <h1 className={`font-black text-slate-900 leading-none truncate tracking-tight transition-all duration-300 ${isScrolled ? "text-xl" : "text-2xl md:text-3xl"}`}>
                                         {restaurantName}
                                     </h1>
                                     {!isScrolled && (
@@ -172,28 +225,7 @@ export default function PublicMenuPage() {
                                 </motion.div>
                                 
                                 <AnimatePresence>
-                                    {!isScrolled && (
-                                        <motion.div 
-                                            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                                            className="flex flex-wrap items-center gap-1.5 mt-1.5 overflow-hidden"
-                                        >
-                                            {/* Mobile-only Live Badge */}
-                                            <div className="sm:hidden flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 shadow-sm mr-1">
-                                                <span className="relative flex h-1.5 w-1.5">
-                                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                                                </span>
-                                                <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest">Live</span>
-                                            </div>
-
-                                            <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-emerald-700 bg-emerald-100/80 backdrop-blur-md px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-200/50 shadow-sm">
-                                                <GreetingIcon className="w-2.5 h-2.5 md:w-3 md:h-3" /> {greeting}
-                                            </span>
-                                            <span className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-slate-600 bg-white/80 backdrop-blur-md px-2 py-0.5 rounded-md uppercase tracking-widest border border-slate-200/60 shadow-sm">
-                                                <Clock className="w-2.5 h-2.5 md:w-3 md:h-3" /> {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                        </motion.div>
-                                    )}
+                                    {!isScrolled && <LiveHeaderBadge />}
                                 </AnimatePresence>
                             </div>
                         </div>
@@ -202,7 +234,7 @@ export default function PublicMenuPage() {
                     {/* Search Bar (Glassmorphic) */}
                     <div className="relative w-full max-w-2xl mb-4 transform transition-all group">
                         <div className="absolute inset-0 bg-emerald-500/5 rounded-xl blur-md transition-opacity duration-300 opacity-0 group-focus-within:opacity-100" />
-                        <div className="relative bg-white/80 backdrop-blur-xl rounded-xl shadow-sm border border-slate-200/80 flex items-center overflow-hidden transition-all group-focus-within:bg-white group-focus-within:border-emerald-300 group-focus-within:shadow-[0_8px_30px_rgb(16,185,129,0.12)]">
+                        <div className="relative bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-slate-200/80 flex items-center overflow-hidden transition-all group-focus-within:bg-white group-focus-within:border-emerald-300 group-focus-within:shadow-[0_8px_30px_rgb(16,185,129,0.12)]">
                             <div className="pl-3.5 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                                 <Search className="w-4.5 h-4.5" />
                             </div>
@@ -221,7 +253,7 @@ export default function PublicMenuPage() {
                     </div>
                     
                     {/* Animated Category Pills */}
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 md:mx-0 md:px-0 scroll-smooth">
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 md:mx-0 md:px-0 scroll-smooth transform-gpu">
                         <button 
                             onClick={() => setActiveCategory("All")} 
                             className={`relative flex-shrink-0 px-4 py-2 rounded-lg text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${activeCategory === "All" ? 'text-white shadow-md shadow-slate-900/20' : 'text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
@@ -242,7 +274,7 @@ export default function PublicMenuPage() {
                         ))}
                     </div>
                 </div>
-            </div>
+            </header>
 
             {/* --- MENU GRID (2 Columns Mobile, 3 Tablet, 4 Desktop) --- */}
             <div className="p-3 md:p-8 max-w-[1400px] mx-auto min-h-[50vh]">
@@ -267,93 +299,95 @@ export default function PublicMenuPage() {
                         </motion.div>
                     ) : (
                         <motion.div 
-                            key={activeCategory + search} 
+                            key={activeCategory} // FIX: Removed search from key so the grid doesn't self-destruct!
                             variants={containerVar} 
                             initial="hidden" 
                             animate="show"
                             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5 lg:gap-6"
                         >
-                            {filteredItems.map((item: any) => {
-                                const dietaryType = item.dietary || 'non-veg';
-                                let BadgeIcon = Beef; let badgeColor = 'text-red-600';
-                                if(dietaryType === 'veg') { BadgeIcon = Leaf; badgeColor = 'text-green-600'; }
-                                else if(dietaryType === 'drinks') { BadgeIcon = GlassWater; badgeColor = 'text-blue-600'; }
-                                else if(dietaryType === 'hookah') { BadgeIcon = Wind; badgeColor = 'text-orange-600'; }
-                                else if(dietaryType === 'tobacco') { BadgeIcon = Cigarette; badgeColor = 'text-slate-600'; }
+                            <AnimatePresence>
+                                {filteredItems.map((item: any) => {
+                                    const dietaryType = item.dietary || 'non-veg';
+                                    let BadgeIcon = Beef; let badgeColor = 'text-red-600';
+                                    if(dietaryType === 'veg') { BadgeIcon = Leaf; badgeColor = 'text-green-600'; }
+                                    else if(dietaryType === 'drinks') { BadgeIcon = GlassWater; badgeColor = 'text-blue-600'; }
+                                    else if(dietaryType === 'hookah') { BadgeIcon = Wind; badgeColor = 'text-orange-600'; }
+                                    else if(dietaryType === 'tobacco') { BadgeIcon = Cigarette; badgeColor = 'text-slate-600'; }
 
-                                const hasVariants = item.variants && item.variants.length > 0;
-                                const displayVariants = hasVariants ? item.variants.slice(0, 3) : [];
+                                    const hasVariants = item.variants && item.variants.length > 0;
+                                    const displayVariants = hasVariants ? item.variants.slice(0, 3) : [];
 
-                                return (
-                                    <motion.div 
-                                        key={item.id} 
-                                        variants={itemVar}
-                                        layout="position"
-                                        onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
-                                        className="bg-white p-3 md:p-4 rounded-[1.5rem] border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] active:scale-[0.97] hover:-translate-y-1 transition-all duration-300 cursor-pointer group hover:border-emerald-200 hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.15)] flex flex-col h-full relative"
-                                    >
-                                        {/* Sold Out Overlay */}
-                                        {!item.is_available && (
-                                            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-30 flex items-center justify-center rounded-[1.5rem]">
-                                                <span className="bg-slate-900 text-white px-3 py-1.5 rounded-lg font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-lg">Sold Out</span>
-                                            </div>
-                                        )}
-
-                                        {/* Top Section: Image + Title */}
-                                        <div className="flex gap-3 mb-1">
-                                            {/* Image Thumbnail */}
-                                            <div className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-[1rem] overflow-hidden relative shadow-inner border border-slate-100/50 bg-slate-50">
-                                                {item.image_url ? (
-                                                    <img loading="lazy" src={item.image_url} alt={item.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out ${!item.is_available && 'grayscale'}`} />
-                                                ) : (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageIcon className="w-6 h-6 opacity-30" /></div>
-                                                )}
-                                                
-                                                {/* Premium Floating Badge */}
-                                                <div className="absolute top-1.5 left-1.5 bg-white/95 backdrop-blur-md px-1.5 py-1 rounded-md border border-slate-100 shadow-sm flex items-center justify-center z-20">
-                                                    <BadgeIcon className={`w-3 h-3 md:w-3.5 md:h-3.5 ${badgeColor}`} />
+                                    return (
+                                        <motion.div 
+                                            key={item.id} 
+                                            variants={itemVar}
+                                            layout="position"
+                                            onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
+                                            className="bg-white p-3 md:p-4 rounded-[1.5rem] border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] active:scale-[0.97] hover:-translate-y-1 transition-all duration-300 cursor-pointer group hover:border-emerald-200 hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.15)] flex flex-col h-full relative transform-gpu will-change-transform"
+                                        >
+                                            {/* Sold Out Overlay */}
+                                            {!item.is_available && (
+                                                <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-30 flex items-center justify-center rounded-[1.5rem]">
+                                                    <span className="bg-slate-900 text-white px-3 py-1.5 rounded-lg font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-lg">Sold Out</span>
                                                 </div>
-                                            </div>
+                                            )}
 
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0 flex flex-col pt-0.5">
-                                                <h3 className="font-black text-slate-900 text-sm md:text-base leading-tight truncate group-hover:text-emerald-600 transition-colors">{item.name}</h3>
-                                                <p className="text-[10px] md:text-xs text-slate-500 line-clamp-2 mt-1 leading-snug font-medium pr-1">
-                                                    {item.description || "Freshly prepared for you."}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Bottom Section: Options / Price */}
-                                        {hasVariants ? (
-                                            <div className="mt-auto pt-3 border-t border-slate-100/60">
-                                                <div className="flex items-center gap-1.5 mb-2">
-                                                    <Layers className="w-3.5 h-3.5 text-emerald-500" />
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Options</span>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    {displayVariants.map((v: any, idx: number) => (
-                                                        <div key={idx} className="flex justify-between items-center bg-slate-50/80 group-hover:bg-emerald-50/50 px-3 py-2 rounded-xl transition-colors border border-slate-100/50 group-hover:border-emerald-100/50">
-                                                            <span className="text-[11px] md:text-xs font-bold text-slate-700 truncate mr-2">{v.name}</span>
-                                                            <span className="text-[11px] md:text-xs font-black text-emerald-600 shrink-0">Rs {v.price}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                {item.variants.length > 3 && (
-                                                    <div className="text-center mt-2">
-                                                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">+{item.variants.length - 3} more</span>
+                                            {/* Top Section: Image + Title */}
+                                            <div className="flex gap-3 mb-1">
+                                                {/* Image Thumbnail */}
+                                                <div className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-[1rem] overflow-hidden relative shadow-inner border border-slate-100/50 bg-slate-50">
+                                                    {item.image_url ? (
+                                                        <img loading="lazy" src={item.image_url} alt={item.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out ${!item.is_available && 'grayscale'}`} />
+                                                    ) : (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageIcon className="w-6 h-6 opacity-30" /></div>
+                                                    )}
+                                                    
+                                                    {/* Premium Floating Badge */}
+                                                    <div className="absolute top-1.5 left-1.5 bg-white/95 backdrop-blur-md px-1.5 py-1 rounded-md border border-slate-100 shadow-sm flex items-center justify-center z-20">
+                                                        <BadgeIcon className={`w-3 h-3 md:w-3.5 md:h-3.5 ${badgeColor}`} />
                                                     </div>
-                                                )}
+                                                </div>
+
+                                                {/* Content */}
+                                                <div className="flex-1 min-w-0 flex flex-col pt-0.5">
+                                                    <h3 className="font-black text-slate-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-emerald-600 transition-colors">{item.name}</h3>
+                                                    <p className="text-[10px] md:text-xs text-slate-500 line-clamp-2 mt-1 leading-snug font-medium pr-1">
+                                                        {item.description || "Freshly prepared for you."}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        ) : (
-                                            <div className="mt-auto pt-3 border-t border-slate-100/60 flex items-center justify-between">
-                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fixed Price</span>
-                                                <span className="text-sm md:text-base font-black text-emerald-600 tracking-tight">Rs {item.price || 0}</span>
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                );
-                            })}
+
+                                            {/* Bottom Section: Options / Price */}
+                                            {hasVariants ? (
+                                                <div className="mt-auto pt-3 border-t border-slate-100/60">
+                                                    <div className="flex items-center gap-1.5 mb-2">
+                                                        <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Options</span>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        {displayVariants.map((v: any, idx: number) => (
+                                                            <div key={idx} className="flex justify-between items-center bg-slate-50/80 group-hover:bg-emerald-50/50 px-3 py-2 rounded-xl transition-colors border border-slate-100/50 group-hover:border-emerald-100/50">
+                                                                <span className="text-[11px] md:text-xs font-bold text-slate-700 truncate mr-2">{v.name}</span>
+                                                                <span className="text-[11px] md:text-xs font-black text-emerald-600 shrink-0">Rs {v.price}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    {item.variants.length > 3 && (
+                                                        <div className="text-center mt-2">
+                                                            <span className="text-[9px] md:text-[10px] font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">+{item.variants.length - 3} more</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="mt-auto pt-3 border-t border-slate-100/60 flex items-center justify-between">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fixed Price</span>
+                                                    <span className="text-sm md:text-base font-black text-emerald-600 tracking-tight">Rs {item.price || 0}</span>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    );
+                                })}
+                            </AnimatePresence>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -365,7 +399,7 @@ export default function PublicMenuPage() {
                     <div className="max-w-md mx-auto pointer-events-auto">
                         <motion.button 
                             initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} whileTap={{ scale: 0.96 }}
-                            className="w-full bg-slate-900/95 backdrop-blur-2xl text-white p-2.5 md:p-3 pr-4 md:pr-5 rounded-[1.5rem] shadow-[0_20px_40px_rgb(0,0,0,0.25)] flex items-center justify-between border border-slate-700/50 group overflow-hidden relative"
+                            className="w-full bg-slate-900/95 backdrop-blur-2xl text-white p-2.5 md:p-3 pr-4 md:pr-5 rounded-[1.5rem] shadow-[0_20px_40px_rgb(0,0,0,0.25)] flex items-center justify-between border border-slate-700/50 group overflow-hidden relative transform-gpu"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             <div className="flex items-center gap-3 relative z-10">
@@ -391,12 +425,12 @@ export default function PublicMenuPage() {
                         <motion.div 
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
                             onClick={() => setSelectedItem(null)} 
-                            className="absolute inset-0 bg-slate-900/50 backdrop-blur-md" 
+                            className="absolute inset-0 bg-slate-900/50 backdrop-blur-md transform-gpu" 
                         />
                         
                         <motion.div 
                             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 260, mass: 0.8 }}
-                            className="bg-[#f8fafc] w-full max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-0 relative z-10 shadow-2xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden"
+                            className="bg-[#f8fafc] w-full max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-0 relative z-10 shadow-2xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden transform-gpu will-change-transform"
                         >
                             {/* Floating Close Button */}
                             <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 w-9 h-9 bg-white/50 backdrop-blur-xl rounded-full flex items-center justify-center text-slate-800 z-50 hover:bg-white/80 transition-colors shadow-md ring-1 ring-white/50 active:scale-90">

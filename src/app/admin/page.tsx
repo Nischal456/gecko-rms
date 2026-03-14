@@ -18,7 +18,6 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 // --- 0. NEPALI UTILS ---
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
 const nepaliMonths = ["बैशाख", "जेष्ठ", "अषाढ", "श्रावण", "भाद्र", "आश्विन", "कार्तिक", "मंसिर", "पुष", "माघ", "फाल्गुन", "चैत्र"];
-const nepaliDays = ["आइतबार", "सोमबार", "मंगलबार", "बुधबार", "बिहीबार", "शुक्रबार", "शनिबार"];
 
 function toNepaliDigits(num: number | string): string {
     return num.toString().split('').map(c => nepaliDigits[parseInt(c)] || c).join('');
@@ -204,13 +203,11 @@ function PlanBadge({ plan }: { plan: string }) {
     )
 }
 
-// --- 5. METRIC CARD ---
-// --- 5. METRIC CARD ---
+// --- 5. PREMIUM METRIC CARD ---
 function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     const hasTrend = trend !== 0;
     const isPositive = trend > 0;
     
-    // Explicitly type the object so 'color' string can index it
     const themeMap: Record<string, string> = {
         emerald: "text-emerald-600 bg-emerald-50 border-emerald-100",
         blue: "text-blue-600 bg-blue-50 border-blue-100",
@@ -219,18 +216,20 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
         red: "text-red-600 bg-red-50 border-red-100"
     };
 
-    // Safe access with fallback
     const theme = themeMap[color] || "text-slate-600 bg-slate-50 border-slate-100";
+    
+    // Premium Currency Alignment Logic
+    const isCurrency = typeof value === 'string' && value.startsWith('Rs');
+    const valString = isCurrency ? value.replace('Rs ', '') : value;
 
     return (
         <motion.div 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: delay, duration: 0.4 }} 
-            className="bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full"
+            className="bg-white p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full transform-gpu"
         >
-            {/* Background Blob */}
-            <div className={`absolute -right-8 -top-8 w-32 h-32 rounded-full blur-3xl opacity-20 bg-${color}-400 transition-transform group-hover:scale-150`} />
+            <div className={`absolute -right-8 -top-8 w-32 h-32 rounded-full blur-3xl opacity-20 bg-${color}-400 transition-transform group-hover:scale-150 pointer-events-none`} />
             
             <div className="relative z-10 flex flex-col justify-between h-full">
                 <div className="flex justify-between items-start mb-4">
@@ -247,7 +246,10 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
                     )}
                 </div>
                 <div>
-                    <h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter mb-1 leading-none">{value}</h3>
+                    <div className="flex items-baseline gap-1.5 mb-1">
+                        {isCurrency && <span className={`text-sm font-black opacity-70 ${theme.split(' ')[0]}`}>Rs</span>}
+                        <h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter leading-none">{valString}</h3>
+                    </div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
                 </div>
             </div>
@@ -267,7 +269,7 @@ export default function AdminDashboard() {
         async function init() {
             const dashboardData = await getDashboardData();
             if(!dashboardData) { router.push("/login"); return; }
-            setTimeout(() => { setData(dashboardData); setLoading(false); }, 800); // Slight delay for smoother entry
+            setTimeout(() => { setData(dashboardData); setLoading(false); }, 800);
         }
         init();
     }, []);
@@ -298,7 +300,7 @@ export default function AdminDashboard() {
             {!loading && data && (
                 <>
                     <Sidebar tenantName={data.tenant?.name} tenantCode={data.tenant?.code || "---"} logo={data.tenant?.logo_url} />
-                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 md:pb-8">
+                    <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 md:pb-8 custom-scrollbar">
                         
                         {/* --- HEADER SECTION --- */}
                         <header className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-10">
@@ -327,10 +329,10 @@ export default function AdminDashboard() {
 
                         {/* --- METRICS GRID --- */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                            <MetricCard title="Revenue" value={`Rs ${data.stats.revenue.value.toLocaleString()}`} trend={data.stats.revenue.trend} icon={IndianRupee} color="emerald" delay={0.2} />
+                            <MetricCard title="Real Revenue" value={formatRs(data.stats.revenue.value)} trend={data.stats.revenue.trend} icon={IndianRupee} color="emerald" delay={0.2} />
                             <MetricCard title="Total Orders" value={data.stats.orders.value} trend={data.stats.orders.trend} icon={ShoppingBag} color="blue" delay={0.3} />
                             <MetricCard title="Kitchen Active" value={`${data.stats.active} Orders`} trend={0} icon={ChefHat} color="amber" delay={0.4} />
-                            <MetricCard title="Avg Ticket" value={`Rs ${data.stats.avgTicket.value}`} trend={data.stats.avgTicket.trend} icon={CreditCard} color="violet" delay={0.5} />
+                            <MetricCard title="Avg Ticket" value={formatRs(data.stats.avgTicket.value)} trend={data.stats.avgTicket.trend} icon={CreditCard} color="violet" delay={0.5} />
                         </div>
 
                         {/* --- FEED & MOVERS --- */}

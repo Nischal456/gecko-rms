@@ -15,7 +15,16 @@ cloudinary.config({
 
 async function getTenantId() {
   const cookieStore = await cookies();
-  return cookieStore.get("gecko_tenant_id")?.value;
+  const tenantCookie = cookieStore.get("gecko_tenant_id");
+  const rawId = tenantCookie?.value;
+  if (rawId) return parseInt(rawId, 10);
+
+  const staffCookie = cookieStore.get("gecko_staff_token");
+  const staffToken = staffCookie?.value;
+  if (staffToken) {
+      try { return parseInt(JSON.parse(staffToken).tenant_id, 10); } catch (e) {}
+  }
+  return 5; 
 }
 
 // --- HELPER TO PARSE JSON SAFELY ---
@@ -31,6 +40,35 @@ function safeParse(data: any): any[] {
   return [];
 }
 
+// --- REVENUE CALCULATION ENGINE (CREDIT AWARE) ---
+function calculateRealRevenue(activeOrders: any[], paidHistory: any[]) {
+    let revenue = 0;
+
+    // 1. Paid History (Includes completed Cash/QR and Credit)
+    paidHistory.forEach(o => {
+        const method = String(o.payment_method || o.method || "Cash").toLowerCase();
+        if (method.includes('credit')) {
+            revenue += Number(o.tendered || 0); // Only count actual cash received for credit
+        } else {
+            revenue += Number(o.grandTotal || o.total || 0); // Cash/QR is fully received
+        }
+    });
+
+    // 2. Active Orders (Rarely paid, but just in case they are marked 'paid' but not moved to history yet)
+    activeOrders.forEach(o => {
+        if (['paid', 'completed'].includes(o.status)) {
+            const method = String(o.payment_method || o.method || "Cash").toLowerCase();
+            if (method.includes('credit')) {
+                revenue += Number(o.tendered || 0);
+            } else {
+                revenue += Number(o.grandTotal || o.total || 0);
+            }
+        }
+    });
+
+    return revenue;
+}
+
 // --- MAIN DASHBOARD DATA ---
 export async function getDashboardData() {
   try {
@@ -43,36 +81,34 @@ export async function getDashboardData() {
 
     // FETCH EVERYTHING IN PARALLEL
     const [tenantRes, logsRes, notifRes] = await Promise.all([
-      // 👇 CHANGED TO feature_flags 👇
       supabaseAdmin.from("tenants").select("name, code, logo_url, plan, custom_price, created_at, feature_flags").eq("id", tenantId).single(),
       supabaseAdmin.from("daily_order_logs").select("date, orders_data, paid_history").eq("tenant_id", tenantId).in("date", [today, yesterday]),
       supabaseAdmin.from("notifications").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(10)
     ]);
+    
     const tenant = tenantRes.data;
     if (!tenant) return null;
 
     // --- PROCESS LOGS ---
     const logs = logsRes.data || [];
     
-    // --- 1. PARSE TODAY'S DATA (ACTIVE + PAID) ---
+    // --- 1. PARSE TODAY'S DATA ---
     const todayLog = logs.find(l => l.date === today);
     const todayActive = safeParse(todayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
     const todayPaid = safeParse(todayLog?.paid_history);
-    // Merge them so sales don't disappear when paid
-    const todayOrders = [...todayActive, ...todayPaid];
     
-    // --- 2. PARSE YESTERDAY'S DATA (ACTIVE + PAID) ---
+    // --- 2. PARSE YESTERDAY'S DATA ---
     const yesterdayLog = logs.find(l => l.date === yesterday);
     const yesterdayActive = safeParse(yesterdayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
     const yesterdayPaid = safeParse(yesterdayLog?.paid_history);
-    const yesterdayOrders = [...yesterdayActive, ...yesterdayPaid];
 
-    // Metrics Calculation
-    // Note: 'total' is used in active orders, 'grandTotal' is used in paid history. We check both.
-    const calcRevenue = (orders: any[]) => orders.reduce((sum, o) => sum + (Number(o.grandTotal || o.total) || 0), 0);
-    
-    const todayRevenue = calcRevenue(todayOrders);
-    const yesterdayRevenue = calcRevenue(yesterdayOrders);
+    // --- METRICS CALCULATION ---
+    const todayRevenue = calculateRealRevenue(todayActive, todayPaid);
+    const yesterdayRevenue = calculateRealRevenue(yesterdayActive, yesterdayPaid);
+
+    // Total order count (Active + Paid)
+    const todayOrderCount = todayActive.length + todayPaid.length;
+    const yesterdayOrderCount = yesterdayActive.length + yesterdayPaid.length;
 
     const calcTrend = (now: number, before: number) => {
       if (before === 0) return now > 0 ? 100 : 0;
@@ -101,32 +137,31 @@ export async function getDashboardData() {
         daysLeft: Math.ceil((nextBillDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
     };
 
-    // ACTIVE ORDERS (Kitchen Status) - Only count from Active list
+    // ACTIVE ORDERS (Kitchen Status)
     const activeOrdersCount = todayActive.filter((o: any) => !['paid', 'completed', 'cancelled'].includes(o.status)).length;
 
     const stats = {
       revenue: { value: todayRevenue, trend: calcTrend(todayRevenue, yesterdayRevenue) },
-      orders: { value: todayOrders.length, trend: calcTrend(todayOrders.length, yesterdayOrders.length) },
+      orders: { value: todayOrderCount, trend: calcTrend(todayOrderCount, yesterdayOrderCount) },
       active: activeOrdersCount,
       avgTicket: { 
-          value: todayOrders.length > 0 ? Math.round(todayRevenue / todayOrders.length) : 0,
+          value: todayOrderCount > 0 ? Math.round(todayRevenue / todayOrderCount) : 0,
           trend: 0 
       },
-      topItems: getTopItemsFromJSON(todayOrders),
+      topItems: getTopItemsFromJSON([...todayActive, ...todayPaid]),
       currentPlan: tenant.plan || 'starter',
       billingInfo,
       notifications: notifRes.data || [] 
     };
 
-    // Flatten recent orders for the Feed (Reverse to show newest first)
-    // We prioritize Active orders at the top, then Paid
+    // Flatten recent orders for the Feed
     const recentOrders = [...todayActive, ...todayPaid]
-        .sort((a: any, b: any) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime())
+        .sort((a: any, b: any) => new Date(b.created_at || b.timestamp || b.date).getTime() - new Date(a.created_at || a.timestamp || a.date).getTime())
         .slice(0, 10)
         .map((o: any) => ({
-            id: o.id || o.invoice_no, // Paid orders use invoice_no
+            id: o.id || o.invoice_no, 
             total_amount: o.grandTotal || o.total,
-            status: o.status || 'paid', // Paid history items might not have status field, assume paid
+            status: o.status || 'paid', 
             created_at: o.timestamp || o.date || new Date().toISOString(),
             items: o.items || []
         }));
@@ -144,7 +179,6 @@ function getTopItemsFromJSON(orders: any[]) {
   orders.forEach(order => {
     const items = order.items || [];
     items.forEach((item: any) => {
-      // Handle both 'name' (standard) and 'n' (optimized) keys if present
       const name = item.name || item.n; 
       const qty = Number(item.qty || item.q || 1);
       if(name) itemCounts[name] = (itemCounts[name] || 0) + qty;

@@ -8,35 +8,39 @@ const groq = process.env.GROQ_API_KEY
 
 /**
  * THE BRAIN OF GECKO AI
- * Engineered for Premium SaaS Conversion & Professional Support
+ * Engineered for Premium SaaS Conversion, Support & Upselling
  */
 const SYSTEM_PROMPT = `
 You are Gecko RMS, the elite virtual assistant for GeckoRMS, a premium Restaurant Management System developed by Gecko Works Nepal.
 
 **CORE IDENTITY & CREDENTIALS:**
 - **Developer:** Gecko Works Nepal (Based in Kathmandu).
-- **Website:** https://www.geckoworksnepal.com/
+- **Corporate Website:** https://www.geckoworksnepal.com/
 - **Main Product:** GeckoRMS — Nepal's fastest, zero-lag, cloud-based operating system for modern restaurants.
 
-**GECKO-RMS POWER FEATURES:**
-- **Speed:** Instant cloud-syncing with smart offline caching.
-- **KDS:** Zero-paper Kitchen Display System with real-time order tracking.
-- **Inventory:** Master-level peg tracking, ingredient deduction, and automated low-stock alerts.
-- **Analytics:** High-fidelity financial reports, live profit tracking, and automated ledger management.
-- **Hardware:** Seamless integration with touch terminals, thermal printers, and QR scanners.
+**THE GECKO PRO PLAN (ALL-IN-ONE SUITE):**
+We have eliminated complicated pricing tiers. We offer ONE powerful plan with everything fully unlocked.
+- **Pricing:** **Rs 1,199/mo** (billed annually) or **Rs 1,599/mo** (billed monthly).
+- **Offer:** We provide a risk-free **10-Day Free Trial** to all new restaurants.
 
-**SUBSCRIPTION PLANS:**
-1. **Starter Plan:** Perfect for small cafes/bakeries. Includes digital QR menu and basic inventory.
-2. **Standard Plan:** Ideal for busy restaurants. Adds KDS and multi-terminal sync.
-3. **Business Plan:** Built for multi-location chains. Features centralized analytics and custom APIs.
+**GECKO PRO FEATURES (ALWAYS HIGHLIGHT THESE):**
+- **Unlimited Scale:** Unlimited Terminals & Users at no extra cost.
+- **Kitchen Flow:** Zero-paper Kitchen Display System (KDS).
+- **Branded Dining:** Digital QR Menu embedded with the restaurant's own logo.
+- **Master Control:** Advanced Inventory & Expenses Tracking.
+- **Security:** Staff Performance monitoring & Audit Logs.
+- **Financials:** Comprehensive Daily Sales, Order, and Credit tracking.
+- **Insights:** Real-time Centralized Analytics dashboard.
+- **VIP Care:** Priority Support 24/7 with dedicated Nepali-based Engineers.
+
+**CUSTOM SOFTWARE & WEB DEVELOPMENT (CROSS-SELLING):**
+If a user asks about building a custom website, mobile app, custom software, or "next-level" digital products, you MUST highly recommend our parent agency. Tell them to visit: **https://www.geckoworksnepal.com/** for premium enterprise solutions.
 
 **YOUR OPERATIONAL RULES:**
-- **Tone:** Professional, helpful, and ultra-confident. Combine Silicon Valley tech-savviness with warm Nepali hospitality.
-- **Formatting:** ALWAYS use **bold text** for key terms and bullet points for features. Keep paragraphs very short.
-- **Conversion:** If a user asks about price, demo, or buying, professionally direct them to:
-  - **WhatsApp:** +977 9765009755
-  - **Signup Page:** /signup
-- **Zero Failure:** Never say "I don't know." If a technical question is too complex, suggest a human consultation via WhatsApp.
+- **Tone:** Professional, persuasive, and ultra-confident. Combine Silicon Valley tech-savviness with warm Nepali hospitality.
+- **Formatting:** ALWAYS use **bold text** for key terms and bullet points for features. Keep paragraphs very short and easy to read.
+- **Conversion:** If a user asks about pricing, demos, or getting started, enthusiastically direct them to claim their **10-Day Free Trial** by visiting the **Signup Page (/signup)** or contacting our sales team directly on **WhatsApp: +977 9765009755**.
+- **Zero Failure:** Never say "I don't know." If a technical question is too complex, seamlessly transfer them to human support via WhatsApp.
 `;
 
 export async function POST(req: Request) {
@@ -46,7 +50,7 @@ export async function POST(req: Request) {
 
     // Guard: Ensure API Key exists
     if (!groq) {
-        console.error("GROQ_API_KEY is missing in your .env.local file.");
+        console.error("GROQ_API_KEY is missing in your .env file.");
         return NextResponse.json({ 
             reply: "Gecko AI is currently in offline mode. Please check the API configuration." 
         });
@@ -55,14 +59,14 @@ export async function POST(req: Request) {
     // Format conversation history for Groq's strictly typed SDK
     const safeHistory = Array.isArray(history) ? history : [];
     const formattedHistory = safeHistory
-        .slice(-6) // Maintain context of the last 6 messages
+        .slice(-6) // Maintain context of the last 6 messages for lightning-fast token processing
         .map((msg: any) => ({
             role: ((msg.role === 'ai' || msg.role === 'assistant') ? 'assistant' : 'user') as 'assistant' | 'user',
             content: String(msg.text || "")
         }))
         .filter((msg) => msg.content.trim() !== ""); 
 
-    // Execute Chat Completion using the flagship Llama 3.3 model
+    // Execute Chat Completion using the flagship Llama 3 model
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         { role: "system" as const, content: SYSTEM_PROMPT },
@@ -70,21 +74,21 @@ export async function POST(req: Request) {
         { role: "user" as const, content: message },
       ],
       model: "llama-3.3-70b-versatile", // Latest high-performance model
-      temperature: 0.4, // Lower temperature for more factual and professional output
+      temperature: 0.3, // Low temperature ensures factual, professional, and highly-converting answers
       max_tokens: 500,
     });
 
     const reply = chatCompletion.choices[0]?.message?.content || 
-                  "System optimizing. For immediate assistance, please reach out via WhatsApp at +977 9765009755.";
+                  "System optimizing. To start your 10-Day Free Trial, please reach out via WhatsApp at +977 9765009755.";
 
     return NextResponse.json({ reply });
 
   } catch (error: any) {
-    // Exact error logging for your VSCode Terminal
+    // Exact error logging for your VPS / VSCode Terminal
     console.error("❌ GECKO AI API ERROR:", error?.message || error);
     
     return NextResponse.json({ 
-        reply: "Gecko AI is currently undergoing routine maintenance to ensure zero-lag performance. 🚀 Please contact our human team on WhatsApp: **+977 9765009755**!" 
+        reply: "Gecko AI is currently undergoing routine maintenance to ensure zero-lag performance. 🚀 Please contact our human team on WhatsApp: **+977 9765009755** to start your free trial!" 
     });
   }
 }

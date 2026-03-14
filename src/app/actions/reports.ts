@@ -26,7 +26,13 @@ function safeParse(data: any): any[] {
 async function getTenantId(): Promise<number> {
   const cookieStore = await cookies();
   const rawId = cookieStore.get("gecko_tenant_id")?.value;
-  return getSafeId(rawId);
+  if (rawId) return getSafeId(rawId);
+  
+  const staffCookie = cookieStore.get("gecko_staff_token");
+  if (staffCookie?.value) {
+      try { return getSafeId(JSON.parse(staffCookie.value).tenant_id); } catch(e){}
+  }
+  return 5;
 }
 
 // --- MAIN REPORT ACTION ---
@@ -104,7 +110,8 @@ export async function getReportData(range: ReportRange) {
           console.error("Failed to fetch expenses", e);
       }
 
-      let totalRevenue = 0;
+      let totalRevenue = 0; // Actual Cash Received
+      let totalCreditDue = 0; // Money floating in credit
       let prevRevenue = 0;
       let totalExpense = 0;
       let orderCount = 0;
@@ -127,28 +134,37 @@ export async function getReportData(range: ReportRange) {
           const allSales = [...validActive, ...paidOrders];
           
           allSales.forEach((order: any) => {
-              // Safe Check if Paid
               const isFromPaidHistory = paidOrders.some(po => po.id === order.id || po.invoice_no === order.invoice_no);
               const isPaid = isFromPaidHistory || ['paid', 'completed'].includes(order.status);
-              const amount = Number(order.grandTotal || order.total || 0);
               
+              const grandTotal = Number(order.grandTotal || order.total || 0);
+              let actualRevenue = grandTotal;
+              let currentDue = 0;
               let finalMethod = "Pending";
 
               if (isPaid) {
-                  totalRevenue += amount;
-                  dailyMap[dateKey].revenue += amount;
-
-                  // Extract precise payment method
                   let rawMethod = String(order.payment_method || order.method || "Cash").toLowerCase();
                   if (rawMethod.includes("qr") || rawMethod.includes("esewa") || rawMethod.includes("fonepay")) finalMethod = "QR";
                   else if (rawMethod.includes("card") || rawMethod.includes("visa") || rawMethod.includes("pos")) finalMethod = "Card";
+                  else if (rawMethod.includes("credit")) finalMethod = "Credit";
                   else if (rawMethod.includes("cash")) finalMethod = "Cash";
                   else finalMethod = order.payment_method || "Cash";
+
+                  // Extract exact cash received if Credit
+                  if (finalMethod === "Credit") {
+                      const tendered = Number(order.tendered || 0);
+                      actualRevenue = tendered; 
+                      currentDue = order.credit_due !== undefined ? Number(order.credit_due) : Math.max(0, grandTotal - tendered);
+                  }
+
+                  totalRevenue += actualRevenue;
+                  totalCreditDue += currentDue;
+                  dailyMap[dateKey].revenue += actualRevenue;
                   
-                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + amount;
+                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + actualRevenue;
 
                   const staff = order.served_by || order.staff || "Cashier"; 
-                  staffPerformance[staff] = (staffPerformance[staff] || 0) + amount;
+                  staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRevenue;
               }
 
               orderCount += 1;
@@ -168,11 +184,13 @@ export async function getReportData(range: ReportRange) {
               allTransactions.push({
                   id: order.invoice_no || order.id || `ORD-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
                   date: order.paid_at || order.timestamp || log.date,
-                  amount: amount,
+                  amount: grandTotal,
+                  tendered: actualRevenue,
+                  due: currentDue,
                   type: "POS Bill",
                   method: finalMethod,
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
-                  status: isPaid ? 'Completed' : 'Pending', 
+                  status: isPaid ? (currentDue > 0 ? 'Partial/Credit' : 'Completed') : 'Pending', 
                   items: order.items || [], 
                   customer: { name: order.customer_name, address: order.customer_address }
               });
@@ -194,13 +212,14 @@ export async function getReportData(range: ReportRange) {
               totalRevenue += amount;
               if (dateKey) dailyMap[dateKey].revenue += amount;
               
-              // Track Manual Income as a Payment Method too!
               paymentMethods["Manual Income"] = (paymentMethods["Manual Income"] || 0) + amount;
               
               allTransactions.push({
                   id: `INC-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
                   amount: amount,
+                  tendered: amount,
+                  due: 0,
                   type: "Manual Income",
                   method: "Manual Log",
                   details: cleanCategory,
@@ -216,6 +235,8 @@ export async function getReportData(range: ReportRange) {
                   id: `EXP-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
                   amount: amount,
+                  tendered: amount,
+                  due: 0,
                   type: "Manual Expense",
                   method: "Deduction",
                   details: cleanCategory,
@@ -230,7 +251,11 @@ export async function getReportData(range: ReportRange) {
       (prevLogs || []).forEach((log: any) => {
           const paid = safeParse(log.paid_history);
           paid.forEach((o: any) => {
-              prevRevenue += Number(o.grandTotal || o.total || 0);
+              let amt = Number(o.grandTotal || o.total || 0);
+              if (String(o.payment_method).toLowerCase() === 'credit') {
+                  amt = Number(o.tendered || 0); // Only past received cash counts for trend
+              }
+              prevRevenue += amt;
           });
       });
 
@@ -255,13 +280,13 @@ export async function getReportData(range: ReportRange) {
           .sort((a, b) => b.sales - a.sales)
           .slice(0, 5);
 
-      // Sort all transactions by newest
       const sortedTransactions = allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return {
           success: true,
           stats: {
               totalRevenue,
+              totalCreditDue, // Sent to frontend
               totalExpense,
               netProfit,
               margin,

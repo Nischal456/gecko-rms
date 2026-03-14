@@ -140,52 +140,102 @@ function PremiumDateCard() {
 }
 
 function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
-    const themeColor = color === 'blue' ? 'text-blue-600 bg-blue-50' : color === 'orange' ? 'text-orange-600 bg-orange-50' : color === 'red' ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50';
+    const themeColor =
+        color === 'blue'
+            ? 'text-blue-600 bg-blue-50'
+            : color === 'orange'
+            ? 'text-orange-600 bg-orange-50'
+            : color === 'red'
+            ? 'text-red-600 bg-red-50'
+            : 'text-emerald-600 bg-emerald-50';
+
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay, duration: 0.4 }} className="bg-white p-5 md:p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group">
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: delay, duration: 0.4 }}
+            className="bg-white pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-[200px] flex flex-col justify-between"
+        >
             <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-${color}-100`} />
+
             <div className="relative z-10 flex justify-between items-start mb-6">
-                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-inner ${themeColor}`}><Icon className="w-6 h-6 md:w-7 md:h-7" /></div>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${themeColor}`}>
+                    <Icon className="w-7 h-7" />
+                </div>
             </div>
-            <div className="relative z-10"><h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter mb-1">{value}</h3><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p></div>
+
+            <div className="relative z-10">
+                <h3 className="text-4xl font-black text-slate-900 tracking-tighter mb-1">
+                    {value}
+                </h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {title}
+                </p>
+            </div>
         </motion.div>
-    )
+    );
 }
 
 function UnavailableHeroCard({ items, delay }: any) {
+    const hasMore = items?.length > 2;
+
     return (
         <motion.div 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay, duration: 0.4 }} 
-            className="bg-red-50 p-5 rounded-[2.2rem] border border-red-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group flex flex-col h-full min-h-[160px]"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: delay, duration: 0.4 }}
+            className="bg-red-50 pt-6 pb-10 px-6 md:px-7 rounded-[2.2rem] border border-red-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group flex flex-col h-[200px] col-span-2 lg:col-span-1"
         >
-            <div className="flex items-center justify-between mb-3 relative z-10">
+            <div className="flex items-center justify-between mb-3 relative z-10 shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center"><Ban className="w-4 h-4 text-red-600" /></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-red-700">Unavailable ({items.length})</span>
+                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                        <Ban className="w-4 h-4 text-red-600" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-red-700">
+                        Unavailable ({items?.length || 0})
+                    </span>
                 </div>
             </div>
             
-            <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                {items.length === 0 ? (
+            <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0 pb-4">
+                {!items || items.length === 0 ? (
                     <div className="h-full flex items-center justify-center opacity-40">
-                        <span className="text-xs font-bold text-red-400 italic">All items available</span>
+                        <span className="text-xs font-bold text-red-400 italic">
+                            All items available
+                        </span>
                     </div>
                 ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 pb-2">
                         {items.map((item: any, idx: number) => (
                             <div key={idx} className="bg-white/80 px-3 py-1.5 rounded-xl border border-red-100/50 flex items-center justify-between shadow-sm">
-                                <span className="text-[11px] font-bold text-red-900 truncate max-w-[70%]">{item.title}</span>
-                                <span className="text-[9px] bg-red-100 text-red-600 px-1.5 rounded-md font-bold">Disabled</span>
+                                <span className="text-[11px] font-bold text-red-900 truncate max-w-[70%]">
+                                    {item.title}
+                                </span>
+                                <span className="text-[9px] bg-red-100 text-red-600 px-1.5 rounded-md font-bold shrink-0">
+                                    Disabled
+                                </span>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {hasMore && (
+                <>
+                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-red-50 to-transparent z-10 pointer-events-none transition-opacity duration-300 lg:group-hover:opacity-0" />
+                    
+                    <div className="hidden lg:flex absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                        <span className="bg-red-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg shadow-red-500/30 items-center animate-bounce">
+                            SCROLL ↓
+                        </span>
+                    </div>
+                </>
+            )}
+
             <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-red-100 blur-2xl opacity-50 pointer-events-none" />
         </motion.div>
     )
 }
-
 function ViewerTable({ data, onClick }: any) {
     const isPacked = data.status === 'occupied';
     const isToClean = data.status === 'payment' || data.status === 'dirty';
@@ -207,7 +257,7 @@ function ViewerTable({ data, onClick }: any) {
             className={`absolute flex flex-col items-center justify-center border-2 select-none cursor-pointer group touch-none backdrop-blur-sm ${containerStyle}`}
         >
             <h3 className="font-black text-xl leading-none">{data.label}</h3>
-            {isReady && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-white text-emerald-600 shadow-md"><Sparkles className="w-3 h-3" /><span className="text-[10px] font-bold">READY</span></div>}
+            {isReady && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-white text-emerald-600 shadow-md"><Utensils className="w-3 h-3" /><span className="text-[10px] font-bold">READY</span></div>}
             {isPacked && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-red-500 text-white shadow-sm border border-red-400"><Users className="w-3 h-3" /><span className="text-[10px] font-bold uppercase tracking-wide">Occupied</span></div>}
             {isToClean && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-amber-500 text-white shadow-sm border border-amber-400"><Trash2 className="w-3 h-3" /><span className="text-[10px] font-bold">CLEAN</span></div>}
             {isFree && <div className="flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full border border-slate-200/50 opacity-50"><Users className="w-3 h-3" /><span className="text-[10px] font-bold">{data.seats}</span></div>}
@@ -246,7 +296,6 @@ export default function WaiterDashboard() {
     setGreeting(hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening");
     const timer = setInterval(() => setTime(new Date()), 1000);
     
-    // Fast Polling
     const dataTimer = setInterval(loadAllData, 4000); 
     loadAllData();
     if(window.innerWidth < 768) setScale(0.5); 
@@ -485,7 +534,7 @@ export default function WaiterDashboard() {
                                             <div className="flex justify-between items-start pl-2">
                                                 <div>
                                                     <p className="font-black text-slate-900 text-2xl tracking-tight">Table {order.tbl}</p>
-                                                    <p className="text-sm text-emerald-600 mt-1 font-bold flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> {readyItems.length} items ready</p>
+                                                    <p className="text-sm text-emerald-600 mt-1 font-bold flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5" /> {readyItems.length} items ready</p>
                                                 </div>
                                             </div>
 
@@ -514,9 +563,10 @@ export default function WaiterDashboard() {
                         </div>
                     </div>
                 </div>
-
-                <FloatingDock router={router} dockStatus={dockStatus} />
             </main>
+
+            {/* DOCK PLACED DIRECTLY AS A CHILD OF THE ROOT SO IT STAYS FIXED OUTSIDE SCROLL */}
+            <FloatingDock router={router} dockStatus={dockStatus} />
         </>
       )}
     </div>

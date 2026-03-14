@@ -6,7 +6,7 @@ import {
   ChefHat, User, ArrowRight, Loader2, Store, Hash, LogOut, 
   Calculator, Briefcase, UtensilsCrossed, ScanFace, Leaf, CheckCircle2, ShieldCheck,Building, Utensils
 } from "lucide-react";
-import { toast, Toaster } from "sonner"; // Ensure you have installed sonner
+import { toast, Toaster } from "sonner";
 import { getPublicStaffList, linkDeviceToRestaurant, staffLogin, unlinkDevice } from "@/app/actions/staff-auth";
 
 export default function StaffLoginPage() {
@@ -68,7 +68,6 @@ export default function StaffLoginPage() {
           setIsSuccess(true);
           toast.success(`Welcome, ${selectedStaff.full_name}`, { description: "Starting your session..." });
           
-          // Smooth delay for visual confirmation
           setTimeout(() => {
               window.location.replace(res.url || '/staff/pos'); 
           }, 800);
@@ -111,7 +110,7 @@ export default function StaffLoginPage() {
 
   // --- RENDER ---
   if (view === "loading") return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+    <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center gap-4">
         <div className="relative">
             <div className="w-16 h-16 border-4 border-emerald-100 rounded-full"></div>
             <div className="w-16 h-16 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
@@ -121,9 +120,8 @@ export default function StaffLoginPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 font-sans text-slate-900 selection:bg-emerald-500 selection:text-white relative overflow-hidden transform-gpu">
+    <div className="min-h-[100dvh] bg-[#F8FAFC] flex items-center justify-center p-4 font-sans text-slate-900 selection:bg-emerald-500 selection:text-white relative overflow-hidden">
       
-      {/* INTEGRATED TOAST NOTIFICATIONS */}
       <Toaster position="top-center" richColors theme="light" />
 
       {/* PREMIUM BACKGROUND (CSS ONLY - 0 LAG) */}
@@ -135,24 +133,19 @@ export default function StaffLoginPage() {
           <motion.div 
             initial={{ y: -20, opacity: 0 }} 
             animate={{ y: 0, opacity: 1 }} 
-            className="fixed top-0 left-0 right-0 p-4 md:p-8 flex justify-between items-center z-10 pointer-events-none"
+            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+            className="fixed top-0 left-0 right-0 p-4 md:p-8 flex justify-between items-center z-10 pointer-events-none transform-gpu"
           >
               <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl p-2.5 pr-6 rounded-2xl border border-white/60 shadow-sm ring-1 ring-slate-100 pointer-events-auto">
-                  {/* LOGO CONTAINER: Changed to white bg so logos represent correctly */}
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md border border-slate-100 overflow-hidden relative">
                       {tenantInfo?.logo_url ? (
-                          <img 
-                            src={tenantInfo.logo_url} 
-                            alt={tenantInfo.name} 
-                            className="w-full h-full object-contain p-1" 
-                          />
+                          <img src={tenantInfo.logo_url} alt={tenantInfo.name} className="w-full h-full object-contain p-1" />
                       ) : (
                           <div className="w-full h-full bg-slate-900 flex items-center justify-center">
                              <Store className="w-5 h-5 text-white" />
                           </div>
                       )}
                   </div>
-                  
                   <div>
                       <h3 className="text-xs font-black text-slate-900 leading-none">{tenantInfo?.name || "Terminal"}</h3>
                       <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest flex items-center gap-1.5">
@@ -160,7 +153,7 @@ export default function StaffLoginPage() {
                       </p>
                   </div>
               </div>
-              <button onClick={handleUnlink} className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-400 text-[10px] font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all shadow-sm ring-1 ring-slate-100 pointer-events-auto">
+              <button onClick={handleUnlink} className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-400 text-[10px] font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all shadow-sm ring-1 ring-slate-100 pointer-events-auto active:scale-95">
                   Disconnect
               </button>
           </motion.div>
@@ -169,121 +162,94 @@ export default function StaffLoginPage() {
       <AnimatePresence mode="wait">
         
         {/* --- VIEW 1: SETUP --- */}
-       {view === "setup" && (
-  <motion.div
-  key="setup"
-  initial={{ opacity: 0, y: 40, scale: 0.96 }}
-  animate={{ opacity: 1, y: 0, scale: 1 }}
-  exit={{ opacity: 0, y: -20, scale: 1.02 }}
-  transition={{ duration: 0.6, ease: "easeOut" }}
-  className="relative w-full max-w-md z-10"
->
-  {/* Ambient Glow */}
-  <div className="absolute -inset-6 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-transparent blur-3xl rounded-[3rem]" />
+        {view === "setup" && (
+            <motion.div
+                key="setup"
+                initial={{ opacity: 0, y: 40, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                className="relative w-full max-w-md z-10 transform-gpu will-change-transform"
+            >
+                <div className="absolute -inset-6 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-transparent blur-3xl rounded-[3rem] pointer-events-none" />
 
-  {/* Card */}
-  <div className="relative bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-[0_40px_120px_-30px_rgba(16,185,129,0.35)] border border-white/40 ring-1 ring-emerald-100/50 overflow-hidden">
+                <div className="relative bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-[0_40px_120px_-30px_rgba(16,185,129,0.35)] border border-white/40 ring-1 ring-emerald-100/50 overflow-hidden">
+                    <div className="text-center px-10 pt-12 pb-8">
+                        <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: 0.1, type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                            className="w-28 h-28 mx-auto mb-8 rounded-[2.5rem] bg-gradient-to-br from-emerald-100 via-white to-emerald-50 shadow-2xl shadow-emerald-300/60 ring-1 ring-white flex items-center justify-center transform-gpu"
+                        >
+                            <Utensils className="w-14 h-14 text-emerald-500 drop-shadow-lg" />
+                        </motion.div>
 
-    {/* Header */}
-    <div className="text-center px-10 pt-12 pb-8">
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="w-28 h-28 mx-auto mb-8 rounded-[2.5rem] bg-gradient-to-br from-emerald-100 via-white to-emerald-50 shadow-2xl shadow-emerald-300/60 ring-1 ring-white flex items-center justify-center"
-      >
-        <Utensils className="w-14 h-14 text-emerald-500 drop-shadow-lg" />
-      </motion.div>
+                        <h1 className="text-4xl font-black tracking-tight text-slate-900">System Setup</h1>
+                        <p className="mt-3 text-slate-400 font-semibold">Enter your Restaurant ID to activate</p>
+                    </div>
 
-      <h1 className="text-4xl font-black tracking-tight text-slate-900">
-        System Setup
-      </h1>
-      <p className="mt-3 text-slate-400 font-semibold">
-        Enter your Restaurant ID to activate
-      </p>
-    </div>
+                    <div className="h-px bg-gradient-to-r from-transparent via-emerald-200/60 to-transparent" />
 
-    {/* Divider */}
-    <div className="h-px bg-gradient-to-r from-transparent via-emerald-200/60 to-transparent" />
+                    <form onSubmit={handleLink} className="px-10 py-10 space-y-8">
+                        <div className="relative group">
+                            <div className="absolute left-5 top-1/2 -translate-y-1/2 w-14 h-14 rounded-2xl bg-white shadow-xl shadow-emerald-300/50 border border-white flex items-center justify-center text-emerald-500 transition-transform group-focus-within:scale-110">
+                            <Hash className="w-6 h-6" />
+                            </div>
 
-    {/* Form */}
-    <form
-      onSubmit={handleLink}
-      className="px-10 py-10 space-y-8"
-    >
-      {/* Input */}
-      <div className="relative group">
-        <div className="absolute left-5 top-1/2 -translate-y-1/2 w-14 h-14 rounded-2xl bg-white shadow-xl shadow-emerald-300/50 border border-white flex items-center justify-center text-emerald-500 transition-all group-focus-within:scale-110">
-          <Hash className="w-6 h-6" />
-        </div>
+                            <input
+                            autoFocus
+                            value={restCode}
+                            onChange={(e) => setRestCode(e.target.value.toUpperCase())}
+                            placeholder="GECKO-01"
+                            className="w-full h-20 pl-24 pr-6 rounded-3xl bg-white/70 backdrop-blur-md border-2 border-transparent focus:border-emerald-500 focus:bg-white text-2xl font-black tracking-[0.3em] text-slate-900 outline-none transition-all placeholder:text-slate-300 shadow-inner"
+                            />
+                        </div>
 
-        <input
-          autoFocus
-          value={restCode}
-          onChange={(e) => setRestCode(e.target.value.toUpperCase())}
-          placeholder="GECKO-01"
-          className="w-full h-20 pl-24 pr-6 rounded-3xl bg-white/70 backdrop-blur-md border-2 border-transparent focus:border-emerald-500 focus:bg-white text-2xl font-black tracking-[0.3em] text-slate-900 outline-none transition-all placeholder:text-slate-300 shadow-inner"
-        />
-      </div>
-
-      {/* Button */}
-      <motion.button
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.95 }}
-        disabled={!restCode || isSubmitting}
-        className="relative w-full h-16 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 shadow-2xl shadow-emerald-400/40 flex items-center justify-center gap-3 overflow-hidden disabled:opacity-50"
-      >
-        {/* Button Shine */}
-        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
-
-        {isSubmitting ? (
-          <Loader2 className="w-6 h-6 animate-spin" />
-        ) : (
-          <>
-            Activate System
-            <ArrowRight className="w-5 h-5" />
-          </>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            disabled={!restCode || isSubmitting}
+                            className="relative w-full h-16 rounded-2xl font-extrabold text-lg text-white bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 shadow-2xl shadow-emerald-400/40 flex items-center justify-center gap-3 overflow-hidden disabled:opacity-50 transform-gpu"
+                        >
+                            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
+                            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Activate System <ArrowRight className="w-5 h-5" /></>}
+                        </motion.button>
+                    </form>
+                </div>
+            </motion.div>
         )}
-      </motion.button>
-    </form>
-  </div>
-</motion.div>
-
-)}
 
         {/* --- VIEW 2: STAFF GRID --- */}
         {view === "staff" && (
             <motion.div key="staff" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full max-w-7xl mt-24 z-10 pb-10 transform-gpu">
-                <div className="text-center mb-16">
-                    <motion.h1 
-                        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-                        className="text-5xl font-black text-slate-900 tracking-tight"
-                    >
+                <div className="text-center mb-10 md:mb-16">
+                    <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }} className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
                         Who is working?
                     </motion.h1>
-                    <p className="text-slate-400 mt-3 font-bold text-lg">Select your profile to begin shift</p>
+                    <p className="text-slate-400 mt-3 font-bold text-base md:text-lg">Select your profile to begin shift</p>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 md:gap-8 px-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 px-4 md:px-6">
                     {staffList.map((staff, i) => (
                         <motion.button 
-                            layoutId={`staff-card-${staff.id}`} // THE MAGIC MORPH
+                            layoutId={`staff-card-${staff.id}`} 
                             key={staff.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.03, ease: "easeOut" }}
+                            transition={{ delay: i * 0.02, type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
                             onClick={() => { setSelectedStaff(staff); setView("pin"); }}
-                            className="bg-white p-6 rounded-[2.5rem] flex flex-col items-center gap-5 transition-all active:scale-95 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-emerald-900/5 hover:-translate-y-1 relative overflow-hidden ring-1 ring-slate-100 group touch-manipulation"
+                            className="bg-white p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] flex flex-col items-center gap-4 md:gap-5 transition-all active:scale-95 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-emerald-900/5 hover:-translate-y-1 relative overflow-hidden ring-1 ring-slate-100 group touch-manipulation transform-gpu will-change-transform"
                         >
                             <motion.div 
-                                layoutId={`staff-avatar-${staff.id}`} // Avatar Travels to Next Screen
-                                className={`w-24 h-24 rounded-[1.8rem] flex items-center justify-center border-2 transition-transform duration-300 shadow-sm ${getRoleColor(staff.role)}`}
+                                layoutId={`staff-avatar-${staff.id}`}
+                                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                className={`w-20 h-20 md:w-24 md:h-24 rounded-[1.5rem] md:rounded-[1.8rem] flex items-center justify-center border-2 transition-transform duration-300 shadow-sm ${getRoleColor(staff.role)} transform-gpu`}
                             >
                                 {getRoleIcon(staff.role)}
                             </motion.div>
                             <div className="text-center relative z-10">
-                                <h3 className="text-slate-900 font-black text-xl leading-tight group-hover:text-emerald-600 transition-colors">{staff.full_name.split(' ')[0]}</h3>
-                                <span className="inline-block mt-2 px-3 py-1 bg-slate-50 rounded-xl text-slate-400 text-[10px] font-black uppercase tracking-widest border border-slate-100 group-hover:bg-emerald-50 group-hover:text-emerald-600 group-hover:border-emerald-100 transition-all">{staff.role}</span>
+                                <h3 className="text-slate-900 font-black text-lg md:text-xl leading-tight group-hover:text-emerald-600 transition-colors">{staff.full_name.split(' ')[0]}</h3>
+                                <span className="inline-block mt-1.5 px-3 py-1 bg-slate-50 rounded-xl text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-slate-100 group-hover:bg-emerald-50 group-hover:text-emerald-600 group-hover:border-emerald-100 transition-all">{staff.role}</span>
                             </div>
                         </motion.button>
                     ))}
@@ -291,17 +257,17 @@ export default function StaffLoginPage() {
             </motion.div>
         )}
 
-        {/* --- VIEW 3: PIN ENTRY (COMPACT & FAST) --- */}
+        {/* --- VIEW 3: PIN ENTRY --- */}
         {view === "pin" && selectedStaff && (
             <motion.div 
                 layoutId={`staff-card-${selectedStaff.id}`} 
                 key="pin" 
-                className="w-full max-w-[360px] z-20 transform-gpu"
+                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                className="w-full max-w-[360px] z-20 transform-gpu will-change-transform"
             >
                 <div className="bg-white/90 backdrop-blur-2xl rounded-[3rem] p-8 shadow-2xl shadow-slate-200/50 border border-white ring-1 ring-slate-100 relative overflow-hidden">
                     
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex justify-between items-center mb-6">
                         <button onClick={() => { setSelectedStaff(null); setPin(""); setView("staff"); }} className="text-slate-400 hover:text-slate-900 transition-colors p-2 hover:bg-slate-100 rounded-xl touch-manipulation active:bg-slate-200"><LogOut className="w-5 h-5 rotate-180" /></button>
                         <div className="w-9 h-9" /> 
                     </div>
@@ -309,7 +275,8 @@ export default function StaffLoginPage() {
                     <div className="text-center mb-8">
                         <motion.div 
                             layoutId={`staff-avatar-${selectedStaff.id}`}
-                            className={`w-20 h-20 mx-auto rounded-[1.8rem] flex items-center justify-center border-2 mb-4 shadow-xl ${getRoleColor(selectedStaff.role)}`}
+                            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                            className={`w-20 h-20 mx-auto rounded-[1.8rem] flex items-center justify-center border-2 mb-4 shadow-xl transform-gpu ${getRoleColor(selectedStaff.role)}`}
                         >
                             {getRoleIcon(selectedStaff.role)}
                         </motion.div>
@@ -327,31 +294,31 @@ export default function StaffLoginPage() {
                                     backgroundColor: i < pin.length ? '#10b981' : '#e2e8f0',
                                     borderColor: i < pin.length ? '#10b981' : '#cbd5e1'
                                 }}
-                                transition={{ type: "spring", stiffness: 500, damping: 30 }} // Snappy
-                                className="w-3.5 h-3.5 rounded-full border-[3px]" 
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }} 
+                                className="w-3.5 h-3.5 rounded-full border-[3px] transform-gpu" 
                             />
                         ))}
                     </div>
 
-                    {/* NUMPAD (Optimized Size) */}
+                    {/* NUMPAD */}
                     <div className="grid grid-cols-3 gap-3 mb-6">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                            <button key={num} onClick={() => handleNum(num.toString())} className="h-16 rounded-[1.5rem] bg-white border border-slate-100 shadow-sm shadow-slate-200/50 text-xl font-black text-slate-900 hover:bg-slate-50 hover:border-slate-200 active:scale-90 active:bg-slate-100 transition-all duration-75 touch-manipulation">
+                            <button key={num} onClick={() => handleNum(num.toString())} className="h-16 rounded-[1.5rem] bg-white border border-slate-100 shadow-sm shadow-slate-200/50 text-xl font-black text-slate-900 active:scale-90 active:bg-slate-100 transition-transform duration-75 touch-manipulation transform-gpu">
                                 {num}
                             </button>
                         ))}
                         <div />
-                        <button onClick={() => handleNum("0")} className="h-16 rounded-[1.5rem] bg-white border border-slate-100 shadow-sm shadow-slate-200/50 text-xl font-black text-slate-900 hover:bg-slate-50 hover:border-slate-200 active:scale-90 active:bg-slate-100 transition-all duration-75 touch-manipulation">0</button>
-                        <button onClick={handleBack} className="h-16 rounded-[1.5rem] bg-red-50/50 border border-red-50 text-red-400 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all duration-75 flex items-center justify-center touch-manipulation"><LogOut className="w-5 h-5 rotate-180" /></button>
+                        <button onClick={() => handleNum("0")} className="h-16 rounded-[1.5rem] bg-white border border-slate-100 shadow-sm shadow-slate-200/50 text-xl font-black text-slate-900 active:scale-90 active:bg-slate-100 transition-transform duration-75 touch-manipulation transform-gpu">0</button>
+                        <button onClick={handleBack} className="h-16 rounded-[1.5rem] bg-red-50/50 border border-red-50 text-red-400 active:scale-90 active:bg-red-100 transition-transform duration-75 flex items-center justify-center touch-manipulation transform-gpu"><LogOut className="w-5 h-5 rotate-180" /></button>
                     </div>
 
                     <button 
                         onClick={handleLogin} 
                         disabled={pin.length !== 4 || isSubmitting || isSuccess}
-                        className={`w-full h-16 rounded-[1.5rem] font-bold text-lg shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all touch-manipulation ${
+                        className={`w-full h-16 rounded-[1.5rem] font-bold text-lg shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all touch-manipulation transform-gpu ${
                             isSuccess 
                             ? 'bg-emerald-500 text-white shadow-emerald-500/30 ring-2 ring-emerald-200' 
-                            : 'bg-slate-900 text-white shadow-slate-900/20 hover:shadow-2xl hover:-translate-y-0.5'
+                            : 'bg-slate-900 text-white shadow-slate-900/20'
                         }`}
                     >
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 

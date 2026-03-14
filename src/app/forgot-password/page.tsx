@@ -6,13 +6,13 @@ import { Mail, Building2, ArrowRight, CheckCircle, AlertTriangle, Loader2, Arrow
 import { requestPasswordReset } from "@/app/actions/auth";
 import Link from "next/link";
 
-// --- 1. PHYSICS TILT CARD (Shared Component) ---
+// --- 1. PHYSICS TILT CARD (Optimized for 0 lag) ---
 function TiltCard({ children }: { children: React.ReactNode }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  const mouseX = useSpring(x, { stiffness: 200, damping: 25, mass: 0.8 });
-  const mouseY = useSpring(y, { stiffness: 200, damping: 25, mass: 0.8 });
+  const mouseX = useSpring(x, { stiffness: 200, damping: 30, mass: 0.5 });
+  const mouseY = useSpring(y, { stiffness: 200, damping: 30, mass: 0.5 });
 
   function onMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
     const { left, top, width, height } = currentTarget.getBoundingClientRect();
@@ -29,7 +29,7 @@ function TiltCard({ children }: { children: React.ReactNode }) {
       style={{ rotateX, rotateY, perspective: 1200 }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => { x.set(0); y.set(0); }}
-      className="relative z-20 w-full max-w-[460px] perspective-container group"
+      className="relative z-20 w-full max-w-[460px] perspective-container group transform-gpu will-change-transform"
     >
       <motion.div 
         style={{ background: useTransform(shineX, x => `linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.4) ${x}, transparent 80%)`) }}
@@ -49,8 +49,10 @@ export default function ForgotPassword() {
         setStatus("loading");
 
         const formData = new FormData(e.currentTarget);
-        const code = formData.get("code") as string;
-        const email = formData.get("email") as string;
+        
+        // FIX: Strip hidden spaces and force uppercase BEFORE sending to backend
+        const code = (formData.get("code") as string).trim().toUpperCase();
+        const email = (formData.get("email") as string).trim();
 
         const res = await requestPasswordReset(code, email);
 
@@ -84,7 +86,7 @@ export default function ForgotPassword() {
                 <motion.button 
                     whileHover={{ scale: 1.05 }} 
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-3 px-5 py-2.5 bg-white/70 backdrop-blur-xl border border-white/60 rounded-full shadow-sm hover:shadow-lg transition-all text-slate-500 hover:text-slate-900"
+                    className="flex items-center gap-3 px-5 py-2.5 bg-white/70 backdrop-blur-xl border border-white/60 rounded-full shadow-sm hover:shadow-lg transition-all text-slate-500 hover:text-slate-900 transform-gpu"
                 >
                     <ArrowLeft className="w-4 h-4" /> 
                     <span className="text-xs font-bold uppercase tracking-widest">Login</span>
@@ -94,11 +96,10 @@ export default function ForgotPassword() {
             {/* --- MAIN CARD --- */}
             <TiltCard>
                 <motion.div 
-                    layout
                     initial={{ opacity: 0, y: 40, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="w-full bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[0_40px_100px_-30px_rgba(16,185,129,0.15)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-white/50"
+                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                    className="w-full bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[0_40px_100px_-30px_rgba(16,185,129,0.15)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-white/50 transform-gpu"
                 >
                     {/* Gloss Texture */}
                     <div className="absolute inset-0 bg-gradient-to-b from-white/40 to-transparent pointer-events-none opacity-80" />
@@ -109,8 +110,8 @@ export default function ForgotPassword() {
                         <motion.div 
                             initial={{ scale: 0 }} 
                             animate={{ scale: 1 }} 
-                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                            className="w-24 h-24 bg-gradient-to-b from-white to-emerald-50 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative group border border-white"
+                            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                            className="w-24 h-24 bg-gradient-to-b from-white to-emerald-50 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative group border border-white transform-gpu"
                         >
                             <img src="/paw.png" alt="Gecko Paw" className="w-14 h-14 object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-500" />
                             <div className="absolute inset-0 rounded-[2rem] ring-4 ring-white/30" />
@@ -130,7 +131,7 @@ export default function ForgotPassword() {
                                     key="success"
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="w-full bg-emerald-50/80 border border-emerald-100 rounded-3xl p-8 text-center"
+                                    className="w-full bg-emerald-50/80 border border-emerald-100 rounded-3xl p-8 text-center transform-gpu"
                                 >
                                     <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
                                         <CheckCircle className="w-8 h-8" />
@@ -143,7 +144,7 @@ export default function ForgotPassword() {
                                         <motion.button 
                                             whileHover={{ scale: 1.02 }}
                                             whileTap={{ scale: 0.98 }}
-                                            className="w-full h-14 bg-emerald-600 text-white rounded-2xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-emerald-600/20"
+                                            className="w-full h-14 bg-emerald-600 text-white rounded-2xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-emerald-600/20 transform-gpu"
                                         >
                                             Return to Login
                                         </motion.button>
@@ -156,7 +157,7 @@ export default function ForgotPassword() {
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     onSubmit={handleSubmit} 
-                                    className="w-full space-y-5"
+                                    className="w-full space-y-5 transform-gpu"
                                 >
                                     {/* RESTAURANT CODE */}
                                     <div>
@@ -201,11 +202,10 @@ export default function ForgotPassword() {
 
                                     {/* SUBMIT BUTTON */}
                                     <motion.button 
-                                        layout
                                         whileHover={{ scale: 1.02, boxShadow: "0 20px 40px -10px rgba(16,185,129,0.3)" }}
                                         whileTap={{ scale: 0.98 }}
                                         disabled={status === "loading"}
-                                        className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-3xl font-black text-lg shadow-2xl shadow-slate-900/20 transition-all flex items-center justify-center gap-3 mt-4 relative overflow-hidden group disabled:opacity-70"
+                                        className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-3xl font-black text-lg shadow-2xl shadow-slate-900/20 transition-all flex items-center justify-center gap-3 mt-4 relative overflow-hidden group disabled:opacity-70 transform-gpu"
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                                         <div className="relative flex items-center gap-2">

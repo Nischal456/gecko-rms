@@ -12,17 +12,19 @@ export async function requestPasswordReset(code: string, email: string) {
     const cleanCode = code.trim().toUpperCase();
     const cleanEmail = email.trim().toLowerCase();
 
+    // FIX: Removed 'admin_email' from select, changed to maybeSingle() to prevent crash on invalid code
     const { data: tenant, error } = await supabaseAdmin
       .from("tenants")
-      .select("id, name, admin_email, email") 
+      .select("id, name, email") 
       .ilike("code", cleanCode)
-      .single();
+      .maybeSingle();
 
     if (error || !tenant) {
       return { success: false, error: "Invalid Restaurant Code." };
     }
 
-    const dbEmail = (tenant.admin_email || tenant.email || "").toLowerCase().trim();
+    // FIX: Only check 'email' since 'admin_email' does not exist in DB
+    const dbEmail = (tenant.email || "").toLowerCase().trim();
     if (dbEmail !== cleanEmail) {
       return { success: false, error: "Email does not match our records." };
     }
@@ -35,7 +37,7 @@ export async function requestPasswordReset(code: string, email: string) {
       .update({ reset_token: token, reset_token_expiry: expiry.toISOString() })
       .eq("id", tenant.id);
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://46.225.226.113";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://rms.geckoworksnepal.com.np";
     const resetLink = `${baseUrl}/reset-password/${token}`;
     
     await sendResetEmail(email, resetLink);
@@ -49,12 +51,13 @@ export async function requestPasswordReset(code: string, email: string) {
 // --- 2. PERFORM RESET ---
 export async function resetPassword(token: string, newPassword: string) {
   try {
+    // FIX: changed to maybeSingle() for safety
     const { data: tenant, error } = await supabaseAdmin
       .from("tenants")
       .select("id")
       .eq("reset_token", token)
       .gt("reset_token_expiry", new Date().toISOString())
-      .single();
+      .maybeSingle();
 
     if (error || !tenant) return { success: false, error: "Invalid or expired link." };
 
@@ -106,11 +109,12 @@ export async function loginUser(data: any) {
 
   // B. RESTAURANT ADMIN LOGIN
   try {
+    // FIX: changed to maybeSingle() for safety
     const { data: tenant, error } = await supabaseAdmin
       .from("tenants")
       .select("*")
       .ilike("code", cleanCode) 
-      .single();
+      .maybeSingle();
 
     if (error || !tenant) return { success: false, error: "Invalid Restaurant Code." };
 
@@ -118,7 +122,8 @@ export async function loginUser(data: any) {
         return { success: false, error: "⛔ SERVICE SUSPENDED: Contact GeckoRMS Administrator." };
     }
 
-    const dbEmail = (tenant.admin_email || tenant.email || "").toLowerCase().trim();
+    // FIX: Only check 'email' since 'admin_email' does not exist in DB
+    const dbEmail = (tenant.email || "").toLowerCase().trim();
     if (dbEmail !== cleanEmail) return { success: false, error: "Invalid Email Address." };
 
     if (tenant.admin_password !== password) return { success: false, error: "Incorrect Password." };

@@ -5,20 +5,19 @@ import Link from "next/link";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import {
     Store, User, Mail, Phone, MessageSquare,
-    ArrowRight, Loader2, CheckCircle2, ArrowLeft,
-    Sparkles,Utensils
+    ArrowRight, Loader2, CheckCircle2, ArrowLeft, Utensils
 } from "lucide-react";
 import { toast } from "sonner";
 import { requestSubscription } from "@/app/actions/subscription";
 
-// --- 1. ULTRA-PREMIUM TILT CARD (Physics Tuned) ---
+// --- 1. ULTRA-PREMIUM TILT CARD (Light Premium - GPU Accelerated) ---
 function TiltCard({ children }: { children: React.ReactNode }) {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
-    // Heavy, expensive-feeling spring physics
-    const mouseX = useSpring(x, { stiffness: 200, damping: 25, mass: 0.8 });
-    const mouseY = useSpring(y, { stiffness: 200, damping: 25, mass: 0.8 });
+    // Light mass prevents trailing calculation lag on low-end CPUs
+    const mouseX = useSpring(x, { stiffness: 200, damping: 30, mass: 0.5 });
+    const mouseY = useSpring(y, { stiffness: 200, damping: 30, mass: 0.5 });
 
     function onMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
         const { left, top, width, height } = currentTarget.getBoundingClientRect();
@@ -26,7 +25,6 @@ function TiltCard({ children }: { children: React.ReactNode }) {
         y.set(clientY - top - height / 2);
     }
 
-    // Subtle 3D rotation
     const rotateX = useTransform(mouseY, [-400, 400], [2.5, -2.5]);
     const rotateY = useTransform(mouseX, [-400, 400], [-2.5, 2.5]);
     const shineX = useTransform(mouseX, [-400, 400], ["0%", "100%"]);
@@ -36,11 +34,10 @@ function TiltCard({ children }: { children: React.ReactNode }) {
             style={{ rotateX, rotateY, perspective: 1200 }}
             onMouseMove={onMouseMove}
             onMouseLeave={() => { x.set(0); y.set(0); }}
-            className="relative z-20 w-full max-w-[500px] perspective-container group"
+            className="relative z-20 w-full max-w-[500px] perspective-container group transform-gpu will-change-transform"
         >
-            {/* Shine Effect */}
             <motion.div
-                style={{ background: useTransform(shineX, x => `linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.4) ${x}, transparent 80%)`) }}
+                style={{ background: useTransform(shineX, x => `linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.7) ${x}, transparent 80%)`) }}
                 className="absolute inset-0 rounded-[3rem] z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700"
             />
             {children}
@@ -83,107 +80,108 @@ export default function SubscriptionPage() {
     };
 
     return (
-        <div className="min-h-[100dvh] bg-[#F4F7F5] flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden selection:bg-emerald-500 selection:text-white font-sans">
+        <div className="min-h-[100dvh] bg-[#F8FAFC] flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden selection:bg-emerald-500 selection:text-white font-sans">
 
-            {/* --- ALIVE BACKGROUND --- */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none transform-gpu">
+            {/* --- ALIVE BACKGROUND (Light/Premium GPU) --- */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <motion.div
                     animate={{ scale: [1, 1.2, 1], rotate: [0, 45, 0], x: [0, 50, 0] }}
                     transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                    className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] bg-gradient-to-br from-emerald-100/50 to-teal-50/40 rounded-full blur-[120px] will-change-transform mix-blend-multiply"
+                    className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] bg-emerald-200/20 rounded-full blur-[120px] will-change-transform transform-gpu"
                 />
                 <motion.div
                     animate={{ scale: [1, 1.1, 1], rotate: [0, -45, 0], x: [0, -50, 0] }}
                     transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-                    className="absolute bottom-[-20%] right-[-10%] w-[120vw] h-[120vw] bg-gradient-to-tr from-cyan-100/50 to-emerald-50/40 rounded-full blur-[100px] will-change-transform mix-blend-multiply"
+                    className="absolute bottom-[-20%] right-[-10%] w-[120vw] h-[120vw] bg-teal-100/30 rounded-full blur-[100px] will-change-transform transform-gpu"
                 />
             </div>
 
-            {/* --- NAVIGATION --- */}
-            <Link href="/" className="absolute top-6 left-6 md:top-10 md:left-10 z-40 group">
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-3 px-5 py-2.5 bg-white/70 backdrop-blur-xl border border-white/60 rounded-full shadow-sm hover:shadow-lg transition-all text-slate-500 hover:text-slate-900"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Back</span>
-                </motion.button>
-            </Link>
-
-            <Link href="/login" className="absolute top-6 right-6 md:top-10 md:right-10 z-40">
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-3 px-5 py-2.5 bg-slate-900 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-colors"
-                >
-                    <span className="text-xs font-bold uppercase tracking-widest">Login</span>
-                    <ArrowRight className="w-4 h-4" />
-                </motion.button>
-            </Link>
+            {/* --- PREMIUM FLOATING NAVBAR --- */}
+            <nav className="absolute top-4 left-0 right-0 z-50 px-4 pointer-events-none">
+                <div className="max-w-5xl mx-auto flex items-center justify-between">
+                    <Link href="/" className="pointer-events-auto group bg-white/80 backdrop-blur-xl border border-white shadow-lg shadow-slate-200/30 px-5 py-2.5 rounded-full flex items-center gap-3 hover:shadow-emerald-500/10 transition-all transform-gpu">
+                        <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:text-emerald-600 transition-colors" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-slate-900 group-hover:text-emerald-600 transition-colors">Back</span>
+                    </Link>
+                    
+                    <Link href="/login" className="pointer-events-auto flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-full shadow-md hover:border-emerald-200 hover:text-emerald-600 transition-all transform-gpu active:scale-95">
+                        <span className="text-xs font-bold uppercase tracking-widest">Login</span>
+                        <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </div>
+            </nav>
 
             {/* --- MAIN INTERFACE --- */}
             <TiltCard>
                 <motion.div
-                    layout
-                    initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                    initial={{ opacity: 0, y: 40, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="w-full bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[0_40px_100px_-30px_rgba(16,185,129,0.15)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-white/50"
+                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                    className="w-full bg-white/80 backdrop-blur-2xl border border-white shadow-[0_30px_80px_-15px_rgba(0,0,0,0.08)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-slate-100 transform-gpu will-change-transform mt-16 md:mt-0"
                 >
-                    {/* Texture Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/40 to-transparent pointer-events-none opacity-80" />
-
                     <div className="relative z-10 flex flex-col items-center">
 
+                        <AnimatePresence mode="wait">
                         {success ? (
-                            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-10">
-                                <div className="w-28 h-28 bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/40 mx-auto mb-8 relative border border-emerald-300">
-                                    <CheckCircle2 className="w-14 h-14 text-white drop-shadow-md" />
-                                    <div className="absolute inset-0 rounded-[2rem] ring-4 ring-white/30" />
+                            <motion.div 
+                                key="success"
+                                initial={{ opacity: 0, scale: 0.9 }} 
+                                animate={{ opacity: 1, scale: 1 }} 
+                                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                className="text-center py-10 transform-gpu"
+                            >
+                                <div className="w-24 h-24 bg-emerald-50 rounded-[2rem] flex items-center justify-center shadow-inner mx-auto mb-8 border border-emerald-100">
+                                    <CheckCircle2 className="w-12 h-12 text-emerald-500 drop-shadow-sm" />
                                 </div>
                                 <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">Request Received</h2>
-                                <p className="text-slate-500 font-medium leading-relaxed mb-10 text-sm">
-                                    We have sent a confirmation to <b className="text-slate-700">{formData.email}</b>.<br /> Our enterprise team will contact you shortly to configure your workspace.
+                                <p className="text-slate-500 font-bold leading-relaxed mb-10 text-sm">
+                                    We have sent a confirmation to <b className="text-slate-800">{formData.email}</b>.<br /> Our enterprise team will contact you shortly to configure your workspace.
                                 </p>
                                 <Link href="/">
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        className="w-full h-14 bg-slate-900 text-white rounded-3xl font-black text-lg shadow-xl shadow-slate-900/20"
+                                        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                        className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20 transform-gpu"
                                     >
                                         Return Home
                                     </motion.button>
                                 </Link>
                             </motion.div>
                         ) : (
-                            <>
+                            <motion.div 
+                                key="form" 
+                                initial={{ opacity: 0 }} 
+                                animate={{ opacity: 1 }} 
+                                exit={{ opacity: 0, y: -20 }} 
+                                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                className="w-full transform-gpu"
+                            >
                                 {/* --- PAW LOGO --- */}
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                                    className="w-24 h-24 bg-gradient-to-b from-white to-emerald-50 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-6 relative group border border-white"
+                                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5, delay: 0.1 }}
+                                    className="w-20 h-20 bg-gradient-to-b from-white to-slate-50 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200/50 mx-auto mb-8 relative group border border-slate-100 transform-gpu"
                                 >
-                                    <img src="/paw.png" alt="Gecko Paw" className="w-12 h-12 object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-500" />
-                                    <div className="absolute inset-0 rounded-[2rem] ring-4 ring-white/30" />
-                                    <div className="absolute -inset-4 bg-emerald-400/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                                    <img src="/paw.png" alt="Gecko Paw" className="w-10 h-10 object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-500" />
                                 </motion.div>
 
                                 <div className="text-center mb-8 space-y-2">
                                     <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
-                                        Request <span className="text-emerald-500">Access</span>
+                                        Request Access
                                     </h1>
-                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.1em] flex items-center justify-center gap-1">
-                                        <Utensils className="w-3 h-3 text-amber-500" />  Let’s set up your restaurant digitally
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-1.5">
+                                        <Utensils className="w-3.5 h-3.5 text-emerald-500" />  Let’s set up your restaurant
                                     </p>
                                 </div>
 
+                                {/* REMOVED layout PROPS FROM FORM ELEMENTS TO FIX TYPING LAG */}
                                 <form onSubmit={handleSubmit} className="w-full space-y-4">
 
                                     {/* RESTAURANT NAME */}
-                                    <motion.div layout>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Business Details</label>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Business Details</label>
                                         <div className="relative group mb-3">
                                             <input
                                                 name="restaurantName"
@@ -192,9 +190,9 @@ export default function SubscriptionPage() {
                                                 value={formData.restaurantName}
                                                 onChange={handleChange}
                                                 placeholder="Restaurant / Cafe Name"
-                                                className="w-full h-14 pl-14 pr-6 bg-white/50 border border-slate-200/60 rounded-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm text-sm"
+                                                className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
                                             />
-                                            <Store className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                                         </div>
                                         <div className="relative group">
                                             <input
@@ -204,16 +202,16 @@ export default function SubscriptionPage() {
                                                 value={formData.fullName}
                                                 onChange={handleChange}
                                                 placeholder="Your Full Name"
-                                                className="w-full h-14 pl-14 pr-6 bg-white/50 border border-slate-200/60 rounded-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm text-sm"
+                                                className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
                                             />
-                                            <User className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                                         </div>
-                                    </motion.div>
+                                    </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                         {/* EMAIL */}
-                                        <motion.div layout>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Contact</label>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Contact</label>
                                             <div className="relative group">
                                                 <input
                                                     name="email"
@@ -222,17 +220,16 @@ export default function SubscriptionPage() {
                                                     value={formData.email}
                                                     onChange={handleChange}
                                                     placeholder="Email Address"
-                                                    className="w-full h-14 pl-12 pr-4 bg-white/50 border border-slate-200/60 rounded-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm text-sm"
+                                                    className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
                                                 />
                                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                                             </div>
-                                        </motion.div>
+                                        </div>
 
                                         {/* PHONE */}
-                                        <motion.div layout>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 hidden sm:block">
-                                                Phone
-                                            </label>                                <div className="relative group">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 hidden sm:block">Phone</label>                                
+                                            <div className="relative group">
                                                 <input
                                                     name="phone"
                                                     type="tel"
@@ -240,51 +237,52 @@ export default function SubscriptionPage() {
                                                     value={formData.phone}
                                                     onChange={handleChange}
                                                     placeholder="Phone No."
-                                                    className="w-full h-14 pl-12 pr-4 bg-white/50 border border-slate-200/60 rounded-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm text-sm"
+                                                    className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
                                                 />
                                                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                                             </div>
-                                        </motion.div>
+                                        </div>
                                     </div>
 
                                     {/* MESSAGE */}
-                                    <motion.div layout className="pt-2">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Requirements (Optional)</label>
+                                    <div className="pt-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Requirements (Optional)</label>
                                         <div className="relative group">
                                             <textarea
                                                 name="message"
                                                 value={formData.message}
                                                 onChange={handleChange}
                                                 placeholder="Tell us about your setup needs..."
-                                                className="w-full h-24 pl-12 pr-6 py-4 bg-white/50 border border-slate-200/60 rounded-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all shadow-sm text-sm resize-none custom-scrollbar"
+                                                className="w-full h-24 pl-11 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm resize-none custom-scrollbar transform-gpu"
                                             />
-                                            <MessageSquare className="absolute left-5 top-5 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            <MessageSquare className="absolute left-4 top-4 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                                         </div>
-                                    </motion.div>
+                                    </div>
 
                                     {/* SUBMIT BUTTON */}
                                     <motion.button
-                                        layout
-                                        whileHover={{ scale: 1.02, boxShadow: "0 20px 40px -10px rgba(16,185,129,0.3)" }}
+                                        whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
                                         disabled={loading}
-                                        className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-3xl font-black text-lg shadow-2xl shadow-slate-900/20 transition-all flex items-center justify-center gap-3 mt-6 relative overflow-hidden group"
+                                        className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-3 mt-6 relative overflow-hidden group transform-gpu hover:shadow-2xl hover:shadow-emerald-500/40 disabled:opacity-60"
                                     >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                                         <div className="relative flex items-center gap-2">
                                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "TRANSMIT REQUEST"}
                                         </div>
                                     </motion.button>
                                 </form>
-                            </>
+                            </motion.div>
                         )}
+                        </AnimatePresence>
                     </div>
                 </motion.div>
             </TiltCard>
 
-            <div className="absolute bottom-6 flex items-center gap-2 opacity-40 hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-6 flex items-center gap-2 opacity-60">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gecko Systems v2.1 • Encrypted Channel</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gecko Systems v2.1 • Secure Channel</p>
             </div>
         </div>
     )

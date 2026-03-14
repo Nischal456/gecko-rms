@@ -8,14 +8,14 @@ import Link from "next/link";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { loginUser } from "@/app/actions/auth";
 
-// --- 1. ULTRA-PREMIUM TILT CARD (Physics Tuned) ---
+// --- 1. ULTRA-PREMIUM TILT CARD (Physics Tuned for 0 Lag) ---
 function TiltCard({ children }: { children: React.ReactNode }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  // Heavy, expensive-feeling spring physics
-  const mouseX = useSpring(x, { stiffness: 200, damping: 25, mass: 0.8 });
-  const mouseY = useSpring(y, { stiffness: 200, damping: 25, mass: 0.8 });
+  // Lighter mass for faster calculation on low-end CPUs, preventing math-loop lag
+  const mouseX = useSpring(x, { stiffness: 200, damping: 30, mass: 0.5 });
+  const mouseY = useSpring(y, { stiffness: 200, damping: 30, mass: 0.5 });
 
   function onMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
     const { left, top, width, height } = currentTarget.getBoundingClientRect();
@@ -33,7 +33,7 @@ function TiltCard({ children }: { children: React.ReactNode }) {
       style={{ rotateX, rotateY, perspective: 1200 }}
       onMouseMove={onMouseMove}
       onMouseLeave={() => { x.set(0); y.set(0); }}
-      className="relative z-20 w-full max-w-[460px] perspective-container group"
+      className="relative z-20 w-full max-w-[460px] perspective-container group transform-gpu will-change-transform"
     >
       {/* Shine Effect */}
       <motion.div 
@@ -87,17 +87,17 @@ export default function LoginPage() {
   return (
     <div className="min-h-[100dvh] bg-[#F4F7F5] flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden selection:bg-emerald-500 selection:text-white font-sans">
        
-       {/* --- ALIVE BACKGROUND --- */}
-       <div className="absolute inset-0 overflow-hidden pointer-events-none transform-gpu">
+       {/* --- ALIVE BACKGROUND (GPU ACCELERATED) --- */}
+       <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <motion.div 
             animate={{ scale: [1, 1.2, 1], rotate: [0, 45, 0], x: [0, 50, 0] }}
             transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] bg-gradient-to-br from-emerald-100/50 to-teal-50/40 rounded-full blur-[120px] will-change-transform mix-blend-multiply" 
+            className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] bg-gradient-to-br from-emerald-100/50 to-teal-50/40 rounded-full blur-[120px] will-change-transform transform-gpu mix-blend-multiply" 
           />
           <motion.div 
             animate={{ scale: [1, 1.1, 1], rotate: [0, -45, 0], x: [0, -50, 0] }}
             transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-            className="absolute bottom-[-20%] right-[-10%] w-[120vw] h-[120vw] bg-gradient-to-tr from-green-100/50 to-emerald-50/40 rounded-full blur-[100px] will-change-transform mix-blend-multiply" 
+            className="absolute bottom-[-20%] right-[-10%] w-[120vw] h-[120vw] bg-gradient-to-tr from-green-100/50 to-emerald-50/40 rounded-full blur-[100px] will-change-transform transform-gpu mix-blend-multiply" 
           />
        </div>
 
@@ -106,7 +106,7 @@ export default function LoginPage() {
           <motion.button 
             whileHover={{ scale: 1.05 }} 
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-3 px-5 py-2.5 bg-white/70 backdrop-blur-xl border border-white/60 rounded-full shadow-sm hover:shadow-lg transition-all text-slate-500 hover:text-slate-900"
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/70 backdrop-blur-xl border border-white/60 rounded-full shadow-sm hover:shadow-lg transition-all text-slate-500 hover:text-slate-900 transform-gpu"
           >
             <ArrowLeft className="w-4 h-4" /> 
             <span className="text-xs font-bold uppercase tracking-widest">Back</span>
@@ -120,7 +120,7 @@ export default function LoginPage() {
            initial={{ opacity: 0, y: 40, scale: 0.95 }}
            animate={{ opacity: 1, y: 0, scale: 1 }}
            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-           className="w-full bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[0_40px_100px_-30px_rgba(16,185,129,0.15)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-white/50"
+           className="w-full bg-white/60 backdrop-blur-3xl border border-white/60 shadow-[0_40px_100px_-30px_rgba(16,185,129,0.15)] rounded-[3rem] p-8 md:p-12 relative overflow-hidden ring-1 ring-white/50 transform-gpu"
          >
             {/* Texture Overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-white/40 to-transparent pointer-events-none opacity-80" />
@@ -132,14 +132,14 @@ export default function LoginPage() {
                    initial={{ scale: 0 }} 
                    animate={{ scale: 1 }} 
                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                   className="w-28 h-28 bg-gradient-to-b from-white to-emerald-50 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative group border border-white"
+                   className="w-28 h-28 bg-gradient-to-b from-white to-emerald-50 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative group border border-white transform-gpu"
                 >
                    {/* Custom Image */}
                    <img src="/paw.png" alt="Gecko Paw" className="w-16 h-16 object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-500" />
                    
                    {/* Living Glow */}
-                   <div className="absolute inset-0 rounded-[2rem] ring-4 ring-white/30" />
-                   <div className="absolute -inset-4 bg-emerald-400/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                   <div className="absolute inset-0 rounded-[2rem] ring-4 ring-white/30 pointer-events-none" />
+                   <div className="absolute -inset-4 bg-emerald-400/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
                 </motion.div>
                 
                 <div className="text-center mb-10 space-y-2">
@@ -160,7 +160,7 @@ export default function LoginPage() {
                          animate={{ height: "auto", opacity: 1 }} 
                          exit={{ height: 0, opacity: 0 }}
                          transition={{ duration: 0.3, ease: "circOut" }}
-                         className="overflow-hidden"
+                         className="overflow-hidden transform-gpu"
                        >
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Restaurant ID</label>
                           <div className="relative group">
@@ -177,8 +177,8 @@ export default function LoginPage() {
                      )}
                    </AnimatePresence>
 
-                   {/* EMAIL */}
-                   <motion.div layout>
+                   {/* EMAIL & PASSWORD (REMOVED 'layout' PROP HERE TO STOP TYPING LAG) */}
+                   <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Credentials</label>
                       <div className="relative group mb-3">
                         <input 
@@ -217,7 +217,7 @@ export default function LoginPage() {
                               Recover Access?
                           </Link>
                       </div>
-                   </motion.div>
+                   </div>
 
                    {/* AUTH BUTTON */}
                    <motion.button 
@@ -225,7 +225,7 @@ export default function LoginPage() {
                      whileHover={{ scale: 1.02, boxShadow: "0 20px 40px -10px rgba(16,185,129,0.3)" }}
                      whileTap={{ scale: 0.98 }}
                      disabled={loading}
-                     className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-3xl font-black text-lg shadow-2xl shadow-slate-900/20 transition-all flex items-center justify-center gap-3 mt-4 relative overflow-hidden group"
+                     className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-3xl font-black text-lg shadow-2xl shadow-slate-900/20 transition-all flex items-center justify-center gap-3 mt-4 relative overflow-hidden group transform-gpu"
                    >
                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                       <div className="relative flex items-center gap-2">
@@ -241,7 +241,7 @@ export default function LoginPage() {
                        <motion.button 
                          whileHover={{ scale: 1.02, backgroundColor: "#fff" }}
                          whileTap={{ scale: 0.98 }}
-                         className="w-full h-14 bg-white/50 backdrop-blur-sm border border-slate-200 text-slate-600 rounded-3xl font-bold text-xs uppercase tracking-widest hover:border-emerald-200 hover:text-emerald-700 hover:shadow-lg transition-all flex items-center justify-center gap-3"
+                         className="w-full h-14 bg-white/50 backdrop-blur-sm border border-slate-200 text-slate-600 rounded-3xl font-bold text-xs uppercase tracking-widest hover:border-emerald-200 hover:text-emerald-700 hover:shadow-lg transition-all flex items-center justify-center gap-3 transform-gpu"
                        >
                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
                                <User className="w-4 h-4" /> 
