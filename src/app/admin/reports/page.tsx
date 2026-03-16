@@ -7,7 +7,7 @@ import {
   BarChart3, TrendingUp, Download, Wallet, Banknote, Users, 
   FileSpreadsheet, Loader2, ArrowUpRight, Calendar, CreditCard, 
   PieChart, ArrowDownRight, Search, QrCode, Filter, ChevronDown, 
-  ChevronUp, CheckCircle2, Clock, CalendarDays, ShieldCheck, AlertCircle, ShoppingBag,Award,TrendingDown,Layers,
+  ChevronUp, CheckCircle2, Clock, CalendarDays, ShieldCheck, AlertCircle, ShoppingBag, Award, TrendingDown, Layers,
   X, BookOpen, UserCircle
 } from "lucide-react";
 import { 
@@ -20,8 +20,11 @@ import { toast } from "sonner";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import NepaliDate from 'nepali-date-converter';
 
+// --- CONFIG ---
+const NEPALI_MONTHS = ["Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+
 // --- UTILS ---
-const formatNPR = (n: number) => "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(n);
+const formatNPR = (n: number) => "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(n || 0);
 
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
 function toNepaliDigits(num: number | string): string {
@@ -44,6 +47,16 @@ function getFormattedNepaliDate() {
     }
 }
 
+const toNepaliDate = (dateStr: string) => {
+    try {
+        const jsDate = new Date(dateStr);
+        const npDate = new NepaliDate(jsDate);
+        return `${NEPALI_MONTHS[npDate.getMonth()]} ${npDate.getDate()}`;
+    } catch (e) {
+        return dateStr;
+    }
+};
+
 const toBS = (dateStr: string) => { 
     try { 
         const date = new Date(dateStr);
@@ -52,15 +65,26 @@ const toBS = (dateStr: string) => {
     } catch { return "---"; }
 };
 
-// Premium CSV Export
+const toBSFull = (dateStr: string) => { 
+    try { 
+        const date = new Date(dateStr);
+        const bsDate = new NepaliDate(date);
+        return bsDate.format('YYYY/MM/DD'); 
+    } catch { return "---"; }
+};
+
+// Premium CSV Export (STRICTLY Filters out Cancelled/Void Items)
 function exportToCSV(transactions: any[], range: string) {
     if(!transactions || transactions.length === 0) return toast.error("No data available to export");
     
-    let csv = "ID,Date(AD),Date(BS),Time,Table/Details,Items,Grand Total,Paid Amount,Due Amount,Method,Status,Customer Name,Customer Phone\n";
+    let csv = "ID,Date(AD),Date(BS),Time,Type,Details/Table,Items,Grand Total,Paid Amount,Due Amount,Method,Status,Customer Name,Customer Phone\n";
     
     transactions.forEach((t: any) => {
         const dateObj = new Date(t.date);
-        const items = t.items?.map((i:any) => `${i.qty}x ${i.name.replace(/,/g, '')}`).join(" | ") || "";
+        
+        // Filter out any internally cancelled items before exporting to ensure perfectly clean data
+        const cleanItems = t.items?.filter((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim())) || [];
+        const itemsStr = cleanItems.map((i:any) => `${i.qty}x ${i.name.replace(/,/g, '')}`).join(" | ") || "";
         
         const grandTotal = Number(t.amount) || 0;
         const tendered = Number(t.tendered) || 0;
@@ -70,65 +94,24 @@ function exportToCSV(transactions: any[], range: string) {
         const cName = (t.customer?.name || '').replace(/"/g, '""');
         const cPhone = (t.customer?.address || '').replace(/"/g, '""');
 
-        csv += `${t.id},${dateObj.toISOString().split('T')[0]},${toBS(t.date)},${dateObj.toLocaleTimeString()},"${safeDetails}","${items}",${grandTotal},${tendered},${due},${t.method},${t.status},"${cName}","${cPhone}"\n`;
+        csv += `${t.id},${dateObj.toISOString().split('T')[0]},${toBSFull(t.date)},${dateObj.toLocaleTimeString()},${t.type},"${safeDetails}","${itemsStr}",${grandTotal},${tendered},${due},${t.method},${t.status},"${cName}","${cPhone}"\n`;
     });
     
     const link = document.createElement("a"); 
     link.href = "data:text/csv;charset=utf-8," + encodeURI(csv); 
     link.download = `Gecko_Admin_Report_${range}_${new Date().toISOString().split('T')[0]}.csv`; 
     link.click();
-    toast.success("Report Exported Successfully");
+    toast.success("Ledger Exported Successfully");
 }
 
-// --- COMPONENTS ---
-function StatCard({ title, value, sub, icon: Icon, color, trend, isHighlight = false }: any) {
-    const isPos = trend && !trend.includes('-');
-    const styles: any = {
-        emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
-        blue: "bg-blue-50 text-blue-600 border-blue-100",
-        red: "bg-red-50 text-red-600 border-red-100",
-        orange: "bg-orange-50 text-orange-600 border-orange-100"
-    };
-
-    const theme = styles[color] || styles.emerald;
-    const isCurrency = typeof value === 'string' && value.startsWith('Rs');
-    const valString = isCurrency ? value.replace('Rs ', '') : value;
-
-    return (
-        <motion.div 
-            variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
-            className={`p-5 md:p-6 rounded-[2rem] border shadow-xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden ${isHighlight ? 'bg-slate-900 border-slate-800 shadow-slate-900/20' : 'bg-white border-slate-100 shadow-slate-200/30'}`}
-        >
-            <div className={`absolute top-0 right-0 p-4 opacity-[0.03] transition-opacity ${isHighlight ? 'text-white' : 'text-slate-900'}`}>
-                <Icon className="w-24 h-24" />
-            </div>
-            <div className="flex justify-between items-start mb-4 relative z-10">
-                <div className={`w-11 h-11 md:w-14 md:h-14 rounded-[1.2rem] flex items-center justify-center border shadow-inner ${isHighlight ? 'bg-white/10 text-white border-white/10' : theme}`}>
-                    <Icon className="w-5 h-5 md:w-6 md:h-6" />
-                </div>
-                {trend && (
-                    <span className={`text-[9px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 uppercase tracking-widest ${isHighlight ? 'bg-white/10 text-slate-300' : theme}`}>
-                        {color === 'red' ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />} {trend}
-                    </span>
-                )}
-            </div>
-            <div className="relative z-10">
-                <h4 className={`text-[10px] md:text-xs font-black uppercase tracking-widest mb-1.5 ${isHighlight ? 'text-slate-400' : 'text-slate-400'}`}>{title}</h4>
-                <div className="flex items-baseline gap-1.5">
-                    {isCurrency && <span className={`text-sm font-black opacity-70 ${isHighlight ? 'text-white' : theme.split(' ')[1]}`}>Rs</span>}
-                    <p className={`text-3xl md:text-4xl font-black tracking-tighter truncate leading-none ${isHighlight ? 'text-white' : 'text-slate-900'}`}>{valString}</p>
-                </div>
-            </div>
-        </motion.div>
-    )
-}
-
+// --- CREDIT BOOK MODAL COMPONENT (WITH SEARCH & PAYMENT) ---
 function CreditBookModal({ onClose }: { onClose: () => void }) {
     const [data, setData] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     
+    // Payment States
     const [payAmount, setPayAmount] = useState<string>("");
     const [isPaying, setIsPaying] = useState(false);
 
@@ -136,6 +119,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
         setLoading(true);
         const res = await getCashierReports(60);
         if(res.success && res.summary?.creditAccounts) {
+            // Filter out accounts that have a 0 balance to keep ledger clean
             const activeAccounts: any = {};
             for (const [key, val] of Object.entries(res.summary.creditAccounts)) {
                 if ((val as any).total > 0) activeAccounts[key] = val;
@@ -169,8 +153,11 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
         if (res.success) {
             toast.success(`Successfully cleared Rs ${amt} for ${activeData.displayName}`);
             setPayAmount("");
+            
+            // If they paid it completely off, clear the selection
             if (activeData.total - amt <= 0) setSelectedCustomer(null);
-            await loadCredits();
+            
+            await loadCredits(); // Refresh ledger
         } else {
             toast.error("Payment Failed", { description: res.error || "An error occurred." });
         }
@@ -193,6 +180,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Khata Ledger (60 Days)</p>
                             </div>
                         </div>
+                        {/* SEARCH BAR */}
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                 <Search className="w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -218,7 +206,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                     </div>
                 </div>
 
-                {/* Right Side: Details & Payment */}
+                {/* Right Side: Invoice Details & Payment */}
                 <div className="flex-1 p-5 md:p-8 overflow-y-auto custom-scrollbar bg-[#f8fafc] flex flex-col h-[60%] md:h-full relative">
                     {!selectedCustomer || !activeData ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-slate-300 opacity-60">
@@ -236,6 +224,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                     <span className="text-2xl font-black text-red-600">{formatNPR(activeData.total)}</span>
                                 </div>
 
+                                {/* KHATA PAYMENT ENGINE */}
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Record Khata Payment</p>
                                     <div className="flex flex-col md:flex-row gap-3">
@@ -260,6 +249,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Credit Invoices</h4>
                             <div className="space-y-3 pb-safe">
                                 {activeData.bills.map((b: any, i: number) => {
+                                    // Only show bills that actually have a due amount
                                     if(b.due_amount <= 0) return null;
                                     return (
                                         <div key={i} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -270,17 +260,24 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="text-sm font-black text-slate-900 block mb-0.5">Total: {formatNPR(b.grandTotal)}</span>
+                                                    {b.discount > 0 && <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 inline-block mb-0.5 mt-0.5 shadow-sm">Discount: -{formatNPR(b.discount)}</span>}
                                                     {b.tendered > 0 && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Paid: {formatNPR(b.tendered)}</span>}
-                                                    <span className="text-xs font-black text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100 inline-block mt-1">Due: {formatNPR(b.due_amount)}</span>
+                                                    <span className="text-xs font-black text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100 inline-block mt-1 shadow-sm">Due: {formatNPR(b.due_amount)}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
-                                                {b.items.map((it:any, idx:number) => (
-                                                    <div key={idx} className="flex justify-between text-[11px] font-medium text-slate-500">
-                                                        <span>{it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}</span>
-                                                        <span>Rs {it.price * it.qty}</span>
-                                                    </div>
-                                                ))}
+                                                {b.items.map((it:any, idx:number) => {
+                                                    const isCancelled = ['cancelled', 'void'].includes((it.status || '').toLowerCase().trim());
+                                                    return (
+                                                        <div key={idx} className={`flex justify-between text-[11px] font-medium ${isCancelled ? 'text-red-400 line-through' : 'text-slate-500'}`}>
+                                                            <span className="flex items-center gap-1.5">
+                                                                {it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}
+                                                                {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm">Waste</span>}
+                                                            </span>
+                                                            <span>Rs {it.price * it.qty}</span>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         </div>
                                     )
@@ -407,7 +404,7 @@ export default function ReportsPage() {
       </div>
 
       <AnimatePresence>
-          {showCreditBook && <CreditBookModal onClose={() => setShowCreditBook(false)} />}
+          {showCreditBook && <CreditBookModal onClose={() => {setShowCreditBook(false); loadAllData();}} />}
       </AnimatePresence>
 
       <main className="flex-1 flex flex-col h-full overflow-y-auto pb-[140px] md:pb-0 custom-scrollbar relative transform-gpu">
@@ -440,6 +437,13 @@ export default function ReportsPage() {
                         </button>
                     ))}
                 </div>
+                
+                {/* CREDIT BOOK BUTTON */}
+                <button onClick={() => setShowCreditBook(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group">
+                    <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Credit Ledger</span>
+                </button>
+
                 <button onClick={() => exportToCSV(transactions, range)} disabled={transactions.length === 0} className="hidden md:flex h-10 px-5 bg-slate-900 text-white rounded-xl items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Download className="w-4 h-4" /> <span className="text-[10px] font-black uppercase tracking-widest">Export CSV</span>
                 </button>
@@ -718,43 +722,82 @@ export default function ReportsPage() {
                                                     {isExpanded && (tx.items?.length > 0 || tx.note || tx.customer?.name) && (
                                                         <motion.tr initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-slate-50/80 border-b-2 border-slate-200">
                                                             <td colSpan={5} className="px-6 py-6">
+                                                                
                                                                 {/* IF POS BILL */}
                                                                 {tx.items?.length > 0 && (
                                                                     <div className="grid grid-cols-4 gap-4 mb-4">
-                                                                        {tx.items.map((item:any, idx:number) => (
-                                                                            <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:border-emerald-200 transition-colors">
-                                                                                <div className="flex justify-between items-start mb-2">
-                                                                                    <span className="font-black text-white bg-slate-800 px-2 py-0.5 rounded-md text-[10px]">{item.qty || 1}x</span>
-                                                                                    <span className="text-[10px] font-black text-emerald-600">{formatNPR(item.price || 0)}</span>
+                                                                        {tx.items.map((item:any, idx:number) => {
+                                                                            const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                                                            return (
+                                                                                <div key={idx} className={`bg-white p-4 rounded-2xl border ${isCancelled ? 'border-red-200 bg-red-50/30' : 'border-slate-200'} shadow-sm flex flex-col hover:border-emerald-200 transition-colors`}>
+                                                                                    <div className="flex justify-between items-start mb-2">
+                                                                                        <div className="flex gap-2 items-center">
+                                                                                            <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} px-2 py-0.5 rounded-md text-[10px]`}>{item.qty || 1}x</span>
+                                                                                            {isCancelled && <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase tracking-wider border border-red-200 shadow-sm">Waste ({item.previous_status || 'Unknown'})</span>}
+                                                                                        </div>
+                                                                                        <span className={`text-xs font-black ${isCancelled ? 'text-red-400 line-through' : 'text-emerald-600'}`}>{formatNPR(item.price || 0)}</span>
+                                                                                    </div>
+                                                                                    <span className={`text-sm font-bold leading-tight line-clamp-2 ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                                                                                    {item.variant && <span className="text-[9px] text-slate-400 font-black mt-1.5 uppercase tracking-widest">{item.variant}</span>}
                                                                                 </div>
-                                                                                <span className="text-sm font-bold text-slate-800 leading-tight line-clamp-2">{item.name}</span>
-                                                                                {item.variant && <span className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-widest">{item.variant}</span>}
-                                                                            </div>
-                                                                        ))}
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 )}
-                                                                {/* CUSTOMER OR NOTES INFO */}
-                                                                {(tx.customer?.name || tx.customer?.address || tx.note) && (
-                                                                    <div className="pt-4 border-t border-slate-200 flex flex-wrap gap-4">
-                                                                        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs flex gap-6 shadow-sm">
-                                                                            {tx.note && (
+                                                                
+                                                                <div className="pt-4 border-t border-slate-200 flex flex-wrap gap-4">
+                                                                    <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs flex gap-6 shadow-sm">
+                                                                        {tx.details && (
+                                                                            <div className="flex flex-col gap-1">
+                                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Table / Ref</span>
+                                                                                <span className="font-bold text-slate-700">{tx.details}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {tx.note && (
+                                                                            <>
+                                                                                <div className="w-px bg-slate-100" />
                                                                                 <div className="flex flex-col gap-1">
                                                                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Notes</span>
                                                                                     <span className="font-bold text-slate-700">{tx.note}</span>
                                                                                 </div>
-                                                                            )}
-                                                                            {tx.customer?.name && (
-                                                                                <>
-                                                                                    {tx.note && <div className="w-px bg-slate-100" />}
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</span>
-                                                                                        <span className="font-bold text-slate-700">{tx.customer.name} {tx.customer.address ? `(${tx.customer.address})` : ''}</span>
-                                                                                    </div>
-                                                                                </>
-                                                                            )}
-                                                                        </div>
+                                                                            </>
+                                                                        )}
+                                                                        {tx.customer?.name && (
+                                                                            <>
+                                                                                <div className="w-px bg-slate-100" />
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</span>
+                                                                                    <span className="font-bold text-slate-700">{tx.customer.name} {tx.customer.address ? `(${tx.customer.address})` : ''}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
-                                                                )}
+                                                                    
+                                                                    <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center gap-6 shadow-lg ml-auto">
+                                                                        <div className="flex flex-col text-right">
+                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grand Total</span>
+                                                                            <span className="font-bold text-sm">{formatNPR(tx.amount)}</span>
+                                                                        </div>
+                                                                        {tx.discount > 0 && (
+                                                                            <>
+                                                                                <div className="w-px h-full bg-slate-700" />
+                                                                                <div className="flex flex-col text-right">
+                                                                                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Discount</span>
+                                                                                    <span className="font-bold text-sm text-amber-400">-{formatNPR(tx.discount)}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        {tx.tendered > 0 && (
+                                                                            <>
+                                                                                <div className="w-px h-full bg-slate-700" />
+                                                                                <div className="flex flex-col text-right">
+                                                                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Amount Paid</span>
+                                                                                    <span className="font-black text-lg text-emerald-400">{formatNPR(tx.tendered)}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </td>
                                                         </motion.tr>
                                                     )}
@@ -822,28 +865,38 @@ export default function ReportsPage() {
 
                                                     {tx.items?.length > 0 && (
                                                         <div className="space-y-2 mb-4">
-                                                            {tx.items.map((item:any, idx:number) => (
-                                                                <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-                                                                    <div className="flex gap-2.5 items-center">
-                                                                        <span className="font-black text-white bg-slate-800 w-5 h-5 flex items-center justify-center rounded text-[10px]">{item.qty || 1}</span>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-[13px] font-bold text-slate-800 leading-tight">{item.name}</span>
-                                                                            {item.variant && <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-widest">{item.variant}</span>}
+                                                            {tx.items.map((item:any, idx:number) => {
+                                                                const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                                                return (
+                                                                    <div key={idx} className={`bg-white p-3 rounded-xl border ${isCancelled ? 'border-red-200 bg-red-50/30' : 'border-slate-200'} shadow-sm flex justify-between items-center`}>
+                                                                        <div className="flex gap-2.5 items-center">
+                                                                            <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} w-5 h-5 flex items-center justify-center rounded text-[10px]`}>{item.qty || 1}</span>
+                                                                            <div className="flex flex-col">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <span className={`text-[13px] font-bold leading-tight ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                                                                                    {isCancelled && <span className="text-[8px] font-black bg-red-100 text-red-600 px-1 rounded uppercase tracking-widest border border-red-200">Waste</span>}
+                                                                                </div>
+                                                                                {item.variant && <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-widest">{item.variant}</span>}
+                                                                            </div>
                                                                         </div>
+                                                                        <span className={`text-xs font-black ${isCancelled ? 'text-red-300 line-through' : 'text-slate-900'}`}>{formatNPR((item.price || 0) * (item.qty || 1))}</span>
                                                                     </div>
-                                                                    <span className="text-xs font-black text-slate-900">{formatNPR((item.price || 0) * (item.qty || 1))}</span>
-                                                                </div>
-                                                            ))}
+                                                                )
+                                                            })}
                                                         </div>
                                                     )}
 
-                                                    {(tx.customer?.name || tx.customer?.address || tx.note) && (
-                                                        <div className="bg-white p-4 rounded-xl border border-slate-200 text-[10px] flex flex-col gap-2 shadow-sm">
-                                                            {tx.note && <span className="flex flex-col"><strong className="text-slate-400 uppercase tracking-widest text-[9px] mb-1">Description / Notes</strong> <span className="font-bold text-slate-700 leading-relaxed">{tx.note}</span></span>}
-                                                            {tx.customer?.name && <span className="flex justify-between mt-2 pt-2 border-t border-slate-100"><strong className="text-slate-400 uppercase tracking-widest text-[9px]">Customer</strong> <span className="font-bold text-slate-700">{tx.customer.name}</span></span>}
-                                                            {tx.customer?.address && <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[9px]">Details</strong> <span className="font-bold text-slate-700">{tx.customer.address}</span></span>}
+                                                    <div className="bg-white p-4 rounded-xl border border-slate-200 text-[10px] flex flex-col gap-2 shadow-sm">
+                                                        {tx.note && <span className="flex flex-col"><strong className="text-slate-400 uppercase tracking-widest text-[9px] mb-1">Description / Notes</strong> <span className="font-bold text-slate-700 leading-relaxed">{tx.note}</span></span>}
+                                                        {tx.customer?.name && <span className="flex justify-between mt-2 pt-2 border-t border-slate-100"><strong className="text-slate-400 uppercase tracking-widest text-[9px]">Customer</strong> <span className="font-bold text-slate-700">{tx.customer.name}</span></span>}
+                                                        {tx.customer?.address && <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[9px]">Details</strong> <span className="font-bold text-slate-700">{tx.customer.address}</span></span>}
+                                                        
+                                                        <div className="border-t border-slate-100 mt-2 pt-2 flex flex-col gap-2">
+                                                            <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[10px]">Grand Total</strong> <span className="font-bold text-slate-900 text-sm">{formatNPR(tx.amount)}</span></span>
+                                                            {tx.discount > 0 && <span className="flex justify-between"><strong className="text-amber-500 uppercase tracking-widest text-[10px]">Discount</strong> <span className="font-black text-amber-500 text-sm">-{formatNPR(tx.discount)}</span></span>}
+                                                            {tx.tendered > 0 && <span className="flex justify-between"><strong className="text-emerald-500 uppercase tracking-widest text-[10px]">Amount Paid</strong> <span className="font-black text-emerald-600 text-sm">{formatNPR(tx.tendered)}</span></span>}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
@@ -871,4 +924,40 @@ export default function ReportsPage() {
       </main>
     </div>
   );
+}
+
+// PREMIUM STAT CARD
+function StatCard({ title, value, icon: Icon, color, trend, isHighlight = false }: any) {
+    const styles: any = {
+        emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+        blue: "bg-blue-50 text-blue-600 border-blue-100",
+        red: "bg-red-50 text-red-600 border-red-100",
+        orange: "bg-orange-50 text-orange-600 border-orange-100"
+    };
+
+    const isCurrency = typeof value === 'string' && value.startsWith('Rs');
+    const valString = isCurrency ? value.replace('Rs ', '') : value;
+
+    return (
+        <motion.div 
+            variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} 
+            className={`p-5 md:p-6 rounded-[2rem] border shadow-xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden ${isHighlight ? 'bg-slate-900 border-slate-800 shadow-slate-900/20' : 'bg-white border-slate-100 shadow-slate-200/30'}`}
+        >
+            <div className="flex justify-between items-start mb-4 relative z-10">
+                <div className={`w-11 h-11 md:w-14 md:h-14 rounded-[1.2rem] flex items-center justify-center border shadow-inner ${isHighlight ? 'bg-white/10 text-white border-white/10' : styles[color]}`}>
+                    <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                </div>
+                <span className={`text-[9px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 uppercase tracking-widest ${isHighlight ? 'bg-white/10 text-slate-300' : styles[color]}`}>
+                    {color === 'red' ? <ArrowDownRight className="w-3 h-3" /> : (color === 'emerald' && title !== 'Net Profit' ? <ArrowUpRight className="w-3 h-3" /> : '')} {trend}
+                </span>
+            </div>
+            <div className="relative z-10">
+                <h4 className={`text-[10px] md:text-xs font-black uppercase tracking-widest mb-1.5 ${isHighlight ? 'text-slate-400' : 'text-slate-400'}`}>{title}</h4>
+                <div className="flex items-baseline gap-1.5">
+                    {isCurrency && <span className={`text-sm font-black opacity-70 ${isHighlight ? 'text-white' : styles[color].split(' ')[1]}`}>Rs</span>}
+                    <p className={`text-3xl md:text-4xl font-black tracking-tighter truncate leading-none ${isHighlight ? 'text-white' : 'text-slate-900'}`}>{valString}</p>
+                </div>
+            </div>
+        </motion.div>
+    )
 }

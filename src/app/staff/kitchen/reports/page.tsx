@@ -17,14 +17,22 @@ import NepaliDate from 'nepali-date-converter';
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- UTILS ---
-const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP').format(amount);
+const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP').format(amount || 0);
 
 const toBS = (dateStr: string) => { 
     try { 
+        if (!dateStr) return "---";
         const date = new Date(dateStr);
         const bsDate = new NepaliDate(date);
         return bsDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
+};
+
+const safeFormatTime = (dateStr: string) => {
+    try {
+        if (!dateStr) return "--:--";
+        return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch { return "--:--"; }
 };
 
 // --- PREMIUM DOCK ---
@@ -234,25 +242,25 @@ export default function KitchenReportsPage() {
                     <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 md:space-y-8">
                         
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                            <motion.div variants={itemVariants}><StatCard label="Total Orders" value={data.stats.total} color="bg-blue-50 text-blue-600 border-blue-100" icon={<ChefHat className="w-5 h-5"/>} /></motion.div>
-                            <motion.div variants={itemVariants}><StatCard label="Completed" value={data.stats.completed} color="bg-emerald-50 text-emerald-600 border-emerald-100" icon={<CheckCircle2 className="w-5 h-5"/>} /></motion.div>
-                            <motion.div variants={itemVariants}><StatCard label="Pending" value={data.stats.pending} color="bg-orange-50 text-orange-600 border-orange-100" icon={<Clock className="w-5 h-5"/>} /></motion.div>
-                            <motion.div variants={itemVariants}><StatCard label="Est. Revenue" value={formatRs(data.stats.revenue)} color="bg-slate-900 text-white border-slate-800" icon={<DollarSign className="w-5 h-5 text-emerald-400"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Total Orders" value={data?.stats?.total || 0} color="bg-blue-50 text-blue-600 border-blue-100" icon={<ChefHat className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Completed" value={data?.stats?.completed || 0} color="bg-emerald-50 text-emerald-600 border-emerald-100" icon={<CheckCircle2 className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Pending" value={data?.stats?.pending || 0} color="bg-orange-50 text-orange-600 border-orange-100" icon={<Clock className="w-5 h-5"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Est. Revenue" value={formatRs(data?.stats?.revenue || 0)} color="bg-slate-900 text-white border-slate-800" icon={<DollarSign className="w-5 h-5 text-emerald-400"/>} /></motion.div>
                         </div>
 
                         <motion.div variants={itemVariants} className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
                             <div className="px-6 md:px-8 py-6 border-b border-slate-50 flex items-center justify-between">
                                 <h2 className="font-black text-xl text-slate-900">Recent Kitchen Log</h2>
-                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">{data.history.length} Records</span>
+                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">{data?.history?.length || 0} Records</span>
                             </div>
                             
                             <div className="divide-y divide-slate-100">
-                                {data.history.map((order: any) => {
+                                {data?.history?.map((order: any) => {
                                     const isExpanded = expandedBill === order.id;
                                     
                                     // Robust parsing for valid items and quantities
-                                    const validItems = order.order_items.filter((i:any) => {
-                                        const qty = i.qty || i.quantity || 1;
+                                    const validItems = (order.order_items || []).filter((i:any) => {
+                                        const qty = Number(i.qty || i.quantity || 1);
                                         const s = (i.status || '').toLowerCase().trim();
                                         return qty > 0 && s !== 'cancelled' && s !== 'void';
                                     });
@@ -283,11 +291,11 @@ export default function KitchenReportsPage() {
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <p className="font-black text-lg text-slate-900 leading-none">{order.table_name}</p>
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">#{order.id.slice(0,5)}</span>
+                                                            <p className="font-black text-lg text-slate-900 leading-none">{order.table_name || "Unknown Table"}</p>
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">#{String(order.id).slice(0,5)}</span>
                                                         </div>
                                                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-                                                            <Clock className="w-3 h-3" /> {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {toBS(order.created_at)}
+                                                            <Clock className="w-3 h-3" /> {safeFormatTime(order.created_at)} • {toBS(order.created_at)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -318,6 +326,8 @@ export default function KitchenReportsPage() {
                                                                 const qty = item.qty || item.quantity || 1;
                                                                 const s = (item.status || '').toLowerCase().trim();
                                                                 const isItemDone = ['ready', 'served', 'completed', 'paid'].includes(s);
+                                                                const note = item.note || item.notes;
+                                                                const variant = item.variant || item.variantName;
 
                                                                 return (
                                                                     <div key={idx} className={`p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-colors ${isItemDone ? 'bg-white border-slate-200' : 'bg-orange-50/50 border-orange-200'}`}>
@@ -325,8 +335,8 @@ export default function KitchenReportsPage() {
                                                                         <div className="flex flex-col">
                                                                             <span className={`text-sm font-bold leading-tight ${isItemDone ? 'text-slate-800' : 'text-slate-900'}`}>{item.name}</span>
                                                                             <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                                                                {item.variant && <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{item.variant}</span>}
-                                                                                {item.note && <span className="text-[9px] text-orange-600 font-bold uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> {item.note}</span>}
+                                                                                {variant && <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{variant}</span>}
+                                                                                {note && <span className="text-[9px] text-orange-600 font-bold uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> {note}</span>}
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -339,10 +349,10 @@ export default function KitchenReportsPage() {
                                         </div>
                                     )
                                 })}
-                                {data.history.length === 0 && (
+                                {data?.history?.length === 0 && (
                                     <div className="p-16 flex flex-col items-center justify-center text-slate-300">
                                         <History className="w-16 h-16 mb-4 opacity-20" />
-                                        <p className="font-bold uppercase tracking-widest text-xs">No orders processed yet today.</p>
+                                        <p className="font-bold uppercase tracking-widest text-xs">No food orders processed yet today.</p>
                                     </div>
                                 )}
                             </div>
@@ -358,7 +368,7 @@ export default function KitchenReportsPage() {
                                 <h2 className="font-black text-xl text-slate-900">Recent Leave Requests</h2>
                             </div>
                             <div className="divide-y divide-slate-50">
-                                {data.leaves && data.leaves.length > 0 ? data.leaves.map((leave: any) => (
+                                {data?.leaves && data.leaves.length > 0 ? data.leaves.map((leave: any) => (
                                     <div key={leave.id} className="px-8 py-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
                                         <div>
                                             <p className="font-black text-lg text-slate-900">{leave.staff_name || "Staff Member"}</p>
@@ -387,7 +397,7 @@ export default function KitchenReportsPage() {
                                 <h2 className="font-black text-xl text-slate-900">Payroll History</h2>
                             </div>
                             <div className="divide-y divide-slate-50">
-                                {data.payroll && data.payroll.length > 0 ? data.payroll.map((pay: any) => (
+                                {data?.payroll && data.payroll.length > 0 ? data.payroll.map((pay: any) => (
                                     <div key={pay.id} className="px-8 py-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
                                         <div>
                                             <p className="font-black text-lg text-slate-900">{pay.staff_name || "Kitchen Staff"}</p>

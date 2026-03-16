@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { getCashierReports } from "@/app/actions/cashier"; 
-import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ArrowRight, Table as TableIcon, ShieldCheck, AlertCircle, X } from "lucide-react";
+import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ShieldCheck, X } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,7 +27,9 @@ function exportToCSV(bills: any[], range: number) {
     
     bills.forEach((b: any) => {
         const displayBill = b.bill_no || b.invoice_no || "N/A";
-        const items = b.items?.map((i:any) => `${i.qty}x ${i.name.replace(/,/g, '')}`).join(" | ") || "";
+        // Filter out any internally cancelled items before exporting to ensure perfectly clean data
+        const cleanItems = b.items?.filter((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+        const items = cleanItems?.map((i:any) => `${i.qty}x ${i.name.replace(/,/g, '')}`).join(" | ") || "";
         
         // Calculate paid vs due for export
         const grandTotal = Number(b.grandTotal) || 0;
@@ -69,7 +71,7 @@ export default function ReportsView({ data }: any) {
         setLoading(false); 
     }
 
-    // ZERO-LAG SEARCH ENGINE: useMemo prevents the app from stuttering when typing fast
+    // ZERO-LAG SEARCH ENGINE
     const filteredBills = useMemo(() => {
         return report?.bills?.filter((b: any) => {
             const displayBill = b.bill_no || b.invoice_no || "";
@@ -82,13 +84,30 @@ export default function ReportsView({ data }: any) {
         }) || [];
     }, [report, searchTerm]);
 
-    // TYPE-SAFE Hardware Accelerated Animations
+    // DYNAMIC SALES ENGINE: Calculates Splits based on Grand Total (Sales Volume) instead of Received Cash
+    const derivedStats = useMemo(() => {
+        if (!report?.bills) return { paymentSplit: {}, staffSplit: {} };
+        const pSplit: any = {};
+        const sSplit: any = {};
+        
+        report.bills.forEach((b: any) => {
+            const method = b.payment_method || "Cash";
+            const staff = b.served_by || "Cashier";
+            const total = Number(b.grandTotal) || 0; // Use Grand Total to reflect true generated sales
+            
+            pSplit[method] = (pSplit[method] || 0) + total;
+            sSplit[staff] = (sSplit[staff] || 0) + total;
+        });
+        
+        return { paymentSplit: pSplit, staffSplit: sSplit };
+    }, [report]);
+
+    // TYPE-SAFE Animations
     const containerVariants = { 
         hidden: { opacity: 0 }, 
         show: { opacity: 1, transition: { staggerChildren: 0.05 } } 
     };
     
-    // Removed strict strict string typing that confused the compiler
     const itemVariants: any = { 
         hidden: { opacity: 0, y: 15 }, 
         show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 25 } } 
@@ -142,7 +161,7 @@ export default function ReportsView({ data }: any) {
                         <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100">
                             <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><QrCode className="w-4 h-4 text-indigo-500"/> Payment Split</p>
                             <div className="space-y-3">
-                                {Object.entries(report.summary.byMethod || {}).map(([k,v]:any) => (
+                                {Object.entries(derivedStats.paymentSplit).sort((a:any, b:any) => b[1] - a[1]).map(([k,v]:any) => (
                                     <div key={k} className="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
                                         <span className="font-bold text-slate-700 capitalize text-sm">{k}</span>
                                         <span className="font-black text-slate-900">{formatRs(v)}</span>
@@ -154,7 +173,7 @@ export default function ReportsView({ data }: any) {
                         <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100">
                             <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><UserCircle className="w-4 h-4 text-orange-500"/> Top Staff</p>
                             <div className="space-y-3 max-h-[120px] overflow-y-auto custom-scrollbar pr-2">
-                                {Object.entries(report.summary.byStaff || {}).map(([k,v]:any) => (
+                                {Object.entries(derivedStats.staffSplit).sort((a:any, b:any) => b[1] - a[1]).map(([k,v]:any) => (
                                     <div key={k} className="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
                                         <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
                                             <div className="w-7 h-7 rounded-full bg-slate-100 text-[10px] flex items-center justify-center text-slate-500 font-black uppercase">{k.charAt(0)}</div>
@@ -249,16 +268,22 @@ export default function ReportsView({ data }: any) {
                                                         <motion.tr initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-slate-50/80 border-b-2 border-emerald-100">
                                                             <td colSpan={5} className="px-6 py-6">
                                                                 <div className="grid grid-cols-4 gap-4 mb-4">
-                                                                    {b.items?.map((item:any, idx:number) => (
-                                                                        <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:border-emerald-200 transition-colors">
-                                                                            <div className="flex justify-between items-start mb-2">
-                                                                                <span className="font-black text-white bg-slate-800 px-2 py-0.5 rounded-md text-[10px]">{item.qty}x</span>
-                                                                                <span className="text-xs font-black text-slate-600">{formatRs(item.price)}</span>
+                                                                    {b.items?.map((item:any, idx:number) => {
+                                                                        const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                                                        return (
+                                                                            <div key={idx} className={`bg-white p-4 rounded-2xl border ${isCancelled ? 'border-red-200 bg-red-50/30' : 'border-slate-200'} shadow-sm flex flex-col hover:border-emerald-200 transition-colors`}>
+                                                                                <div className="flex justify-between items-start mb-2">
+                                                                                    <div className="flex gap-2 items-center">
+                                                                                        <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} px-2 py-0.5 rounded-md text-[10px]`}>{item.qty || 1}x</span>
+                                                                                        {isCancelled && <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase tracking-wider border border-red-200 shadow-sm">Waste ({item.previous_status || 'Unknown'})</span>}
+                                                                                    </div>
+                                                                                    <span className={`text-xs font-black ${isCancelled ? 'text-red-400 line-through' : 'text-emerald-600'}`}>{formatRs(item.price || 0)}</span>
+                                                                                </div>
+                                                                                <span className={`text-sm font-bold leading-tight line-clamp-2 ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                                                                                {item.variant && <span className="text-[9px] text-slate-400 font-black mt-1.5 uppercase tracking-widest">{item.variant}</span>}
                                                                             </div>
-                                                                            <span className="text-sm font-bold text-slate-800 leading-tight line-clamp-2">{item.name}</span>
-                                                                            {item.variant && <span className="text-[9px] text-slate-400 font-black mt-1.5 uppercase tracking-widest">{item.variant}</span>}
-                                                                        </div>
-                                                                    ))}
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                                 <div className="pt-4 border-t border-slate-200 flex flex-wrap gap-4">
                                                                     <div className="bg-white p-4 rounded-2xl border border-slate-200 text-xs flex gap-6 shadow-sm">
@@ -287,11 +312,24 @@ export default function ReportsView({ data }: any) {
                                                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grand Total</span>
                                                                             <span className="font-bold text-sm">{formatRs(grandTotal)}</span>
                                                                         </div>
-                                                                        <div className="w-px h-full bg-slate-700" />
-                                                                        <div className="flex flex-col text-right">
-                                                                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Amount Paid</span>
-                                                                            <span className="font-black text-lg text-emerald-400">{formatRs(tendered)}</span>
-                                                                        </div>
+                                                                        {b.discount > 0 && (
+                                                                            <>
+                                                                                <div className="w-px h-full bg-slate-700" />
+                                                                                <div className="flex flex-col text-right">
+                                                                                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Discount</span>
+                                                                                    <span className="font-bold text-sm text-amber-400">-{formatRs(b.discount)}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        {b.tendered > 0 && (
+                                                                            <>
+                                                                                <div className="w-px h-full bg-slate-700" />
+                                                                                <div className="flex flex-col text-right">
+                                                                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Amount Paid</span>
+                                                                                    <span className="font-black text-lg text-emerald-400">{formatRs(b.tendered)}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </td>
@@ -363,27 +401,34 @@ export default function ReportsView({ data }: any) {
                                             {isExpanded && (
                                                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-slate-50 border-b-2 border-emerald-100 px-4 py-4 overflow-hidden">
                                                     <div className="space-y-2 mb-4">
-                                                        {b.items?.map((item:any, idx:number) => (
-                                                            <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-                                                                <div className="flex gap-2.5 items-center">
-                                                                    <span className="font-black text-white bg-slate-800 w-5 h-5 flex items-center justify-center rounded text-[10px]">{item.qty}</span>
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-[13px] font-bold text-slate-800 leading-tight">{item.name}</span>
-                                                                        {item.variant && <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 tracking-widest">{item.variant}</span>}
+                                                        {b.items?.map((item:any, idx:number) => {
+                                                            const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                                            return (
+                                                                <div key={idx} className={`bg-white p-3 rounded-xl border ${isCancelled ? 'border-red-200 bg-red-50/30' : 'border-slate-200'} shadow-sm flex justify-between items-center`}>
+                                                                    <div className="flex gap-2.5 items-center">
+                                                                        <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} w-5 h-5 flex items-center justify-center rounded text-[10px]`}>{item.qty || 1}</span>
+                                                                        <div className="flex flex-col">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <span className={`text-[13px] font-bold leading-tight ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                                                                                {isCancelled && <span className="text-[8px] font-black bg-red-100 text-red-600 px-1 rounded uppercase tracking-widest border border-red-200">Waste</span>}
+                                                                            </div>
+                                                                            {item.variant && <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-widest">{item.variant}</span>}
+                                                                        </div>
                                                                     </div>
+                                                                    <span className={`text-xs font-black ${isCancelled ? 'text-red-300 line-through' : 'text-slate-900'}`}>{formatRs((item.price || 0) * (item.qty || 1))}</span>
                                                                 </div>
-                                                                <span className="text-xs font-black text-slate-900">{formatRs(item.price * item.qty)}</span>
-                                                            </div>
-                                                        ))}
+                                                            )
+                                                        })}
                                                     </div>
                                                     
                                                     <div className="bg-white p-4 rounded-xl border border-slate-200 text-[10px] flex flex-col gap-2 shadow-sm">
                                                         <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest">Table</strong> <span className="font-bold text-slate-700">{b.table_no}</span></span>
                                                         {b.customer_name && <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest">Customer</strong> <span className="font-bold text-slate-700">{b.customer_name}</span></span>}
                                                         
-                                                        <div className="border-t border-slate-100 my-1 pt-2 flex flex-col gap-2">
-                                                            <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest">Grand Total</strong> <span className="font-bold text-slate-900">{formatRs(grandTotal)}</span></span>
-                                                            <span className="flex justify-between"><strong className="text-emerald-500 uppercase tracking-widest">Amount Paid</strong> <span className="font-black text-emerald-600 text-sm">{formatRs(tendered)}</span></span>
+                                                        <div className="border-t border-slate-100 mt-2 pt-2 flex flex-col gap-2">
+                                                            <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[10px]">Grand Total</strong> <span className="font-bold text-slate-900 text-sm">{formatRs(grandTotal)}</span></span>
+                                                            {b.discount > 0 && <span className="flex justify-between"><strong className="text-amber-500 uppercase tracking-widest text-[10px]">Discount</strong> <span className="font-black text-amber-500 text-sm">-{formatRs(b.discount)}</span></span>}
+                                                            {b.tendered > 0 && <span className="flex justify-between"><strong className="text-emerald-500 uppercase tracking-widest text-[10px]">Amount Paid</strong> <span className="font-black text-emerald-600 text-sm">{formatRs(b.tendered)}</span></span>}
                                                         </div>
                                                     </div>
                                                 </motion.div>

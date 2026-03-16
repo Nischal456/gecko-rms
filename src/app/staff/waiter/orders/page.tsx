@@ -8,8 +8,7 @@ import {
   Coffee, DollarSign, Receipt, ShoppingBag, Utensils,
   AlertCircle, Loader2, Lock, Edit3, ChevronDown, Check, Sparkles, Layers, StickyNote, Trash2, XCircle, ArrowUpRight
 } from "lucide-react";
-import { getPOSStats } from "@/app/actions/pos"; 
-import { markOrderServed, cancelOrder } from "@/app/actions/waiter"; 
+import { markOrderServed, cancelOrder, getWaiterDashboardData } from "@/app/actions/waiter"; // FIX: Imported the correct action!
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -24,8 +23,12 @@ interface OrderItem {
     qty: number;
     price: number;
     status: string; 
+    previous_status?: string; 
     variant?: string;
     note?: string;
+    cancel_reason?: string;
+    cancelled_by?: string;
+    cancelled_at?: string;
 }
 
 interface Order {
@@ -55,9 +58,11 @@ const formatRs = (amount: number) => {
 // --- COMPONENTS ---
 
 const renderItemStatus = (status: string) => {
-    if (status === 'ready') return <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase tracking-widest animate-pulse border border-emerald-200 shadow-sm shrink-0">Ready</span>;
-    if (status === 'served') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 shrink-0"><Check className="w-2.5 h-2.5"/> Served</span>;
-    if (status === 'cooking') return <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded uppercase tracking-widest border border-orange-200 shrink-0">Cooking</span>;
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'ready') return <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase tracking-widest animate-pulse border border-emerald-200 shadow-sm shrink-0">Ready</span>;
+    if (s === 'served') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 shrink-0"><Check className="w-2.5 h-2.5"/> Served</span>;
+    if (s === 'cooking') return <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded uppercase tracking-widest border border-orange-200 shrink-0">Cooking</span>;
+    if (['cancelled', 'void'].includes(s)) return <span className="text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase tracking-widest border border-red-200 shrink-0 flex items-center gap-1"><XCircle className="w-2.5 h-2.5" /> Cancelled</span>;
     return <span className="text-[9px] font-black bg-blue-50 text-blue-500 px-2 py-0.5 rounded uppercase tracking-widest border border-blue-100 shrink-0">Pending</span>;
 };
 
@@ -95,21 +100,22 @@ function RoundStatusBadge({ status }: { status: string }) {
     );
 }
 
-function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit }: { order: Order, isLast: boolean, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string) => void, onEdit: (orderId: string, tableLabel: string) => void }) {
-    const validItems = order.items?.filter(item => {
-        const s = (item.status || '').toLowerCase();
-        return s !== 'cancelled' && s !== 'void' && item.qty > 0;
+function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilter }: { order: Order, isLast: boolean, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => void, onEdit: (orderId: string, tableLabel: string) => void, currentFilter: string }) {
+    
+    // Only Active & Completed Tabs use this block now
+    const displayItems = order.items?.filter(item => {
+        const s = (item.status || '').toLowerCase().trim();
+        return !['cancelled', 'void'].includes(s) && item.qty > 0;
     }) || [];
 
-    if (validItems.length === 0) return null; 
+    if (displayItems.length === 0) return null; 
 
-    const readyItems = validItems.filter(i => i.status === 'ready');
+    const readyItems = displayItems.filter(i => i.status === 'ready');
     const hasReadyItems = readyItems.length > 0;
-    const hasPendingItems = validItems.some(i => i.status === 'pending');
-    const hasCookingItems = validItems.some(i => i.status === 'cooking');
-    const allItemsServed = validItems.every(i => ['served', 'paid', 'completed'].includes(i.status));
-
-    const isFullyPending = validItems.every(i => i.status === 'pending');
+    const hasPendingItems = displayItems.some(i => i.status === 'pending');
+    const hasCookingItems = displayItems.some(i => i.status === 'cooking');
+    const allItemsServed = displayItems.every(i => ['served', 'paid', 'completed'].includes(i.status));
+    const isFullyPending = displayItems.every(i => i.status === 'pending');
 
     return (
         <div className={`relative pl-4 pb-6 ${!isLast ? 'border-l-2 border-slate-100 ml-2.5' : 'ml-2.5'}`}>
@@ -170,59 +176,69 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit }: { order: 
             </div>
 
             <div className={`space-y-3 p-3 rounded-[1.25rem] border transition-colors ${hasReadyItems ? 'bg-emerald-50/50 border-emerald-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
-                {validItems.map((item, i) => (
-                    <div key={i} className={`flex justify-between items-start text-sm pb-2.5 border-b border-dashed border-slate-200 last:border-0 last:pb-0 ${item.status === 'served' ? 'opacity-50 grayscale' : ''}`}>
-                        
-                        {/* FIXED: flex-1 min-w-0 strictly prevents pushing the price out */}
-                        <div className="flex gap-2.5 md:gap-3 flex-1 min-w-0 pr-2">
-                            <span className={`font-black w-4 md:w-5 text-right mt-0.5 shrink-0 ${item.status === 'ready' ? 'text-emerald-600' : 'text-slate-500'}`}>{item.qty}x</span>
-                            
-                            <div className="flex flex-col w-full min-w-0">
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start w-full gap-1.5 sm:gap-2">
-                                    <span className={`font-bold leading-tight truncate pr-1 ${item.status === 'served' ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{item.name}</span>
-                                    
-                                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5 sm:mt-0">
-                                        {renderItemStatus(item.status)}
-                                        {item.status === 'pending' && !isFullyPending && (
-                                            <button 
-                                                onClick={() => {
-                                                    const sig = item.unique_id || item.id || `${item.name}||${item.variant || ''}`;
-                                                    onCancel(order.id, order.tbl, sig);
-                                                }}
-                                                className="p-1 bg-white text-red-500 rounded-md border border-red-100 hover:bg-red-50 hover:border-red-300 transition-all shadow-sm active:scale-95"
-                                                title="Cancel specific item"
-                                            >
-                                                <XCircle className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
+                {displayItems.map((item, i) => (
+                    <div key={i} className={`flex flex-col text-sm pb-2.5 border-b border-dashed border-slate-200 last:border-0 last:pb-0 ${item.status === 'served' ? 'opacity-50 grayscale' : ''}`}>
+                        <div className="flex justify-between items-start w-full">
+                            <div className="flex gap-2.5 md:gap-3 flex-1 min-w-0 pr-2">
+                                <span className={`font-black w-4 md:w-5 text-right mt-0.5 shrink-0 ${item.status === 'ready' ? 'text-emerald-600' : 'text-slate-500'}`}>{item.qty}x</span>
+                                <div className="flex flex-col w-full min-w-0">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start w-full gap-1.5 sm:gap-2">
+                                        <span className={`font-bold leading-tight truncate pr-1 ${item.status === 'served' ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{item.name}</span>
+                                        <div className="flex items-center gap-1.5 shrink-0 mt-0.5 sm:mt-0">
+                                            {renderItemStatus(item.status)}
+                                            {['pending', 'cooking', 'ready'].includes(item.status) && (
+                                                <button 
+                                                    onClick={() => {
+                                                        const sig = item.unique_id || item.id || `${item.name}||${item.variant || ''}`;
+                                                        onCancel(order.id, order.tbl, sig, item.status);
+                                                    }}
+                                                    className="p-1 bg-white text-red-500 rounded-md border border-red-100 hover:bg-red-50 hover:border-red-300 transition-all shadow-sm active:scale-95"
+                                                    title="Cancel specific item"
+                                                >
+                                                    <XCircle className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                        {item.variant && <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm"><Layers className="w-2.5 h-2.5"/> {item.variant}</span>}
+                                        {item.note && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 italic shadow-sm"><StickyNote className="w-2.5 h-2.5"/> {item.note}</span>}
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                    {item.variant && <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm"><Layers className="w-2.5 h-2.5"/> {item.variant}</span>}
-                                    {item.note && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 italic shadow-sm"><StickyNote className="w-2.5 h-2.5"/> {item.note}</span>}
-                                </div>
                             </div>
+                            <span className={`font-black shrink-0 mt-0.5 text-right whitespace-nowrap ${item.status === 'served' ? 'text-slate-400' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
                         </div>
-                        
-                        {/* Price is now safely anchored to the right */}
-                        <span className={`font-black shrink-0 mt-0.5 text-right whitespace-nowrap ${item.status === 'served' ? 'text-slate-400' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
                     </div>
                 ))}
-                
-                <div className={`pt-3 mt-3 flex justify-between items-center ${hasReadyItems ? 'border-emerald-200/50' : 'border-slate-200'}`}>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Round Total</span>
-                    <span className={`text-sm font-black ${hasReadyItems ? 'text-emerald-700' : 'text-slate-900'}`}>{formatRs(order.total)}</span>
-                </div>
             </div>
         </div>
     )
 }
 
-function TableCard({ group, onServe, onCancel, onEdit }: { group: GroupedTableOrder, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string) => void, onEdit: (orderId: string, tableLabel: string) => void }) {
-    const { tableId, orders, totalAmount, isTakeaway } = group;
+function TableCard({ group, currentFilter, onServe, onCancel, onEdit }: { group: GroupedTableOrder, currentFilter: string, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => void, onEdit: (orderId: string, tableLabel: string) => void }) {
+    const { tableId, orders, isTakeaway } = group;
     const DisplayIcon = isTakeaway ? ShoppingBag : Utensils;
     
     const hasReadyItems = orders.some(o => o.items.some((i:any) => i.status === 'ready'));
+
+    // Only render Active and Completed via TableCard
+    const validOrdersForTab = orders.filter(order => {
+        if (currentFilter === 'completed') {
+            return ['paid', 'completed'].includes(order.status) && order.items.some((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+        }
+        return !['paid', 'completed', 'cancelled'].includes(order.status) && order.items.some((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+    });
+
+    if (validOrdersForTab.length === 0) return null;
+
+    const dynamicTotalAmount = validOrdersForTab.reduce((total, order) => {
+        const orderItems = order.items.filter(i => {
+            const s = (i.status || '').toLowerCase().trim();
+            return !['cancelled', 'void'].includes(s) && i.qty > 0;
+        });
+        const orderTotal = orderItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        return total + orderTotal;
+    }, 0);
 
     return (
         <motion.div
@@ -242,30 +258,33 @@ function TableCard({ group, onServe, onCancel, onEdit }: { group: GroupedTableOr
                             {isTakeaway ? "Takeaway" : `Table ${tableId}`}
                         </h3>
                         <p className={`text-[10px] font-bold mt-1 uppercase tracking-wider ${hasReadyItems ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {orders.length} Rounds
+                            {validOrdersForTab.length} Rounds
                         </p>
                     </div>
                 </div>
                 <div className="text-right pt-0.5 shrink-0 pl-2">
                     <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Grand Total</span>
-                    <span className="text-lg md:text-xl font-black text-slate-900">{formatRs(totalAmount)}</span>
+                    <span className={`text-lg md:text-xl font-black text-slate-900`}>
+                        {formatRs(dynamicTotalAmount)}
+                    </span>
                 </div>
             </div>
 
             <div className="p-4 flex-1 bg-white">
-                {orders.map((order, index) => (
+                {validOrdersForTab.map((order, index) => (
                     <OrderRoundBlock 
                         key={order.id} 
                         order={order} 
-                        isLast={index === orders.length - 1} 
+                        isLast={index === validOrdersForTab.length - 1} 
                         onServe={onServe}
                         onCancel={onCancel}
                         onEdit={onEdit}
+                        currentFilter={currentFilter}
                     />
                 ))}
             </div>
 
-            {!isTakeaway && (
+            {!isTakeaway && currentFilter === 'active' && (
                 <div className="p-3 bg-slate-50 border-t border-slate-100">
                     <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -282,12 +301,17 @@ export default function OrdersPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [groupedTables, setGroupedTables] = useState<GroupedTableOrder[]>([]);
-    const [filter, setFilter] = useState<'active' | 'completed'>('active');
+    const [cancelledItemsGlobal, setCancelledItemsGlobal] = useState<any[]>([]); // NEW STATE
+    const [filter, setFilter] = useState<'active' | 'completed' | 'cancelled'>('active');
     const [search, setSearch] = useState("");
     
     // Notification State
     const [topAlert, setTopAlert] = useState<{msg: string} | null>(null);
     const notifiedReadyIds = useRef(new Set<string>());
+
+    // State for the advanced Reason-Based Cancellation Modal
+    const [cancelFlow, setCancelFlow] = useState<{orderId: string, tableLabel: string, itemId?: string, requiresReason: boolean} | null>(null);
+    const [cancelReason, setCancelReason] = useState("");
 
     useEffect(() => {
         loadOrders();
@@ -304,9 +328,16 @@ export default function OrdersPage() {
 
     async function loadOrders() {
         try {
-            const res = await getPOSStats();
-            if (res.success && res.stats?.orders_list) {
-                const rawOrders: Order[] = res.stats.orders_list;
+            // FIX: Call getWaiterDashboardData instead of generic getPOSStats
+            const res = await getWaiterDashboardData();
+            if (res.success) {
+                // Populate Cancelled Items
+                if (res.cancelledItems) {
+                    setCancelledItemsGlobal(res.cancelledItems);
+                }
+
+                // Populate Tables
+                const rawOrders: Order[] = res.orders_list || [];
                 const groups: Record<string, GroupedTableOrder> = {};
 
                 rawOrders.forEach(order => {
@@ -406,68 +437,58 @@ export default function OrdersPage() {
         }
     };
 
-    // --- PREMIUM CUSTOM TOAST FOR CANCEL ---
-    const handleCancelOrder = (orderId: string, tableLabel: string, itemIdToCancel?: string) => {
-        toast.custom((t) => (
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
-                <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0">
-                        <Trash2 className="w-5 h-5" />
-                    </div>
-                    <div className="pt-0.5">
-                        <h4 className="font-black text-slate-900 text-sm tracking-tight">
-                            {itemIdToCancel ? "Cancel Item?" : "Cancel Round?"}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
-                            {itemIdToCancel 
-                                ? "Are you sure you want to remove this specific item? This action cannot be undone." 
-                                : "Are you sure you want to completely cancel this entire round? This action cannot be undone."}
-                        </p>
-                    </div>
-                </div>
-                <div className="flex gap-2 mt-1">
-                    <button 
-                        onClick={() => toast.dismiss(t)} 
-                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
-                    >
-                        Keep It
-                    </button>
-                    <button 
-                        onClick={async () => {
-                            toast.dismiss(t);
-                            toast.loading(itemIdToCancel ? "Cancelling item..." : "Cancelling round...");
-                            const res = await cancelOrder(orderId, tableLabel, itemIdToCancel);
-                            toast.dismiss();
-                            if (res.success) {
-                                toast.success(itemIdToCancel ? "Item Cancelled Successfully" : "Round Cancelled Successfully");
-                                loadOrders();
-                            } else {
-                                toast.error(res.error || "Could not cancel");
-                                loadOrders();
-                            }
-                        }} 
-                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
-                    >
-                        Yes, Cancel
-                    </button>
-                </div>
-            </div>
-        ), { duration: 8000, id: `cancel-${orderId}-${itemIdToCancel || 'round'}` });
+    const triggerCancel = (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => {
+        const requiresReason = ['cooking', 'ready'].includes(itemStatus || '');
+        setCancelFlow({ orderId, tableLabel, itemId, requiresReason });
+        setCancelReason(""); 
     };
 
-    // --- PREMIUM EDIT ROUTING ---
+    const confirmCancel = async () => {
+        if (!cancelFlow) return;
+        
+        if (cancelFlow.requiresReason && !cancelReason.trim()) {
+            toast.error("Reason required", { description: "Please provide a reason for cancelling prepared food."});
+            return;
+        }
+
+        const { orderId, tableLabel, itemId } = cancelFlow;
+        const finalReason = cancelReason.trim();
+        
+        setCancelFlow(null); 
+        toast.loading(itemId ? "Cancelling item..." : "Cancelling round...");
+        
+        const res = await cancelOrder(orderId, tableLabel, itemId, finalReason);
+        
+        toast.dismiss();
+        if (res.success) {
+            toast.success(itemId ? "Item Cancelled Successfully" : "Round Cancelled Successfully");
+            loadOrders();
+        } else {
+            toast.error(res.error || "Could not cancel");
+            loadOrders();
+        }
+    };
+
     const handleEditOrder = (orderId: string, tableLabel: string) => {
         toast.loading(`Opening editor for Table ${tableLabel}...`, { duration: 1500 });
         router.push(`/staff/waiter/pos?orderId=${orderId}&table=${tableLabel}`);
     };
 
-    const filteredGroups = groupedTables.filter(group => {
+    // --- PARSE GROUPS FOR ACTIVE/COMPLETED TABS ---
+    const filteredGroups = groupedTables.map(group => {
+        let filteredOrders: Order[] = [];
+        if (filter === 'active') {
+            filteredOrders = group.orders.filter(o => !['paid', 'completed', 'cancelled'].includes(o.status));
+        } else if (filter === 'completed') {
+            filteredOrders = group.orders.filter(o => ['paid', 'completed'].includes(o.status));
+        }
+        return { ...group, orders: filteredOrders };
+    }).filter(group => {
         const matchesSearch = group.tableId.toLowerCase().includes(search.toLowerCase());
-        if (filter === 'active') return matchesSearch && group.hasActiveOrders;
-        return matchesSearch && !group.hasActiveOrders;
+        return matchesSearch && group.orders.length > 0;
     });
 
-    const activeCount = groupedTables.filter(g => g.hasActiveOrders).length;
+    const activeCount = groupedTables.filter(g => g.orders.some(o => !['paid', 'completed', 'cancelled'].includes(o.status))).length;
 
     return (
         <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
@@ -490,6 +511,71 @@ export default function OrdersPage() {
                             <button onClick={() => setTopAlert(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors"><XCircle className="w-6 h-6" /></button>
                         </div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* PREMIUM CANCELLATION MODAL */}
+            <AnimatePresence>
+                {cancelFlow && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+                            onClick={() => setCancelFlow(null)} 
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cursor-pointer" 
+                        />
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                            animate={{ scale: 1, opacity: 1, y: 0 }} 
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }} 
+                            className="bg-white w-full max-w-md rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative z-10 overflow-hidden transform-gpu"
+                        >
+                            <div className="flex items-start gap-4 mb-6">
+                                <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                                    <Trash2 className="w-6 h-6" />
+                                </div>
+                                <div className="pt-1">
+                                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                                        {cancelFlow.itemId ? "Cancel Item" : "Cancel Round"}
+                                    </h3>
+                                    <p className="text-xs font-bold text-slate-500 mt-1">
+                                        {cancelFlow.requiresReason 
+                                            ? "This item is already being prepared. Cancelling it will record waste. Please provide a reason below." 
+                                            : "Are you sure you want to cancel this? This action cannot be undone."}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {cancelFlow.requiresReason && (
+                                <div className="mb-6">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Cancellation Reason *</label>
+                                    <input 
+                                        autoFocus
+                                        type="text" 
+                                        value={cancelReason} 
+                                        onChange={e => setCancelReason(e.target.value)} 
+                                        placeholder="e.g. Customer changed mind, Spilled, etc." 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-400 transition-all shadow-inner"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setCancelFlow(null)} 
+                                    className="flex-1 py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-xl transition-colors border border-slate-200"
+                                >
+                                    Keep It
+                                </button>
+                                <button 
+                                    onClick={confirmCancel}
+                                    disabled={cancelFlow.requiresReason && !cancelReason.trim()}
+                                    className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="w-4 h-4" /> Confirm Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
 
@@ -518,18 +604,24 @@ export default function OrdersPage() {
                                     />
                                 </div>
                                 
-                                <div className="bg-slate-100 p-1.5 rounded-xl md:rounded-2xl flex border border-slate-200 w-full md:w-auto shrink-0">
+                                <div className="bg-slate-100 p-1.5 rounded-xl md:rounded-2xl flex border border-slate-200 w-full md:w-auto shrink-0 overflow-x-auto no-scrollbar">
                                     <button 
                                         onClick={() => setFilter('active')}
-                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 ${filter === 'active' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
+                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'active' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
                                         Active <span className={`px-2 py-0.5 rounded-md ${filter === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{activeCount}</span>
                                     </button>
                                     <button 
                                         onClick={() => setFilter('completed')}
-                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 ${filter === 'completed' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
+                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'completed' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
                                         History
+                                    </button>
+                                    <button 
+                                        onClick={() => setFilter('cancelled')}
+                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'cancelled' ? 'bg-red-50 text-red-600 shadow-md transform scale-105 border border-red-100' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        Waste
                                     </button>
                                 </div>
                             </div>
@@ -537,7 +629,6 @@ export default function OrdersPage() {
                     </div>
                 </header>
 
-                {/* Natural Full Page Scroll Container */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 pb-[160px] md:pb-32 bg-[#F8FAFC]">
                     <div className="max-w-[1600px] mx-auto">
                         {loading && groupedTables.length === 0 ? (
@@ -545,6 +636,75 @@ export default function OrdersPage() {
                                 <Loader2 className="w-12 h-12 animate-spin mb-4 text-emerald-500" />
                                 <p className="font-black uppercase tracking-widest text-xs animate-pulse">Syncing Rounds...</p>
                             </div>
+                        ) : filter === 'cancelled' ? (
+                            /* STRICTLY SEPARATED CANCELLED / WASTE VIEW */
+                            cancelledItemsGlobal.length === 0 ? (
+                                <div className="h-[50vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-red-200/50 rounded-[3rem] bg-red-50/30 mt-4">
+                                    <div className="w-20 h-20 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-red-100">
+                                        <Receipt className="w-8 h-8 md:w-10 md:h-10 opacity-40 text-red-500"/>
+                                    </div>
+                                    <p className="font-black text-base md:text-lg text-red-400 uppercase tracking-widest">No Waste</p>
+                                    <p className="text-[10px] md:text-xs font-bold text-slate-500 opacity-60 mt-1">No prepared food was cancelled in the last 24h.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-4">
+                                    <AnimatePresence mode="popLayout">
+                                        {cancelledItemsGlobal.map((item: any, idx: number) => {
+                                            const isTakeaway = item.tableName?.startsWith('TAKEAWAY');
+                                            const DisplayIcon = isTakeaway ? ShoppingBag : Utensils;
+
+                                            return (
+                                                <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={idx} className="bg-white p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] border border-red-100 shadow-sm flex flex-col h-full hover:shadow-lg transition-all">
+                                                    
+                                                    <div className="flex items-center gap-3 md:gap-4 mb-4 pb-4 border-b border-red-50">
+                                                        <div className="w-10 h-10 md:w-12 md:h-12 bg-red-50 text-red-500 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 border border-red-100 shadow-inner">
+                                                            <DisplayIcon className="w-5 h-5" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="font-black text-base md:text-lg text-slate-900 truncate">
+                                                                {isTakeaway ? "Takeaway" : `Table ${item.tableName}`}
+                                                            </h4>
+                                                            <p className="text-[9px] md:text-[10px] font-bold text-red-500 uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                                                                <Clock className="w-3 h-3" />
+                                                                {item.cancelled_at ? new Date(item.cancelled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown Time'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex-1 flex flex-col">
+                                                        <div className="flex justify-between items-start gap-2 mb-3">
+                                                            <div className="flex gap-2 items-start">
+                                                                <span className="font-black text-red-500 text-xs md:text-sm mt-0.5">{item.qty}x</span>
+                                                                <div>
+                                                                    <h5 className="font-bold text-slate-900 text-xs md:text-sm leading-tight">{item.name}</h5>
+                                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                                        {item.variant && <span className="text-[9px] font-bold bg-slate-50 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-1"><Layers className="w-2.5 h-2.5"/> {item.variant}</span>}
+                                                                        <span className="text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider">
+                                                                            Was {item.previous_status || 'Unknown'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <span className="font-black text-slate-400 text-xs md:text-sm shrink-0">{formatRs(item.price * item.qty)}</span>
+                                                        </div>
+
+                                                        <div className="mt-auto bg-red-50/50 border border-red-100 rounded-xl p-3 flex flex-col gap-1.5 shadow-inner">
+                                                            <div className="flex items-start gap-1.5">
+                                                                <AlertCircle className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 shrink-0 mt-0.5" />
+                                                                <span className="text-[10px] md:text-xs font-bold text-red-700 leading-snug">{item.cancel_reason || 'No reason provided'}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-red-400/80 mt-1 pt-1.5 border-t border-red-200/50">
+                                                                <span>By: {item.cancelled_by || 'Unknown Staff'}</span>
+                                                                <span>Order #{item.orderId?.slice(-4) || 'Unknown'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+                                </div>
+                            )
                         ) : filteredGroups.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 rounded-[2.5rem] md:rounded-[3rem] bg-slate-50 mt-4">
                                 <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 border border-slate-100">
@@ -560,8 +720,9 @@ export default function OrdersPage() {
                                         <div key={group.tableId} className="break-inside-avoid">
                                             <TableCard 
                                                 group={group} 
+                                                currentFilter={filter}
                                                 onServe={handleServeOrder} 
-                                                onCancel={handleCancelOrder}
+                                                onCancel={triggerCancel}
                                                 onEdit={handleEditOrder}
                                             />
                                         </div>

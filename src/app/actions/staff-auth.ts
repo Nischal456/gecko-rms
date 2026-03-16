@@ -69,13 +69,14 @@ export async function staffLogin(staffId: string, pin: string) {
     maxAge: 60 * 60 * 24 * 7 
   });
 
-  // D. ROUTING LOGIC
+  // D. ROUTING LOGIC (FIXED: Added Bartender routing)
   let redirectUrl = "/staff/pos"; // Default fallback
   
   if (staff.role === "waiter") redirectUrl = "/staff/waiter";
   if (staff.role === "chef") redirectUrl = "/staff/kitchen";
   if (staff.role === "manager") redirectUrl = "/staff/manager";
   if (staff.role === "cashier") redirectUrl = "/staff/cashier"; 
+  if (staff.role === "bartender") redirectUrl = "/staff/bartender"; // Successfully routes to BarOS
   
   return { success: true, role: staff.role, url: redirectUrl };
 }

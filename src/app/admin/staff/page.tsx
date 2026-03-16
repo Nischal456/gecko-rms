@@ -8,12 +8,10 @@ import {
   Edit2, Calendar, Wallet, History, Loader2, X,
   UserCircle2, ArrowRight, BellRing, CheckCircle2, XCircle, 
   Phone, Mail, KeyRound, Save, User, CalendarDays, RefreshCcw,
-  Users, Search, Trash2, Eye, EyeOff, Wand2, HeartPulse, Contact
+  Users, Search, Trash2, Eye, EyeOff, Wand2, HeartPulse, Contact, GlassWater
 } from "lucide-react";
 import { toast } from "sonner";
-// REMOVED 'createStaff' from here to avoid confusion
 import { getStaff } from "@/app/actions/staff"; 
-// ADDED 'saveStaff' and 'deleteStaff' here
 import { getStaffDetails, recordPayment, updateLeaveStatus, createLeaveRequest, saveStaff, deleteStaff } from "@/app/actions/staff-management";
 import { getDashboardData } from "@/app/actions/dashboard";
 
@@ -76,6 +74,7 @@ export default function StaffPage() {
         case 'chef': return <ChefHat className="w-6 h-6" />;
         case 'cashier': return <Calculator className="w-6 h-6" />;
         case 'waiter': return <UtensilsCrossed className="w-6 h-6" />;
+        case 'bartender': return <GlassWater className="w-6 h-6" />; // Added Bartender Icon
         default: return <User className="w-6 h-6" />;
     }
   };
@@ -86,6 +85,7 @@ export default function StaffPage() {
         case 'chef': return 'bg-orange-50 text-orange-600 border-orange-100';
         case 'cashier': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
         case 'waiter': return 'bg-blue-50 text-blue-600 border-blue-100';
+        case 'bartender': return 'bg-pink-50 text-pink-600 border-pink-100'; // Added Bartender Style
         default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
   };
@@ -120,14 +120,14 @@ export default function StaffPage() {
       }
   }
 
-  // --- LOGIC: CREATE / UPDATE STAFF (FIXED) ---
+  // --- LOGIC: CREATE / UPDATE STAFF ---
   async function handleSaveStaff(e: React.FormEvent) {
       e.preventDefault();
       setIsSubmitting(true);
       
       const formData = new FormData(formRef.current!);
       const data = {
-          id: selectedStaff?.id, // Includes ID only if editing
+          id: selectedStaff?.id, 
           full_name: formData.get("full_name"),
           role: formData.get("role"),
           pin_code: formData.get("pin_code"),
@@ -139,7 +139,6 @@ export default function StaffPage() {
           emergency_contact_phone: formData.get("emergency_contact_phone")
       };
 
-      // FIX: Use saveStaff instead of createStaff to handle updates correctly
       const res = await saveStaff(data); 
       
       if (res.success) {
@@ -280,7 +279,7 @@ export default function StaffPage() {
                         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{staff.role}</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-50 flex justify-between items-center text-xs font-bold text-slate-400">
-                            <span className="flex items-center gap-1"><Banknote className="w-3 h-3" /> Rs {staff.salary?.toLocaleString()}</span>
+                            <span className="flex items-center gap-1"><Banknote className="w-3 h-3" /> Rs {staff.salary?.toLocaleString() || 0}</span>
                             <span className="flex items-center gap-1 group-hover:text-emerald-500 transition-colors">Manage <ArrowRight className="w-3 h-3" /></span>
                         </div>
                     </div>
@@ -316,7 +315,7 @@ export default function StaffPage() {
 
                         {/* --- CREATE / EDIT FORM --- */}
                         {(drawerMode === 'create' || isEditingProfile) && (
-                            <form ref={formRef} onSubmit={handleSaveStaff} className="flex-1 overflow-y-auto p-8 space-y-6">
+                            <form ref={formRef} onSubmit={handleSaveStaff} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Full Name</label>
@@ -335,6 +334,11 @@ export default function StaffPage() {
                                                     <option value="chef">Chef</option>
                                                     <option value="waiter">Waiter</option>
                                                     <option value="cashier">Cashier</option>
+                                                    
+                                                    {/* FEATURE FLAG: Show Bartender ONLY if split_kot_bot is active, OR if the staff is already a bartender */}
+                                                    {(tenant?.feature_flags?.split_kot_bot || selectedStaff?.role === 'bartender') && (
+                                                        <option value="bartender">Bartender</option>
+                                                    )}
                                                 </select>
                                             </div>
                                         </div>
@@ -379,7 +383,7 @@ export default function StaffPage() {
                                     </div>
                                 </div>
 
-                                <div className="flex gap-3">
+                                <div className="flex gap-3 pt-4">
                                     {isEditingProfile && drawerMode !== 'create' && (
                                         <button type="button" onClick={() => setIsEditingProfile(false)} className="flex-1 h-16 bg-white border border-slate-200 text-slate-500 rounded-[1.5rem] font-bold text-lg hover:bg-slate-50 transition-colors">Cancel</button>
                                     )}
@@ -400,14 +404,14 @@ export default function StaffPage() {
                                     ))}
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto p-8 bg-white relative">
+                                <div className="flex-1 overflow-y-auto p-8 bg-white relative custom-scrollbar">
                                     {selectedStaff.isLoading ? (
                                         <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin" /></div>
                                     ) : (
                                         <>
                                             {/* PROFILE TAB */}
                                             {activeTab === 'profile' && (
-                                                <div className="space-y-6">
+                                                <div className="space-y-6 pb-20">
                                                     <div className="p-6 rounded-[1.5rem] bg-slate-50 border border-slate-100">
                                                         <div className="flex justify-between items-start mb-4">
                                                             <h3 className="font-black text-slate-900 flex items-center gap-2"><UserCircle2 className="w-5 h-5" /> Personal Details</h3>
@@ -438,7 +442,7 @@ export default function StaffPage() {
 
                                             {/* PAYROLL TAB */}
                                             {activeTab === 'payroll' && (
-                                                <div className="space-y-8">
+                                                <div className="space-y-8 pb-20">
                                                     <div className="p-6 rounded-[2rem] bg-slate-900 text-white relative overflow-hidden shadow-xl shadow-slate-900/20">
                                                         <div className="absolute top-0 right-0 p-6 opacity-10"><Wallet className="w-32 h-32 text-white" /></div>
                                                         <h3 className="font-black mb-6 flex items-center gap-2 relative z-10"><Banknote className="w-5 h-5" /> Record Payment</h3>
@@ -457,7 +461,7 @@ export default function StaffPage() {
                                             )}
 
                                             {activeTab === 'leave' && (
-                                                <div className="space-y-8">
+                                                <div className="space-y-8 pb-20">
                                                     {selectedStaff.leaves?.some((l: any) => l.status === 'pending') && (
                                                         <div className="space-y-4">
                                                             <div className="flex items-center gap-2 bg-orange-50 p-3 rounded-xl border border-orange-100"><BellRing className="w-5 h-5 text-orange-600 animate-bounce" /><div><h3 className="font-black text-orange-900 text-sm">Action Required</h3></div></div>

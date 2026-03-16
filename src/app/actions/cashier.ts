@@ -47,12 +47,15 @@ export async function getCashierData() {
     const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
     const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
     
-    const { data: log } = await supabaseAdmin
+    // Fetch logs for the last 2 days to ensure we get exactly 24 hours of cancellation history
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const { data: logs } = await supabaseAdmin
         .from("daily_order_logs")
-        .select("orders_data, paid_history")
+        .select("date, orders_data, paid_history")
         .eq("tenant_id", tenantId)
-        .eq("date", today)
-        .maybeSingle();
+        .in("date", [yesterdayStr, today]);
 
     const { data: optimizedMenu } = await supabaseAdmin
         .from("menu_optimized")
@@ -83,34 +86,67 @@ export async function getCashierData() {
         });
     }
 
-    const activeOrders = safeParse(log?.orders_data);
-    const paidHistory = safeParse(log?.paid_history);
-
     let totalRevenue = 0;
     let pendingBills = 0;
     const tableOrderMap = new Map();
+    const cancelledItemsMap = new Map(); // Using Map prevents duplicates across day logs
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // FIXED: Only count ACTUAL received money in Total Sales
-    paidHistory.forEach((bill: any) => {
-        if (bill.payment_method === 'Credit') {
-            totalRevenue += Number(bill.tendered || 0); // Only add advance paid
-        } else {
-            totalRevenue += Number(bill.grandTotal || 0); // Cash/QR is fully paid
+    logs?.forEach(log => {
+        const activeOrders = safeParse(log.orders_data);
+        const paidHistory = safeParse(log.paid_history);
+
+        // ONLY count revenue for TODAY
+        if (log.date === today) {
+            paidHistory.forEach((bill: any) => {
+                if (bill.payment_method === 'Credit') {
+                    totalRevenue += Number(bill.tendered || 0);
+                } else {
+                    totalRevenue += Number(bill.grandTotal || 0);
+                }
+            });
         }
-    });
 
-    activeOrders.forEach((order: any) => {
-      if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
-      pendingBills++;
-      if (order.tbl) {
-          if (tableOrderMap.has(order.tbl)) {
-              const existing = tableOrderMap.get(order.tbl);
-              existing.items = [...existing.items, ...order.items];
-              existing.total = Number(existing.total) + Number(order.total);
-          } else {
-              tableOrderMap.set(order.tbl, { ...order });
-          }
-      }
+        // 24-HOUR CANCEL/WASTE TRACKER: Scans BOTH active and checked-out orders!
+        const allOrdersForWaste = [...activeOrders, ...paidHistory];
+        
+        allOrdersForWaste.forEach((order: any) => {
+            (order.items || []).forEach((item: any) => {
+                if (item.status === 'cancelled' || item.status === 'void') {
+                    if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
+                        if (item.cancelled_at) {
+                            const cancelDate = new Date(item.cancelled_at);
+                            if (cancelDate >= oneDayAgo) {
+                                const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
+                                const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
+                                
+                                cancelledItemsMap.set(uniqueKey, {
+                                    ...item,
+                                    orderId: orderId,
+                                    tableName: order.tbl || order.table_no || "Unknown"
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        // Populate Table Map for Pending Orders
+        activeOrders.forEach((order: any) => {
+            if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
+            
+            pendingBills++;
+            if (order.tbl) {
+                if (tableOrderMap.has(order.tbl)) {
+                    const existing = tableOrderMap.get(order.tbl);
+                    existing.items = [...existing.items, ...order.items];
+                    existing.total = Number(existing.total) + Number(order.total);
+                } else {
+                    tableOrderMap.set(order.tbl, { ...order });
+                }
+            }
+        });
     });
 
     for (const [tbl, existing] of tableOrderMap.entries()) {
@@ -153,6 +189,9 @@ export async function getCashierData() {
       bank_accounts: tenant?.settings?.bank_accounts || [] 
     };
 
+    // Convert map to array and sort newest first
+    const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
+
     return {
       success: true,
       restaurant: profile,
@@ -160,10 +199,11 @@ export async function getCashierData() {
       tables: richTables,
       menu: flatMenu, 
       categories: categories, 
-      activeOrders: Array.from(tableOrderMap.values()).reverse()
+      activeOrders: Array.from(tableOrderMap.values()).reverse(),
+      cancelledItems: finalCancelledItems 
     };
   } catch (error) {
-    return { success: false, activeOrders: [] };
+    return { success: false, activeOrders: [], cancelledItems: [] };
   }
 }
 
@@ -177,11 +217,15 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
         unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
         name: i.name, 
         price: i.price, 
-        qty: i.qty,
-        variant: i.variantName || "", 
-        note: i.note || "", 
-        status: "pending"              
+        qty: i.qty || i.quantity || 1, 
+        variant: i.variantName || i.variant || "", 
+        note: i.note || i.notes || "", 
+        status: "pending",
+        category: i.category || "",
+        station: i.station || "",
+        dietary: i.dietary || ""
     }));
+    
     const newTotal = compactItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
 
     const { data: currentLog } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).eq("date", today).maybeSingle();
@@ -229,8 +273,8 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     return { success: true };
 }
 
-// --- 3. CANCEL ORDER ---
-export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string) {
+// --- 3. CANCEL ORDER (SUPPORTS REASONS + ANY ITEM STATE) ---
+export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string, reason?: string) {
     const tenantId = await getTenantId();
     
     const today = new Date();
@@ -242,6 +286,13 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         today.toISOString().split('T')[0],
         tomorrow.toISOString().split('T')[0]
     ];
+
+    let staffName = "Cashier";
+    const cookieStore = await cookies();
+    try {
+        const token = cookieStore.get("gecko_staff_token")?.value;
+        if (token) staffName = JSON.parse(token).name;
+    } catch(e) {}
 
     try {
         const { data: logs } = await supabaseAdmin
@@ -274,10 +325,17 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                             const targetSig = String(itemIdToCancel).trim();
                             const safeStatus = (i.status || '').toLowerCase().trim();
 
-                            if (sig === targetSig && safeStatus === 'pending' && !itemCancelled) {
+                            if (sig === targetSig && ['pending', 'cooking', 'ready'].includes(safeStatus) && !itemCancelled) {
                                 itemCancelled = true;
                                 amountToDeduct += (Number(i.price) * Number(i.qty));
-                                return { ...i, status: 'cancelled' };
+                                return { 
+                                    ...i, 
+                                    previous_status: i.status || 'pending',
+                                    status: 'cancelled',
+                                    cancel_reason: reason || 'No reason provided',
+                                    cancelled_by: staffName,
+                                    cancelled_at: new Date().toISOString()
+                                };
                             }
                             return i;
                         });
@@ -310,7 +368,14 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                         if (isFullyPending) {
                             found = true;
                             foundDate = log.date;
-                            const newItems = order.items.map((i:any) => ({ ...i, status: 'cancelled' }));
+                            const newItems = order.items.map((i:any) => ({ 
+                                ...i, 
+                                previous_status: i.status || 'pending',
+                                status: 'cancelled',
+                                cancel_reason: 'Round Cancelled',
+                                cancelled_by: staffName,
+                                cancelled_at: new Date().toISOString() 
+                            }));
                             return { ...order, status: 'cancelled', items: newItems, total: 0 };
                         }
                     }
@@ -325,7 +390,7 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         }
 
         if (!foundDate || !modifiedOrders) {
-            return { success: false, error: "Could not cancel. Item might be cooking or already served." };
+            return { success: false, error: "Could not cancel. Item might be already served." };
         }
 
         await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", foundDate);
@@ -451,7 +516,7 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
     }
 }
 
-// --- 5. FINALIZE (Checkout with Discount & Payment Details) ---
+// --- 5. FINALIZE (Checkout) ---
 export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, paymentDetails: any, tenantInfo: any, customerDetails?: any) {
     const tenantId = await getTenantId();
     const today = new Date().toISOString().split('T')[0];
@@ -477,7 +542,6 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
                 table_no: tableId,
                 restaurant_name: tenantInfo?.name,
                 items: order.items,
-                // Advanced Payment fields
                 subTotal: paymentDetails.subTotal || 0,
                 discount: paymentDetails.discount || 0,
                 grandTotal: paymentDetails.grandTotal || 0, 
@@ -544,7 +608,6 @@ export async function getCashierReports(days: number) {
                     const tendered = Number(bill.tendered) || 0;
                     const method = bill.payment_method || "Cash";
                     
-                    // FIXED: Only count actual paid money in Total Sales
                     const actualRevenue = method === 'Credit' ? tendered : amt;
                     
                     dailyTotal += actualRevenue;
@@ -556,7 +619,6 @@ export async function getCashierReports(days: number) {
                     const staff = bill.served_by || "Cashier";
                     if(summary.byStaff[staff]) summary.byStaff[staff] += actualRevenue; else summary.byStaff[staff] = actualRevenue;
 
-                    // PERFECT CASE-INSENSITIVE GROUPING FOR CREDIT LEDGER
                     if (method === 'Credit') {
                         const rawName = (bill.customer_name || "Unknown Customer").trim();
                         const cName = rawName.toUpperCase(); 
@@ -578,12 +640,11 @@ export async function getCashierReports(days: number) {
     } catch (e) { return { success: false }; }
 }
 
-// --- 8. PROCESS CREDIT / KHATA PAYMENTS (NEW & FIXED) ---
+// --- 8. PROCESS CREDIT / KHATA PAYMENTS ---
 export async function processCreditPayment(customerName: string, amountToPay: number) {
     const tenantId = await getTenantId();
     let remainingPayment = Number(amountToPay);
     
-    // Fetch last 60 days to find unpaid bills
     const startDate = new Date(); startDate.setDate(startDate.getDate() - 60);
     const startStr = startDate.toISOString().split('T')[0];
 
@@ -626,7 +687,6 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
             });
 
             if (logModified) {
-                // FIXED: Use tenant_id and date for bulletproof update targeting
                 const { error: updateErr } = await supabaseAdmin.from("daily_order_logs")
                     .update({ paid_history: newHistory })
                     .eq("tenant_id", tenantId)

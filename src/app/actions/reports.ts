@@ -83,6 +83,7 @@ export async function getReportData(range: ReportRange) {
   const prevEndStr = prevEndDate.toISOString().split('T')[0];
 
   try {
+      // Fetch POS Logs
       const { data: logs } = await supabaseAdmin
           .from("daily_order_logs")
           .select("date, orders_data, paid_history") 
@@ -127,50 +128,47 @@ export async function getReportData(range: ReportRange) {
           const dateKey = log.date; 
           if (!dailyMap[dateKey]) dailyMap[dateKey] = { revenue: 0, expense: 0 };
 
-          const activeOrders = safeParse(log.orders_data);
           const paidOrders = safeParse(log.paid_history);
           
-          const validActive = activeOrders.filter((o: any) => o.status !== 'cancelled');
-          const allSales = [...validActive, ...paidOrders];
-          
-          allSales.forEach((order: any) => {
-              const isFromPaidHistory = paidOrders.some(po => po.id === order.id || po.invoice_no === order.invoice_no);
-              const isPaid = isFromPaidHistory || ['paid', 'completed'].includes(order.status);
-              
+          paidOrders.forEach((order: any) => {
               const grandTotal = Number(order.grandTotal || order.total || 0);
+              const discountAmt = Number(order.discount || 0);
               let actualRevenue = grandTotal;
               let currentDue = 0;
               let finalMethod = "Pending";
 
-              if (isPaid) {
-                  let rawMethod = String(order.payment_method || order.method || "Cash").toLowerCase();
-                  if (rawMethod.includes("qr") || rawMethod.includes("esewa") || rawMethod.includes("fonepay")) finalMethod = "QR";
-                  else if (rawMethod.includes("card") || rawMethod.includes("visa") || rawMethod.includes("pos")) finalMethod = "Card";
-                  else if (rawMethod.includes("credit")) finalMethod = "Credit";
-                  else if (rawMethod.includes("cash")) finalMethod = "Cash";
-                  else finalMethod = order.payment_method || "Cash";
+              let rawMethod = String(order.payment_method || order.method || "Cash").toLowerCase();
+              if (rawMethod.includes("qr") || rawMethod.includes("esewa") || rawMethod.includes("fonepay")) finalMethod = "QR";
+              else if (rawMethod.includes("card") || rawMethod.includes("visa") || rawMethod.includes("pos")) finalMethod = "Card";
+              else if (rawMethod.includes("credit")) finalMethod = "Credit";
+              else if (rawMethod.includes("cash")) finalMethod = "Cash";
+              else finalMethod = order.payment_method || "Cash";
 
-                  // Extract exact cash received if Credit
-                  if (finalMethod === "Credit") {
-                      const tendered = Number(order.tendered || 0);
-                      actualRevenue = tendered; 
-                      currentDue = order.credit_due !== undefined ? Number(order.credit_due) : Math.max(0, grandTotal - tendered);
-                  }
-
-                  totalRevenue += actualRevenue;
-                  totalCreditDue += currentDue;
-                  dailyMap[dateKey].revenue += actualRevenue;
-                  
-                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + actualRevenue;
-
-                  const staff = order.served_by || order.staff || "Cashier"; 
-                  staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRevenue;
+              // Extract exact cash received if Credit
+              if (finalMethod === "Credit") {
+                  const tendered = Number(order.tendered || 0);
+                  actualRevenue = tendered; 
+                  currentDue = order.credit_due !== undefined ? Number(order.credit_due) : Math.max(0, grandTotal - tendered);
               }
+
+              // ACTUAL RECEIVED FLOW (For Net Profit & Cash in drawer)
+              totalRevenue += actualRevenue;
+              totalCreditDue += currentDue; 
+              dailyMap[dateKey].revenue += actualRevenue;
+              
+              // SALES VOLUME FLOW (For Methods & Staff Splits)
+              // FIX: Now uses Grand Total so Credit shows generated volume!
+              paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + grandTotal;
+              const staff = order.served_by || order.staff || "Cashier"; 
+              staffPerformance[staff] = (staffPerformance[staff] || 0) + grandTotal;
 
               orderCount += 1;
 
-              if (Array.isArray(order.items)) {
-                  order.items.forEach((item: any) => {
+              // STRIKOUT WASTE FILTER: Exclude cancelled items from top sellers math
+              const cleanItems = (order.items || []).filter((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+              
+              if (Array.isArray(cleanItems)) {
+                  cleanItems.forEach((item: any) => {
                       const iName = item.name || item.n || "Unknown";
                       const iQty = Number(item.qty || item.q || 1);
                       const iPrice = Number(item.price || item.p || 0);
@@ -185,13 +183,14 @@ export async function getReportData(range: ReportRange) {
                   id: order.invoice_no || order.id || `ORD-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
                   date: order.paid_at || order.timestamp || log.date,
                   amount: grandTotal,
+                  discount: discountAmt,
                   tendered: actualRevenue,
                   due: currentDue,
                   type: "POS Bill",
                   method: finalMethod,
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
-                  status: isPaid ? (currentDue > 0 ? 'Partial/Credit' : 'Completed') : 'Pending', 
-                  items: order.items || [], 
+                  status: currentDue > 0 ? 'Partial/Credit' : 'Completed', 
+                  items: order.items || [], // <--- Pass ALL items to frontend (Frontend will strike-through waste)
                   customer: { name: order.customer_name, address: order.customer_address }
               });
           });
@@ -218,6 +217,7 @@ export async function getReportData(range: ReportRange) {
                   id: `INC-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
                   amount: amount,
+                  discount: 0,
                   tendered: amount,
                   due: 0,
                   type: "Manual Income",
@@ -235,6 +235,7 @@ export async function getReportData(range: ReportRange) {
                   id: `EXP-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
                   amount: amount,
+                  discount: 0,
                   tendered: amount,
                   due: 0,
                   type: "Manual Expense",
@@ -253,7 +254,7 @@ export async function getReportData(range: ReportRange) {
           paid.forEach((o: any) => {
               let amt = Number(o.grandTotal || o.total || 0);
               if (String(o.payment_method).toLowerCase() === 'credit') {
-                  amt = Number(o.tendered || 0); // Only past received cash counts for trend
+                  amt = Number(o.tendered || 0); 
               }
               prevRevenue += amt;
           });
@@ -286,7 +287,7 @@ export async function getReportData(range: ReportRange) {
           success: true,
           stats: {
               totalRevenue,
-              totalCreditDue, // Sent to frontend
+              totalCreditDue, 
               totalExpense,
               netProfit,
               margin,

@@ -7,13 +7,13 @@ import {
   CheckCircle2, LayoutTemplate, Box, Rocket, Check, X, 
   ExternalLink, Trash2, Send, ShieldAlert, RefreshCw, MessageSquare, Lock, LogOut, Key,
   Search, ArrowRight, Edit3, Save, Crown, CalendarDays, Radio, Target, 
-  Bell, Info, AlertTriangle, CheckCircle, CheckCheck, Clock, User
+  Bell, Info, AlertTriangle, CheckCircle, CheckCheck, Clock, User, Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
     getAllTenants, createTenant, toggleSubscription, updateFeatureFlags, 
     deleteTenant, updateTenantPrice, updateTenantPlan, sendNotification, 
-    getSystemAlerts, markSystemRead 
+    getSystemAlerts, markSystemRead, updateTenantValidity 
 } from "@/app/actions/super-admin";
 import { impersonateTenant } from "@/app/actions/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
@@ -60,23 +60,20 @@ function NetworkMesh({ tenants }: { tenants: any[] }) {
 }
 
 // ==========================================
-// 2. INTELLIGENT NOTIFICATION CENTER (Updated)
+// 2. INTELLIGENT NOTIFICATION CENTER
 // ==========================================
 function NotificationCenter() {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // FETCH REAL DATA
     useEffect(() => {
         async function fetchNotifs() {
             const res = await getSystemAlerts();
-            if (res.success && res.data) {
-                setNotifications(res.data);
-            }
+            if (res.success && res.data) setNotifications(res.data);
         }
         fetchNotifs();
-        const interval = setInterval(fetchNotifs, 10000); // Poll every 10s
+        const interval = setInterval(fetchNotifs, 10000); 
         return () => clearInterval(interval);
     }, []);
 
@@ -105,7 +102,6 @@ function NotificationCenter() {
 
     return (
         <div className="relative z-50" ref={containerRef}>
-            {/* BELL BUTTON */}
             <motion.button 
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsOpen(!isOpen)} 
@@ -119,7 +115,6 @@ function NotificationCenter() {
                 )}
             </motion.button>
 
-            {/* DROPDOWN MENU */}
             <AnimatePresence>
                 {isOpen && (
                     <>
@@ -154,19 +149,14 @@ function NotificationCenter() {
                                     notifications.map((n: any) => (
                                         <motion.div layout key={n.id} onClick={() => handleRead(n.id)} className={`group relative p-4 mx-3 my-2 rounded-2xl cursor-pointer transition-all border border-transparent ${n.is_read ? 'bg-transparent opacity-50 hover:bg-slate-50' : 'bg-gradient-to-r from-white to-slate-50 shadow-sm border-slate-100 hover:shadow-md hover:border-emerald-100'}`}>
                                             <div className="flex gap-4 items-start">
-                                                {/* STATUS ICON */}
                                                 <div className={`mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${n.type === 'alert' ? 'bg-red-100 text-red-600' : n.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                                                     {n.type === 'alert' ? <AlertTriangle className="w-5 h-5" /> : n.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
                                                 </div>
-                                                
-                                                {/* CONTENT */}
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-start">
                                                         <h4 className={`text-sm font-bold ${n.type === 'alert' ? 'text-red-600' : 'text-slate-900'}`}>{n.title}</h4>
                                                         {!n.is_read && <span className="w-2 h-2 bg-emerald-500 rounded-full shadow-sm animate-pulse"></span>}
                                                     </div>
-                                                    
-                                                    {/* RESTAURANT CONTEXT BADGE (Crucial Feature) */}
                                                     {n.tenants && (
                                                         <div className="inline-flex items-center gap-1.5 mt-1.5 mb-1.5 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
                                                             <User className="w-3 h-3 text-slate-500" />
@@ -174,7 +164,6 @@ function NotificationCenter() {
                                                             <span className="text-[9px] font-mono text-slate-400">({n.tenants.code})</span>
                                                         </div>
                                                     )}
-
                                                     <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium line-clamp-2">{n.message}</p>
                                                     <p className="text-[9px] text-slate-400 font-bold mt-2.5 uppercase tracking-wider flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(n.created_at).toLocaleDateString()}</p>
                                                 </div>
@@ -182,10 +171,6 @@ function NotificationCenter() {
                                         </motion.div>
                                     ))
                                 )}
-                            </div>
-                            <div className="p-3 bg-slate-50 border-t border-slate-100 text-center flex justify-between items-center px-6">
-                                <p className="text-[9px] text-slate-400 font-bold uppercase">Real-time DB Sync</p>
-                                <button onClick={() => setIsOpen(false)} className="md:hidden text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full uppercase">Close</button>
                             </div>
                         </motion.div>
                     </>
@@ -196,26 +181,75 @@ function NotificationCenter() {
 }
 
 // ==========================================
-// 3. TENANT CARD
+// 3. TENANT CARD (FIXED BILLING CALCULATION)
 // ==========================================
-function TenantCard({ t, i, onEditPrice, onEditPlan, onManage }: any) {
-    const totalDays = 30;
-    const daysLeft = Math.max(1, 30 - (t.id % 30)); 
-    const progress = ((totalDays - daysLeft) / totalDays) * 100;
-    const isUrgent = daysLeft <= 5;
+function TenantCard({ t, i, onEditPrice, onEditPlan, onEditValidity, onManage }: any) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // EXACT EXPIRATION ENGINE
+    let expireDate;
+    let cycleText = "Monthly Cycle";
+    let totalDays = 30;
+
+    if (t.feature_flags?.valid_until) {
+        expireDate = new Date(t.feature_flags.valid_until);
+        cycleText = "Custom Period";
+    } else {
+        expireDate = new Date(t.created_at || new Date());
+        if (t.plan === 'trial') {
+            expireDate.setDate(expireDate.getDate() + 10);
+            cycleText = "10-Day Free Trial";
+            totalDays = 10;
+        } else {
+            expireDate.setDate(expireDate.getDate() + 30);
+        }
+    }
+    expireDate.setHours(0, 0, 0, 0);
+
+    const diffTime = expireDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    const isExpired = daysLeft <= 0;
+    const isUrgent = daysLeft <= 5 && !isExpired;
+    const progress = Math.max(0, Math.min(100, (Math.max(0, daysLeft) / totalDays) * 100));
 
     return (
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }} className="relative bg-white/90 backdrop-blur-sm border border-slate-100 rounded-[1.5rem] p-4 shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group z-10">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }} className="relative bg-white/90 backdrop-blur-sm border border-slate-100 rounded-[1.5rem] p-4 shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group z-10 flex flex-col h-full">
             <div className={`absolute top-4 right-4 w-2 h-2 rounded-full ${t.subscription_status === 'active' ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-red-500'}`} />
+            
             <div onClick={(e) => { e.stopPropagation(); }} className="flex items-center gap-3 mb-4 cursor-default">
                 <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-slate-200 group-hover:bg-gecko-500 transition-colors duration-300">{t.name[0]}</div>
                 <div><h3 className="font-bold text-sm text-slate-900 leading-tight group-hover:text-gecko-600 transition-colors">{t.name}</h3><p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1"><Wifi className="w-2.5 h-2.5" /> {t.code}</p></div>
             </div>
+
             <div className="grid grid-cols-2 gap-2 mb-3">
                 <div onClick={(e) => { e.stopPropagation(); onEditPlan(t); }} className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 hover:border-gecko-200 hover:bg-white transition-all cursor-pointer group/plan"><p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Plan</p><div className="flex items-center justify-between"><div className="flex items-center gap-1">{t.plan === 'business' ? <Rocket className="w-3 h-3 text-purple-500" /> : <Zap className="w-3 h-3 text-amber-500" />}<p className="font-bold text-slate-700 capitalize text-xs">{t.plan}</p></div><Edit3 className="w-3 h-3 text-slate-300 group-hover/plan:text-gecko-500 opacity-0 group-hover/plan:opacity-100 transition-all" /></div></div>
                 <div onClick={(e) => { e.stopPropagation(); onEditPrice(t); }} className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 hover:border-gecko-200 hover:bg-white transition-all cursor-pointer group/price"><p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Monthly</p><div className="flex items-center justify-between"><p className="font-bold text-emerald-600 text-xs">Rs {t.custom_price ? t.custom_price.toLocaleString() : (t.plan === 'starter' ? '5,000' : t.plan === 'business' ? '25,000' : '12,000')}</p><Edit3 className="w-3 h-3 text-slate-300 group-hover/price:text-gecko-500 opacity-0 group-hover/price:opacity-100 transition-all" /></div></div>
             </div>
-            <div className="space-y-1.5 mb-4"><div className="flex justify-between items-end"><div className="flex items-center gap-1 text-[9px] font-bold text-slate-400"><CalendarDays className="w-2.5 h-2.5" /><span>Cycle</span></div><span className={`text-[9px] font-bold ${isUrgent ? 'text-red-500' : 'text-slate-600'}`}>{daysLeft} Days Left</span></div><div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-500 ${isUrgent ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${100 - progress}%` }} /></div></div>
+
+            {/* PRECISE VISUAL BILLING PROGRESS BAR (CLICKABLE) */}
+            <div onClick={(e) => { e.stopPropagation(); onEditValidity(t); }} className="mt-auto mb-4 p-2 -mx-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors group/validity">
+                <div className="flex justify-between items-end mb-1.5">
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                        <CalendarDays className="w-2.5 h-2.5" />
+                        <span>{cycleText}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold ${isExpired ? 'text-red-600 animate-pulse' : isUrgent ? 'text-orange-500' : 'text-emerald-600'}`}>
+                            {isExpired ? `Expired (${Math.abs(daysLeft)}d ago)` : `${daysLeft} Days Left`}
+                        </span>
+                        <Edit3 className="w-3 h-3 text-slate-300 group-hover/validity:text-gecko-500 opacity-0 group-hover/validity:opacity-100 transition-all" />
+                    </div>
+                </div>
+                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                        className={`h-full rounded-full transition-all duration-1000 ${isExpired ? 'bg-red-500 w-full opacity-50' : isUrgent ? 'bg-orange-500' : 'bg-emerald-500'}`} 
+                        style={{ width: isExpired ? '100%' : `${progress}%` }} 
+                    />
+                </div>
+            </div>
+
             <div className="pt-3 border-t border-slate-50 flex justify-between items-center"><span className={`text-[9px] font-bold uppercase ${t.subscription_status === 'active' ? 'text-slate-400' : 'text-red-500'}`}>{t.subscription_status === 'active' ? 'Auto-Pay Active' : 'Payment Failed'}</span><div onClick={(e) => e.stopPropagation()}>{onManage(t)}</div></div>
         </motion.div>
     );
@@ -263,9 +297,12 @@ export default function SuperAdminDashboard() {
   
   const [isPriceEditOpen, setIsPriceEditOpen] = useState(false);
   const [isPlanEditOpen, setIsPlanEditOpen] = useState(false);
+  const [isValidityEditOpen, setIsValidityEditOpen] = useState(false);
+
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [newPrice, setNewPrice] = useState(0);
   const [newPlan, setNewPlan] = useState("");
+  const [newValidityDate, setNewValidityDate] = useState("");
 
   const [formData, setFormData] = useState({ name: "", code: "", email: "", password: "", plan: "standard" });
   const [stats, setStats] = useState({ mrr: 0, activeStaff: 0 });
@@ -341,9 +378,43 @@ export default function SuperAdminDashboard() {
 
   function openPriceEdit(tenant: any) { setSelectedTenant(tenant); let currentPrice = 0; if (tenant.custom_price) currentPrice = tenant.custom_price; else if (tenant.plan === 'starter') currentPrice = 5000; else if (tenant.plan === 'business') currentPrice = 25000; else currentPrice = 12000; setNewPrice(currentPrice); setIsPriceEditOpen(true); }
   function openPlanEdit(tenant: any) { setSelectedTenant(tenant); setNewPlan(tenant.plan); setIsPlanEditOpen(true); }
+  
+  function openValidityEdit(tenant: any) { 
+      setSelectedTenant(tenant); 
+      let currentEnd = tenant.feature_flags?.valid_until;
+      if (!currentEnd) {
+          const baseDate = new Date(tenant.created_at || Date.now());
+          baseDate.setDate(baseDate.getDate() + (tenant.plan === 'trial' ? 10 : 30));
+          currentEnd = baseDate.toISOString();
+      }
+      setNewValidityDate(currentEnd.split('T')[0]); // Extract YYYY-MM-DD
+      setIsValidityEditOpen(true); 
+  }
+
+  function handleAddDays(days: number) {
+      const date = new Date(newValidityDate || Date.now());
+      date.setDate(date.getDate() + days);
+      setNewValidityDate(date.toISOString().split('T')[0]);
+  }
 
   async function saveNewPrice() { if(!selectedTenant) return; toast.loading("Updating Billing Contract..."); await updateTenantPrice(selectedTenant.id, Number(newPrice)); const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, custom_price: Number(newPrice) } : t); setTenants(updatedTenants); toast.dismiss(); toast.success("Price Updated Successfully"); setIsPriceEditOpen(false); }
   async function saveNewPlan() { if(!selectedTenant) return; toast.loading("Migrating Plan..."); await updateTenantPlan(selectedTenant.id, newPlan); const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, plan: newPlan } : t); setTenants(updatedTenants); toast.dismiss(); toast.success("Plan Upgraded Successfully"); setIsPlanEditOpen(false); }
+  async function saveNewValidity() { 
+      if(!selectedTenant || !newValidityDate) return; 
+      toast.loading("Extending Billing Cycle..."); 
+      // Save it as a full ISO string
+      const isoDate = new Date(newValidityDate).toISOString();
+      const res = await updateTenantValidity(selectedTenant.id, isoDate);
+      if (res.success) {
+          const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, feature_flags: { ...(t.feature_flags || {}), valid_until: isoDate } } : t); 
+          setTenants(updatedTenants); 
+          toast.dismiss(); 
+          toast.success("Billing Cycle Updated Successfully"); 
+          setIsValidityEditOpen(false); 
+      } else {
+          toast.dismiss(); toast.error("Failed to update cycle");
+      }
+  }
 
   function handleLogout() { localStorage.removeItem("gecko_super_admin"); toast.info("Session Terminated"); router.push("/login"); }
 
@@ -363,7 +434,17 @@ export default function SuperAdminDashboard() {
             <div className="p-8 pt-0 space-y-8 h-full overflow-y-auto pb-24">
                 <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 mb-4"><div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-blue-700 uppercase">Current Billing</span><span className="text-xs font-bold text-blue-500">Monthly</span></div><div className="flex justify-between items-end"><span className="text-2xl font-black text-slate-900">Rs {t.custom_price ? t.custom_price.toLocaleString() : (t.plan === 'starter' ? '5,000' : t.plan === 'business' ? '25,000' : '12,000')}</span><button className="text-[10px] font-bold bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100 hover:text-blue-600 transition-colors">View History</button></div></div>
                 <div className="space-y-3"><h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Access Control</h4><div className={`p-5 rounded-3xl border-2 transition-colors ${t.subscription_status === 'active' ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}><div className="flex justify-between items-center mb-4"><span className={`font-bold text-lg ${t.subscription_status === 'active' ? 'text-emerald-700' : 'text-red-700'}`}>{t.subscription_status === 'active' ? 'Subscription Active' : 'Access Suspended'}</span><div className={`w-8 h-8 rounded-full flex items-center justify-center ${t.subscription_status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`}>{t.subscription_status === 'active' ? <Check className="w-5 h-5 text-white" /> : <X className="w-5 h-5 text-white" />}</div></div><button onClick={async () => { await toggleSubscription(t.id, t.subscription_status); loadData(); }} className="w-full py-4 bg-white border border-white/50 rounded-2xl font-bold text-sm shadow-sm hover:scale-[1.02] transition-transform text-slate-900">{t.subscription_status === 'active' ? 'Suspend Restaurant' : 'Reactivate Restaurant'}</button></div></div>
-                <div className="space-y-3"><h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Module Configuration</h4><div className="space-y-3"><PremiumToggle label="Inventory Management" active={t.feature_flags?.inventory} onClick={() => handleFeatureToggle(t, 'inventory')} /><PremiumToggle label="Kitchen Display (KDS)" active={t.feature_flags?.kitchen_display} onClick={() => handleFeatureToggle(t, 'kitchen_display')} /><PremiumToggle label="Accounting & Billing" active={t.feature_flags?.accounts} onClick={() => handleFeatureToggle(t, 'accounts')} /></div></div>
+                
+                <div className="space-y-3">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Module Configuration</h4>
+                    <div className="space-y-3">
+                        <PremiumToggle label="Inventory Management" active={t.feature_flags?.inventory} onClick={() => handleFeatureToggle(t, 'inventory')} />
+                        <PremiumToggle label="Kitchen Display (KDS)" active={t.feature_flags?.kitchen_display} onClick={() => handleFeatureToggle(t, 'kitchen_display')} />
+                        <PremiumToggle label="Accounting & Billing" active={t.feature_flags?.accounts} onClick={() => handleFeatureToggle(t, 'accounts')} />
+                        <PremiumToggle label="KOT & BOT Split" active={t.feature_flags?.split_kot_bot} onClick={() => handleFeatureToggle(t, 'split_kot_bot')} />
+                    </div>
+                </div>
+
                 <div className="pt-8 border-t border-slate-100 space-y-4"><button onClick={() => handleImpersonate(t.id)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-xl shadow-slate-900/20 hover:scale-[1.02] transition-transform"><ExternalLink className="w-5 h-5" /> Open Admin Dashboard</button><button onClick={() => handleDelete(t.id)} className="w-full py-2 text-red-500 hover:text-red-600 font-bold flex items-center justify-center gap-2 transition-colors text-sm"><Trash2 className="w-4 h-4" /> Delete Restaurant</button></div>
             </div>
         </SheetContent>
@@ -378,6 +459,31 @@ export default function SuperAdminDashboard() {
       {/* --- DIALOGS --- */}
       <Dialog open={isPriceEditOpen} onOpenChange={setIsPriceEditOpen}><DialogContent><DialogHeader><DialogTitle>Edit Monthly Subscription</DialogTitle><DialogDescription>Override the default plan pricing for this restaurant.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><label className="text-sm font-bold text-slate-500 uppercase">Monthly Fee (NPR)</label><div className="relative"><span className="absolute left-4 top-3.5 text-slate-400 font-bold">Rs</span><input type="number" value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="w-full h-12 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-lg" /></div><button onClick={saveNewPrice} className="w-full h-12 bg-gecko-500 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Save New Price</button></div></DialogContent></Dialog>
       <Dialog open={isPlanEditOpen} onOpenChange={setIsPlanEditOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Upgrade Subscription</DialogTitle><DialogDescription>Select a new tier for this restaurant.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="grid grid-cols-1 gap-3"><PlanOption id="starter" name="Starter" price="Rs 5K/mo" icon={Box} selected={newPlan} onClick={setNewPlan} /><PlanOption id="standard" name="Standard" price="Rs 12K/mo" icon={LayoutTemplate} selected={newPlan} onClick={setNewPlan} /><PlanOption id="business" name="Business" price="Rs 25K/mo" icon={Rocket} selected={newPlan} onClick={setNewPlan} /></div><button onClick={saveNewPlan} className="w-full h-12 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 mt-4"><Crown className="w-4 h-4" /> Confirm Upgrade</button></div></DialogContent></Dialog>
+      
+      {/* ADDED: Validity Extension Dialog */}
+      <Dialog open={isValidityEditOpen} onOpenChange={setIsValidityEditOpen}>
+        <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle>Manage Billing Cycle</DialogTitle>
+                <DialogDescription>Extend the free trial or log a monthly payment.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => handleAddDays(10)} className="py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-colors">+ 10 Days (Trial)</button>
+                    <button onClick={() => handleAddDays(30)} className="py-2.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-bold text-xs hover:bg-blue-100 transition-colors">+ 1 Month Paid</button>
+                    <button onClick={() => handleAddDays(365)} className="py-2.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-xl font-bold text-xs hover:bg-purple-100 transition-colors">+ 1 Year Paid</button>
+                </div>
+                <div className="space-y-2 mt-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Custom Expiration Date</label>
+                    <div className="relative">
+                        <Calendar className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
+                        <input type="date" value={newValidityDate} onChange={e => setNewValidityDate(e.target.value)} className="w-full h-12 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-lg text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                </div>
+                <button onClick={saveNewValidity} className="w-full h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-bold flex items-center justify-center gap-2 mt-4 transition-all active:scale-95"><Save className="w-4 h-4" /> Save Expiration Date</button>
+            </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="max-w-[1400px] mx-auto space-y-8 relative z-10 pb-24">
         
@@ -401,7 +507,7 @@ export default function SuperAdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"><MetricCard label="Projected Revenue (MRR)" value={`Rs ${stats.mrr.toLocaleString()}`} sub="Monthly Recurring" icon={DollarSign} color="emerald" /><MetricCard label="Active Staff" value={stats.activeStaff} sub="Users Online" icon={Users} color="blue" /><MetricCard label="System Load" value={`1%`} sub="Stable" icon={Server} color="amber" /><MetricCard label="Restaurants Active" value={`${tenants.length}`} sub="100% Uptime" icon={Globe} color="violet" /></div>
 
         <div className="flex items-center gap-3 pt-6"><div className="h-8 w-1 bg-gecko-500 rounded-full" /><h2 className="text-2xl font-black text-slate-900">Active Deployments</h2></div>
-        {loading ? <div className="h-64 flex items-center justify-center"><Loader2 className="w-10 h-10 text-gecko-500 animate-spin" /></div> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">{tenants.map((t, i) => (<TenantCard key={t.id} t={t} i={i} onEditPrice={openPriceEdit} onEditPlan={openPlanEdit} onManage={renderSheet} />))}</div>}
+        {loading ? <div className="h-64 flex items-center justify-center"><Loader2 className="w-10 h-10 text-gecko-500 animate-spin" /></div> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">{tenants.map((t, i) => (<TenantCard key={t.id} t={t} i={i} onEditPrice={openPriceEdit} onEditPlan={openPlanEdit} onEditValidity={openValidityEdit} onManage={renderSheet} />))}</div>}
       </div>
 
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl border border-white/40 p-2 rounded-2xl shadow-2xl flex items-center gap-2 z-40 hover:scale-105 transition-transform duration-300">

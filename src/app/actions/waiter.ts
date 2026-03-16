@@ -42,6 +42,9 @@ async function getTenantId() {
 export async function getWaiterDashboardData() {
   const tenantId = await getTenantId();
   const today = new Date().toISOString().split('T')[0];
+  
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   try {
     const { data: tables, error: tableError } = await supabaseAdmin
@@ -52,15 +55,17 @@ export async function getWaiterDashboardData() {
 
     if (tableError) console.error("Table Fetch Error:", tableError);
 
-    const { data: log } = await supabaseAdmin
+    // Fetch the last two days of logs to ensure we get exactly 24 hours of history
+    const { data: logs } = await supabaseAdmin
         .from("daily_order_logs")
-        .select("orders_data")
+        .select("date, orders_data, paid_history")
         .eq("tenant_id", tenantId)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .in("date", [yesterdayStr, today])
+        .order("date", { ascending: false });
 
-    const orders = safeParse(log?.orders_data);
+    // Use only today's active orders for the live dashboard
+    const todayLog = logs?.find((l:any) => l.date === today);
+    const activeOrders = safeParse(todayLog?.orders_data);
     
     const { data: menuData } = await supabaseAdmin
         .from("menu_optimized")
@@ -85,13 +90,46 @@ export async function getWaiterDashboardData() {
     }
 
     const notifications: any[] = [];
+    const cancelledItemsMap = new Map(); // Using Map prevents duplicates across day logs
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago boundary
+
     let mySales = 0;
     let tablesServed = 0;
     let hasReady = false;
     let hasCooking = false;
     const activeTableStatus = new Map<string, string>();
 
-    orders.forEach((order: any) => {
+    // PROCESS CANCELLED/WASTE TRACKER ACROSS BOTH ACTIVE & PAID HISTORY FOR 24H
+    logs?.forEach(log => {
+        const logActive = safeParse(log.orders_data);
+        const logPaid = safeParse(log.paid_history);
+        const allOrdersForWaste = [...logActive, ...logPaid];
+
+        allOrdersForWaste.forEach((order: any) => {
+            (order.items || []).forEach((item: any) => {
+                if (item.status === 'cancelled' || item.status === 'void') {
+                    if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
+                        if (item.cancelled_at) {
+                            const cancelDate = new Date(item.cancelled_at);
+                            if (cancelDate >= oneDayAgo) {
+                                const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
+                                const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
+                                
+                                cancelledItemsMap.set(uniqueKey, {
+                                    ...item,
+                                    orderId: orderId,
+                                    tableName: order.tbl || order.table_no || "Unknown"
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    });
+
+    // PROCESS LIVE DASHBOARD (Using only today's active orders)
+    activeOrders.forEach((order: any) => {
         const isActive = ['pending', 'cooking', 'served', 'ready', 'payment_pending'].includes(order.status);
         const isPayment = order.status === 'payment_pending';
 
@@ -153,6 +191,9 @@ export async function getWaiterDashboardData() {
         if (token) staffName = JSON.parse(token).name;
     } catch(e) {}
 
+    // Convert cancelled items map back to an array
+    const finalCancelledItems = Array.from(cancelledItemsMap.values());
+
     return {
         success: true,
         staff: { name: staffName },
@@ -161,7 +202,9 @@ export async function getWaiterDashboardData() {
         sections: finalSections,
         tables: processedTables,
         notifications: notifications,
-        disabledItems: disabledItems
+        disabledItems: disabledItems,
+        cancelledItems: finalCancelledItems,
+        orders_list: activeOrders // Ensuring this matches what the frontend expects
     };
 
   } catch (error) {
@@ -173,7 +216,9 @@ export async function getWaiterDashboardData() {
           sections: ["Main Hall"], 
           tables: [], 
           notifications: [], 
-          disabledItems: [] 
+          disabledItems: [],
+          cancelledItems: [],
+          orders_list: []
       };
   }
 }
@@ -216,7 +261,7 @@ export async function cleanTable(tableName: string) {
     return { success: !updateResult.error };
 }
 
-// --- 3. MARK ORDER SERVED (BULLETPROOF ITEM LEVEL) ---
+// --- 3. MARK ORDER SERVED ---
 export async function markOrderServed(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
@@ -321,8 +366,8 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
     }
 }
 
-// --- 4. CANCEL ORDER (SUPPORTS BOTH FULL AND ITEM-LEVEL) ---
-export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string) {
+// --- 4. CANCEL ORDER ---
+export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string, reason?: string) {
     const tenantId = await getTenantId();
     
     const today = new Date();
@@ -334,6 +379,13 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         today.toISOString().split('T')[0],
         tomorrow.toISOString().split('T')[0]
     ];
+
+    let staffName = "Waiter";
+    const cookieStore = await cookies();
+    try {
+        const token = cookieStore.get("gecko_staff_token")?.value;
+        if (token) staffName = JSON.parse(token).name;
+    } catch(e) {}
 
     try {
         const { data: logs } = await supabaseAdmin
@@ -355,7 +407,6 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
             const updatedOrders = currentOrders.map((order: any) => {
                 if (String(order.id || "").trim() === targetId) {
                     
-                    // IF SPECIFIC ITEM ID IS PROVIDED
                     if (itemIdToCancel) {
                         found = true;
                         foundDate = log.date;
@@ -363,18 +414,24 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                         
                         const newItems = order.items.map((i:any) => {
                             const sig = i.unique_id || i.id || `${i.name}||${i.variant || ''}`;
-                            if (sig === itemIdToCancel && i.status === 'pending') {
-                                amountToDeduct += (i.price * i.qty);
-                                return { ...i, status: 'cancelled' };
+                            if (sig === itemIdToCancel && ['pending', 'cooking', 'ready'].includes((i.status || '').toLowerCase().trim())) {
+                                amountToDeduct += (Number(i.price) * Number(i.qty));
+                                return { 
+                                    ...i, 
+                                    previous_status: i.status || 'pending',
+                                    status: 'cancelled',
+                                    cancel_reason: reason || 'No reason provided',
+                                    cancelled_by: staffName,
+                                    cancelled_at: new Date().toISOString()
+                                };
                             }
                             return i;
                         });
 
-                        // Recalculate Parent Status Based on Remaining Items
-                        const stillPending = newItems.some((i:any) => i.status === 'pending');
-                        const stillCooking = newItems.some((i:any) => i.status === 'cooking');
-                        const stillReady = newItems.some((i:any) => i.status === 'ready');
-                        const allCancelled = newItems.every((i:any) => i.status === 'cancelled' || i.status === 'void');
+                        const stillPending = newItems.some((i:any) => (i.status || '').toLowerCase().trim() === 'pending');
+                        const stillCooking = newItems.some((i:any) => (i.status || '').toLowerCase().trim() === 'cooking');
+                        const stillReady = newItems.some((i:any) => (i.status || '').toLowerCase().trim() === 'ready');
+                        const allCancelled = newItems.every((i:any) => ['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
                         
                         let newOrderStatus = 'payment_pending';
                         if (allCancelled) newOrderStatus = 'cancelled';
@@ -386,16 +443,22 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                             ...order, 
                             status: newOrderStatus,
                             items: newItems,
-                            total: Math.max(0, order.total - amountToDeduct)
+                            total: Math.max(0, Number(order.total) - amountToDeduct)
                         };
                     } 
-                    // ELSE CANCEL ENTIRE ORDER (IF FULLY PENDING)
                     else {
-                        const isFullyPending = order.items.every((i:any) => i.status === 'pending' || i.status === 'cancelled');
+                        const isFullyPending = order.items.every((i:any) => ['pending', 'cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
                         if (isFullyPending) {
                             found = true;
                             foundDate = log.date;
-                            const newItems = order.items.map((i:any) => ({ ...i, status: 'cancelled' }));
+                            const newItems = order.items.map((i:any) => ({ 
+                                ...i, 
+                                previous_status: i.status || 'pending', 
+                                status: 'cancelled',
+                                cancel_reason: 'Round Cancelled',
+                                cancelled_by: staffName,
+                                cancelled_at: new Date().toISOString() 
+                            }));
                             return { ...order, status: 'cancelled', items: newItems, total: 0 };
                         }
                     }
@@ -410,12 +473,11 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         }
 
         if (!foundDate || !modifiedOrders) {
-            return { success: false, error: "Could not cancel. Item might be cooking." };
+            return { success: false, error: "Could not cancel item. It may have already been served." };
         }
 
         await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", foundDate);
         
-        // Free table if it was the only active order
         if (!tableLabel.startsWith("TAKEAWAY")) {
             const remainingActive = modifiedOrders.some((o:any) => o.tbl === tableLabel && !['cancelled', 'paid', 'completed'].includes(o.status));
             if(!remainingActive) {

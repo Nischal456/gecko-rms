@@ -8,7 +8,7 @@ import {
   ZoomIn, ZoomOut, Save, Trash2, Loader2, Store, FileBarChart, Download, 
   ChefHat, UserCircle, LogOut, Search, AlertTriangle, ArrowLeft, ChevronDown, 
   ChevronUp, User, MapPin, Plus, ShoppingBag, Utensils, ArrowRight, Circle, Square, Clock, Bell,
-  CreditCard, LayoutDashboard, Check, Eye, EyeOff, CalendarClock, ShieldCheck, BookOpen, Users
+  CreditCard, LayoutDashboard, Check, Eye, EyeOff, CalendarClock, ShieldCheck, BookOpen, Users, Layers, StickyNote
 } from "lucide-react";
 import { useRouter } from "next/navigation"; 
 import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment } from "@/app/actions/cashier"; 
@@ -33,6 +33,7 @@ interface CashierData {
     activeOrders: any[];
     menu: any[]; 
     categories: any[]; 
+    cancelledItems?: any[];
 }
 
 // --- HELPER CONFIG ---
@@ -46,13 +47,9 @@ const toBS = (dateStr: string) => {
     } catch { return "---"; }
 };
 
-function mergeOrderItems(items: any[]) {
-    if (!items) return [];
-    const validItems = items.filter(item => {
-        const s = (item.status || '').toLowerCase().trim();
-        return s !== 'cancelled' && s !== 'void' && item.qty > 0;
-    });
-    return validItems.reduce((acc: any[], current: any) => {
+// --- ITEM FILTERING HELPERS ---
+function mergeArray(items: any[]) {
+    return items.reduce((acc: any[], current: any) => {
         const currentStatus = (current.status || 'pending').toLowerCase().trim();
         const existing = acc.find((item: any) => {
             const itemStatus = (item.status || 'pending').toLowerCase().trim();
@@ -62,6 +59,30 @@ function mergeOrderItems(items: any[]) {
         else acc.push({ ...current });
         return acc;
     }, []);
+}
+
+// Used for Math and Thermal Receipt (EXCLUDES all waste)
+function getActiveItems(items: any[]) {
+    if (!items) return [];
+    const validItems = items.filter(item => {
+        const s = (item.status || '').toLowerCase().trim();
+        return s !== 'cancelled' && s !== 'void' && item.qty > 0;
+    });
+    return mergeArray(validItems);
+}
+
+// Used for Display in Checkout (INCLUDES cooking/ready waste for reference)
+function getDisplayItems(items: any[]) {
+    if (!items) return [];
+    const validItems = items.filter(item => {
+        const s = (item.status || '').toLowerCase().trim();
+        if (s === 'cancelled' || s === 'void') {
+           const prev = (item.previous_status || '').toLowerCase().trim();
+           return prev === 'cooking' || prev === 'ready';
+        }
+        return item.qty > 0;
+    });
+    return mergeArray(validItems);
 }
 
 function SystemLoader() { 
@@ -76,7 +97,9 @@ function SystemLoader() {
 // --- THERMAL RECEIPT ---
 const ThermalReceipt = ({ data, order, customerDetails, paymentDetails }: any) => {
     if (!order || !data) return null;
-    const mergedItems = mergeOrderItems(order.items);
+    
+    // STRICTLY use active items so cancelled food NEVER prints on the receipt
+    const mergedItems = getActiveItems(order.items);
     
     const displayBillNo = order.bill_no || order.id.slice(-6).toUpperCase();
     const { subTotal, discount, grandTotal, tendered, change } = paymentDetails || { subTotal: 0, discount: 0, grandTotal: 0, tendered: 0, change: 0 };
@@ -158,12 +181,13 @@ const ThermalReceipt = ({ data, order, customerDetails, paymentDetails }: any) =
     );
 };
 
-const renderSmallStatus = (status: string) => {
+const renderSmallStatus = (status: string, previousStatus?: string) => {
     const s = (status || '').toLowerCase().trim();
-    if (s === 'ready') return <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-md uppercase border border-emerald-200 shadow-sm animate-pulse">Ready</span>;
-    if (s === 'served' || s === 'payment_pending') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md uppercase border border-slate-200 flex items-center gap-1"><Check className="w-2.5 h-2.5"/> Served</span>;
-    if (s === 'cooking') return <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-md uppercase border border-orange-200">Cooking</span>;
-    return <span className="text-[9px] font-black bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md uppercase border border-blue-100">Pending</span>;
+    if (s === 'ready') return <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-md uppercase border border-emerald-200 shadow-sm animate-pulse shrink-0">Ready</span>;
+    if (s === 'served' || s === 'payment_pending') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md uppercase border border-slate-200 flex items-center gap-1 shrink-0"><Check className="w-2.5 h-2.5"/> Served</span>;
+    if (s === 'cooking') return <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-md uppercase border border-orange-200 shrink-0">Cooking</span>;
+    if (s === 'cancelled' || s === 'void') return <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md uppercase border border-red-200 shrink-0">Waste ({previousStatus || 'Unknown'})</span>;
+    return <span className="text-[9px] font-black bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md uppercase border border-blue-100 shrink-0">Pending</span>;
 };
 
 // --- PREMIUM CHECKOUT MODAL ---
@@ -171,6 +195,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const [method, setMethod] = useState("Cash");
     const [customer, setCustomer] = useState({ name: "", address: "" });
     const [expandedQr, setExpandedQr] = useState(false); 
+    const [creditCustomers, setCreditCustomers] = useState<string[]>([]);
     
     // --- FINANCIAL ENGINE ---
     const [discountInput, setDiscountInput] = useState<string>("");
@@ -179,16 +204,29 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const dragControls = useDragControls();
 
     const order = table?.currentOrder;
+    
+    // FETCH CREDIT LEDGER FOR AUTOCOMPLETE
+    useEffect(() => {
+        if (method === 'Credit') {
+            getCashierReports(60).then(res => {
+                if (res.success && res.summary?.creditAccounts) {
+                    setCreditCustomers(Object.values(res.summary.creditAccounts).map((c:any) => c.displayName));
+                }
+            });
+        }
+    }, [method]);
+
     if(!order) return null;
     
     const safeStatus = (order.status || '').toLowerCase().trim();
     const isPayable = ['served', 'payment_pending', 'ready'].includes(safeStatus);
     const isCancellable = safeStatus === 'pending';
     
-    const displayItems = mergeOrderItems(order.items);
+    const activeItems = getActiveItems(order.items);
+    const displayItems = getDisplayItems(order.items);
     
-    // CALCULATIONS
-    const subTotal = displayItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    // CALCULATIONS (Strictly uses activeItems so cancelled food does not add to bill)
+    const subTotal = activeItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const discountAmt = discountInput === "" ? 0 : Number(discountInput);
     const grandTotal = Math.max(0, subTotal - discountAmt);
     const tenderedAmt = tenderedInput === "" ? 0 : Number(tenderedInput);
@@ -205,7 +243,6 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const paymentDetails = { subTotal, discount: discountAmt, grandTotal, tendered: tenderedAmt, change: changeDue, creditDue };
 
     const bankAccounts = restaurant?.bank_accounts || []; 
-    // FIXED: Guaranteed Unique Keys using index
     const paymentMethods = [
         { name: "Cash", icon: Banknote, color: "emerald", keyStr: "sys_cash" },
         { name: "Credit", icon: User, color: "blue", keyStr: "sys_credit" },
@@ -228,7 +265,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
             
             <ThermalReceipt data={restaurant} order={order} customerDetails={customer} paymentDetails={paymentDetails} />
 
-            {/* MASSIVE ULTRA PREMIUM EXPANDED QR MODAL */}
+            {/* EXPANDED QR MODAL */}
             <AnimatePresence>
                 {expandedQr && activeMethod?.qr && (
                     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
@@ -258,7 +295,6 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                 </div>
                             </div>
 
-                            {/* MASSIVE QR CODE CONTAINER */}
                             <div className="w-full aspect-square max-w-[400px] bg-slate-50 border border-slate-200 rounded-[2.5rem] p-2 shadow-inner flex items-center justify-center relative overflow-hidden group">
                                 <motion.img 
                                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -300,22 +336,24 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                     </div>
                     
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
-                        {displayItems.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between items-start text-sm p-3 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-slate-200">
-                                <div className="flex gap-3 w-full pr-2">
-                                    <span className="font-black text-slate-400 bg-slate-50 w-7 h-7 flex items-center justify-center rounded-lg shrink-0">{item.qty}</span> 
-                                    <div className="flex flex-col justify-center w-full mt-0.5">
-                                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                                            <span className="font-bold text-slate-900 leading-tight">{item.name}</span>
-                                            {/* ADDED: Full Food Status per Item */}
-                                            {renderSmallStatus(item.status)}
+                        {displayItems.map((item: any, i: number) => {
+                            const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                            return (
+                                <div key={i} className={`flex justify-between items-start text-sm p-3 rounded-2xl border shadow-sm transition-all ${isCancelled ? 'bg-red-50/40 border-red-100 opacity-80' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
+                                    <div className="flex gap-3 w-full pr-2">
+                                        <span className={`font-black w-7 h-7 flex items-center justify-center rounded-lg shrink-0 ${isCancelled ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-400'}`}>{item.qty}</span> 
+                                        <div className="flex flex-col justify-center w-full mt-0.5 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className={`font-bold leading-tight truncate ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
+                                                {renderSmallStatus(item.status, item.previous_status)}
+                                            </div>
+                                            {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
                                         </div>
-                                        {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
                                     </div>
+                                    <span className={`font-black flex items-center shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
                                 </div>
-                                <span className="font-black text-slate-900 flex items-center shrink-0 mt-0.5">{formatRs(item.price * item.qty)}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     
                     {/* FINANCIALS PANEL (Pinned to bottom of left column) */}
@@ -419,8 +457,24 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                         </div>
                         
                         <div className="flex flex-col sm:flex-row gap-3 shrink-0 pb-4">
-                            <input value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder={method === 'Credit' ? "* Customer Name (REQUIRED)" : "Customer Name (Optional)"} className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}/>
-                            <input value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} placeholder="Phone / Address (Optional)" className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none"/>
+                            {/* NATIVE AUTOCOMPLETE DATALIST FOR CREDIT CUSTOMERS */}
+                            <input 
+                                list="credit-customers-list"
+                                value={customer.name} 
+                                onChange={e => setCustomer({...customer, name: e.target.value})} 
+                                placeholder={method === 'Credit' ? "* Select or Type Customer Name" : "Customer Name (Optional)"} 
+                                className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}
+                            />
+                            <datalist id="credit-customers-list">
+                                {creditCustomers.map((name, i) => <option key={i} value={name} />)}
+                            </datalist>
+
+                            <input 
+                                value={customer.address} 
+                                onChange={e => setCustomer({...customer, address: e.target.value})} 
+                                placeholder="Phone / Address (Optional)" 
+                                className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none"
+                            />
                         </div>
                     </div>
 
@@ -594,17 +648,24 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="text-sm font-black text-slate-900 block mb-0.5">Total: {formatRs(b.grandTotal)}</span>
+                                                    {b.discount > 0 && <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 inline-block mb-0.5 mt-0.5 shadow-sm">Discount: -{formatRs(b.discount)}</span>}
                                                     {b.tendered > 0 && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Paid: {formatRs(b.tendered)}</span>}
-                                                    <span className="text-xs font-black text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100 inline-block mt-1">Due: {formatRs(b.due_amount)}</span>
+                                                    <span className="text-xs font-black text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100 inline-block mt-1 shadow-sm">Due: {formatRs(b.due_amount)}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
-                                                {b.items.map((it:any, idx:number) => (
-                                                    <div key={idx} className="flex justify-between text-[11px] font-medium text-slate-500">
-                                                        <span>{it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}</span>
-                                                        <span>Rs {it.price * it.qty}</span>
-                                                    </div>
-                                                ))}
+                                                {b.items.map((it:any, idx:number) => {
+                                                    const isCancelled = ['cancelled', 'void'].includes((it.status || '').toLowerCase().trim());
+                                                    return (
+                                                        <div key={idx} className={`flex justify-between text-[11px] font-medium ${isCancelled ? 'text-red-400 line-through' : 'text-slate-500'}`}>
+                                                            <span className="flex items-center gap-1.5">
+                                                                {it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}
+                                                                {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm">Waste</span>}
+                                                            </span>
+                                                            <span>Rs {it.price * it.qty}</span>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         </div>
                                     )
@@ -740,7 +801,6 @@ export default function CashierDashboard() {
                                     <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Credit Ledger</span>
                                 </button>
                                 
-                                {/* FIXED SALES BOX ALIGNMENT (SINGLE LINE) */}
                                 <div className="flex items-center gap-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                                     <div className="text-right flex flex-col items-end">
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Active</p>
@@ -772,7 +832,23 @@ export default function CashierDashboard() {
                             <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col min-h-[400px] lg:min-h-0 order-2 shrink-0">
                                 <div className="p-6 border-b border-slate-50 flex justify-between items-center shrink-0"><h3 className="font-black text-xl text-slate-900 flex items-center gap-2"><Wallet className="w-5 h-5 text-emerald-500" /> Pending Bills</h3><span className="bg-slate-100 text-slate-500 px-2.5 py-1 rounded-lg text-xs font-bold">{data.activeOrders?.length || 0}</span></div>
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                                    {data.activeOrders?.map((o: any, i: number) => { const isPayable = ['served', 'payment_pending'].includes((o.status || '').toLowerCase().trim()); const items = mergeOrderItems(o.items); const total = items.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0); return (<button key={i} onClick={() => handleSettleClick({ label: o.tbl, currentOrder: o, status: o.status })} className={`w-full text-left p-5 rounded-[1.5rem] border-2 transition-all group ${isPayable ? 'bg-white border-emerald-400 shadow-lg shadow-emerald-500/10 hover:-translate-y-1' : 'bg-slate-50 border-slate-100 hover:border-slate-300'}`}><div className="flex justify-between items-center mb-4"><span className="font-black text-slate-900 text-xl group-hover:text-emerald-600 transition-colors">Table {o.tbl}</span><span className={`text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider ${isPayable ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{o.status}</span></div><div className="flex justify-between items-end border-t border-slate-100 pt-3"><span className="text-xs text-slate-500 font-bold bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">{items.length} Items</span><span className="font-black text-emerald-600 text-2xl leading-none">{formatRs(total)}</span></div></button>);})}
+                                    {data.activeOrders?.map((o: any, i: number) => { 
+                                        const isPayable = ['served', 'payment_pending'].includes((o.status || '').toLowerCase().trim()); 
+                                        const items = getActiveItems(o.items); 
+                                        const total = items.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0); 
+                                        return (
+                                            <button key={i} onClick={() => handleSettleClick({ label: o.tbl, currentOrder: o, status: o.status })} className={`w-full text-left p-5 rounded-[1.5rem] border-2 transition-all group ${isPayable ? 'bg-white border-emerald-400 shadow-lg shadow-emerald-500/10 hover:-translate-y-1' : 'bg-slate-50 border-slate-100 hover:border-slate-300'}`}>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <span className="font-black text-slate-900 text-xl group-hover:text-emerald-600 transition-colors">Table {o.tbl}</span>
+                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider ${isPayable ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{o.status}</span>
+                                                </div>
+                                                <div className="flex justify-between items-end border-t border-slate-100 pt-3">
+                                                    <span className="text-xs text-slate-500 font-bold bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm">{items.length} Items</span>
+                                                    <span className="font-black text-emerald-600 text-2xl leading-none">{formatRs(total)}</span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                     {data.activeOrders?.length === 0 && (<div className="h-full flex flex-col items-center justify-center text-slate-300 py-10"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3"><CheckCircle2 className="w-8 h-8 opacity-40" /></div><span className="text-xs font-black uppercase tracking-widest">All Tables Cleared</span></div>)}
                                 </div>
                             </div>

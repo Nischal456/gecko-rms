@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, Power, Monitor, CreditCard, ChefHat, 
   Smartphone, Database, Lock, Trash2, ExternalLink,
-  ShieldCheck, Ban, CheckCircle2, AlertCircle, Save
+  ShieldCheck, Ban, CheckCircle2, AlertCircle, Save, Ticket
 } from "lucide-react";
 import { toast } from "sonner";
 import { getTenantById, updateFeatureFlags, toggleSubscription, deleteTenant } from "@/app/actions/super-admin";
@@ -52,13 +52,14 @@ export default function RestaurantControlCenter() {
       const res = await getTenantById(Number(id));
       if(res.success) {
         setTenant(res.data);
-        // Default flags if null
+        // Default flags if null, including the new split_kot_bot
         setFeatures(res.data.feature_flags || { 
           inventory: false, 
           kitchen_display: false, 
           accounts: false, 
           qr_ordering: false,
-          staff_app: false
+          staff_app: false,
+          split_kot_bot: false
         });
       } else {
         toast.error("Could not load node data");
@@ -159,6 +160,16 @@ export default function RestaurantControlCenter() {
                    active={features.kitchen_display}
                    onToggle={() => handleFeatureToggle('kitchen_display')}
                 />
+                
+                {/* FIX: New Split KOT & BOT System Toggle Module */}
+                <SystemToggle 
+                   label="KOT & BOT Split" 
+                   description="Differentiate orders between Kitchen (Food) and Bar (Drinks) tickets."
+                   icon={Ticket}
+                   active={features.split_kot_bot}
+                   onToggle={() => handleFeatureToggle('split_kot_bot')}
+                />
+
                 <SystemToggle 
                    label="Smart Inventory" 
                    description="Recipe-based deduction and stock alerts. Required for food cost reports."
@@ -186,13 +197,6 @@ export default function RestaurantControlCenter() {
                    icon={ChefHat}
                    active={features.qr_ordering}
                    onToggle={() => handleFeatureToggle('qr_ordering')}
-                />
-                 <SystemToggle 
-                   label="Offline Sync" 
-                   description="Allow operations to continue when internet connection drops."
-                   icon={Database}
-                   active={true} // Always on for SaaS
-                   onToggle={() => toast.message("Core Feature", { description: "Offline Sync cannot be disabled." })}
                 />
              </div>
           </div>

@@ -18,7 +18,6 @@ export async function getStaffList() {
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, error: "Unauthorized" };
 
-  // FIX: Sorted by 'full_name' to be safe
   const { data, error } = await supabaseAdmin
     .from('staff')
     .select('*')
@@ -37,17 +36,16 @@ export async function saveStaff(formData: any) {
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, error: "Unauthorized" };
 
-  // --- UPDATED PAYLOAD WITH NEW FIELDS ---
   const payload = {
     full_name: formData.full_name,
-    role: formData.role,
+    role: formData.role, // Passes "bartender" perfectly
     phone: formData.phone,
-    email: formData.email, // Added
-    salary: formData.salary, // Added
+    email: formData.email, 
+    salary: formData.salary, 
     pin_code: formData.pin_code,
     status: formData.status,
-    emergency_contact_name: formData.emergency_contact_name, // Added
-    emergency_contact_phone: formData.emergency_contact_phone, // Added
+    emergency_contact_name: formData.emergency_contact_name, 
+    emergency_contact_phone: formData.emergency_contact_phone, 
     tenant_id: tenantId 
   };
 

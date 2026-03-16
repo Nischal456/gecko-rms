@@ -9,19 +9,11 @@ import { revalidatePath } from "next/cache";
 
 export async function getSystemAlerts() {
   try {
-    // FETCH NOTIFICATIONS + TENANT DETAILS
-    // We use a foreign key join to get the name and code
     const { data, error } = await supabaseAdmin
       .from("notifications")
-      .select(`
-        *,
-        tenants (
-          name,
-          code
-        )
-      `)
+      .select(`*, tenants (name, code)`)
       .order("created_at", { ascending: false })
-      .limit(50); // Fetch last 50 events
+      .limit(50);
 
     if (error) throw error;
     return { success: true, data };
@@ -49,7 +41,6 @@ export async function sendNotification(target: string, message: string, type: 'i
   try {
     let tenantIds: any[] = [];
     
-    // Determine Targets
     if (target === 'all') {
       const { data } = await supabaseAdmin.from("tenants").select("id");
       if (data) tenantIds = data.map(t => t.id);
@@ -59,7 +50,6 @@ export async function sendNotification(target: string, message: string, type: 'i
 
     if (tenantIds.length === 0) return { success: false, error: "No targets found" };
 
-    // Create Bulk Payload
     const payload = tenantIds.map(id => ({
       tenant_id: id,
       title: "Admin Broadcast",
@@ -68,12 +58,11 @@ export async function sendNotification(target: string, message: string, type: 'i
       is_read: false
     }));
 
-    // Insert
     const { error } = await supabaseAdmin.from("notifications").insert(payload);
     if (error) throw error;
     
-    revalidatePath("/admin");       // Update Client Dashboards
-    revalidatePath("/super-admin"); // Update Super Admin Feed
+    revalidatePath("/admin");       
+    revalidatePath("/super-admin"); 
     return { success: true };
 
   } catch (error: any) {
@@ -99,7 +88,6 @@ export async function getAllTenants() {
   }
 }
 
-// Added this helper as it is often needed for "Edit Tenant" modals
 export async function getTenantById(id: number) {
   try {
     const { data, error } = await supabaseAdmin
@@ -121,10 +109,17 @@ export async function createTenant(data: any) {
       name: data.name,
       code: data.code.toUpperCase(),
       email: data.email,
-      admin_password: data.password, // Ideally hash this before storing
+      admin_password: data.password, 
       plan: data.plan,
       subscription_status: 'active',
-      feature_flags: { kds: true, inventory: true, accounts: true }
+      feature_flags: { 
+        kds: true, 
+        inventory: true, 
+        accounts: true,
+        qr_ordering: false,
+        staff_app: false,
+        split_kot_bot: false 
+      }
     }]);
 
     if (error) throw error;
@@ -145,7 +140,6 @@ export async function toggleSubscription(id: number, currentStatus: string) {
       .eq("id", id);
 
     if (error) throw error;
-
     revalidatePath("/super-admin");
     return { success: true };
   } catch (error: any) {
@@ -160,6 +154,32 @@ export async function updateFeatureFlags(id: number, flags: any) {
       .update({ feature_flags: flags })
       .eq("id", id);
       
+    if (error) throw error;
+    revalidatePath("/super-admin");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTenantValidity(id: number, validUntil: string) {
+  try {
+    const { data: tenant, error: fetchErr } = await supabaseAdmin
+      .from("tenants")
+      .select("feature_flags")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    const flags = tenant?.feature_flags || {};
+    const newFlags = { ...flags, valid_until: validUntil };
+
+    const { error } = await supabaseAdmin
+      .from("tenants")
+      .update({ feature_flags: newFlags })
+      .eq("id", id);
+
     if (error) throw error;
     revalidatePath("/super-admin");
     return { success: true };

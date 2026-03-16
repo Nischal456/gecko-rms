@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ChefHat, User, ArrowRight, Loader2, Store, Hash, LogOut, 
-  Calculator, Briefcase, UtensilsCrossed, ScanFace, Leaf, CheckCircle2, ShieldCheck,Building, Utensils
+  Calculator, Briefcase, UtensilsCrossed, ScanFace, Leaf, CheckCircle2, ShieldCheck,Building, Utensils, Wine
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getPublicStaffList, linkDeviceToRestaurant, staffLogin, unlinkDevice } from "@/app/actions/staff-auth";
@@ -30,7 +30,7 @@ export default function StaffLoginPage() {
           if (res.needsSetup) {
               setView("setup");
           } else if (res.success) {
-              setTenantInfo({ name: res.tenantName, code: res.tenantCode });
+              setTenantInfo({ name: res.tenantName, code: res.tenantCode, logo_url: res.logo });
               setStaffList(res.staff || []); 
               setView("staff");
           } else {
@@ -91,6 +91,7 @@ export default function StaffLoginPage() {
         case 'chef': return <ChefHat className="w-6 h-6" />;
         case 'cashier': return <Calculator className="w-6 h-6" />;
         case 'waiter': return <UtensilsCrossed className="w-6 h-6" />;
+        case 'bartender': return <Wine className="w-6 h-6" />;
         default: return <User className="w-6 h-6" />;
     }
   };
@@ -101,6 +102,7 @@ export default function StaffLoginPage() {
         case 'chef': return 'bg-orange-50 text-orange-600 border-orange-200 shadow-orange-100';
         case 'cashier': return 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-emerald-100';
         case 'waiter': return 'bg-blue-50 text-blue-600 border-blue-200 shadow-blue-100';
+        case 'bartender': return 'bg-indigo-50 text-indigo-600 border-indigo-200 shadow-indigo-100';
         default: return 'bg-slate-50 text-slate-600 border-slate-200 shadow-slate-100';
     }
   };
