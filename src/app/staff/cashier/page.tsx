@@ -219,11 +219,14 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     if(!order) return null;
     
     const safeStatus = (order.status || '').toLowerCase().trim();
-    const isPayable = ['served', 'payment_pending', 'ready'].includes(safeStatus);
     const isCancellable = safeStatus === 'pending';
     
     const activeItems = getActiveItems(order.items);
     const displayItems = getDisplayItems(order.items);
+    
+    // STRICT PAYMENT LOCK: Only allows checkout if NO active items are pending/cooking/ready
+    const hasUnservedItems = activeItems.some(i => ['pending', 'cooking', 'ready'].includes((i.status || '').toLowerCase().trim()));
+    const isPayable = !hasUnservedItems && activeItems.length > 0;
     
     // CALCULATIONS (Strictly uses activeItems so cancelled food does not add to bill)
     const subTotal = activeItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -332,7 +335,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                 <div className="w-full md:w-[45%] lg:w-[40%] bg-slate-50/80 flex flex-col border-r border-slate-200 backdrop-blur-sm h-[45%] md:h-full shrink-0">
                     <div className="p-5 md:p-6 pt-10 md:pt-6 pb-4 shrink-0 flex justify-between items-center border-b border-slate-200/60">
                         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">Table {table.label}</h2>
-                        <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm ${isPayable ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>{safeStatus}</span>
+                        <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm ${isPayable ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>{isPayable ? 'Payable' : 'Pending'}</span>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
@@ -343,14 +346,15 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                     <div className="flex gap-3 w-full pr-2">
                                         <span className={`font-black w-7 h-7 flex items-center justify-center rounded-lg shrink-0 ${isCancelled ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-400'}`}>{item.qty}</span> 
                                         <div className="flex flex-col justify-center w-full mt-0.5 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                <span className={`font-bold leading-tight truncate ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
+                                            {/* ANTI-OVERLAP FIX: Break-words & Flex Layout */}
+                                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-1 w-full min-w-0">
+                                                <span className={`font-bold leading-tight break-words flex-1 pr-1 ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
                                                 {renderSmallStatus(item.status, item.previous_status)}
                                             </div>
                                             {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
                                         </div>
                                     </div>
-                                    <span className={`font-black flex items-center shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
+                                    <span className={`font-black flex items-start shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
                                 </div>
                             );
                         })}
@@ -482,7 +486,11 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                     <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-200 shrink-0 pb-safe">
                         <div className="flex gap-3 md:gap-4">
                             {isCancellable && <button onClick={() => onCancel(order.id, table.label)} className="flex-1 py-4 md:py-5 rounded-2xl font-black text-red-500 bg-white hover:bg-red-50 transition-all flex items-center justify-center gap-2 border border-red-200 active:scale-95 text-xs md:text-sm uppercase tracking-wider shadow-sm"><Trash2 className="w-5 h-5"/> Cancel</button>}
-                            <button disabled={!isPayable} onClick={handleConfirmCheckout} className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>{isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}</button>
+                            
+                            {/* STRICT PAYMENT LOCK */}
+                            <button disabled={!isPayable} onClick={handleConfirmCheckout} className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>
+                                {isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}
+                            </button>
                         </div>
                     </div>
 
@@ -658,11 +666,17 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                     const isCancelled = ['cancelled', 'void'].includes((it.status || '').toLowerCase().trim());
                                                     return (
                                                         <div key={idx} className={`flex justify-between text-[11px] font-medium ${isCancelled ? 'text-red-400 line-through' : 'text-slate-500'}`}>
-                                                            <span className="flex items-center gap-1.5">
-                                                                {it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}
-                                                                {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm">Waste</span>}
+                                                            <span className="flex items-start gap-1.5 min-w-0 pr-2">
+                                                                <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} w-4 h-4 flex items-center justify-center rounded-[4px] text-[9px] shrink-0 mt-0.5`}>{it.qty}</span>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="break-words leading-tight">{it.name}</span>
+                                                                        {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm shrink-0">Waste</span>}
+                                                                    </div>
+                                                                    {it.variant && <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 tracking-widest">{it.variant}</span>}
+                                                                </div>
                                                             </span>
-                                                            <span>Rs {it.price * it.qty}</span>
+                                                            <span className="shrink-0 mt-0.5">Rs {it.price * it.qty}</span>
                                                         </div>
                                                     )
                                                 })}

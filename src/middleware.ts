@@ -64,12 +64,14 @@ export async function middleware(request: NextRequest) {
 
         try {
             const user = JSON.parse(staffToken);
-            const role = user.role;
+            const role = String(user.role || "").toLowerCase().trim(); // FIX: Enforce lowercase to prevent mismatches
 
+            // Role-based route protection
             if (pathname.startsWith("/staff/manager") && role !== "manager") return sendToHome(role, request);
             if (pathname.startsWith("/staff/kitchen") && role !== "chef") return sendToHome(role, request);
             if (pathname.startsWith("/staff/waiter") && role !== "waiter") return sendToHome(role, request);
             if (pathname.startsWith("/staff/cashier") && role !== "cashier") return sendToHome(role, request);
+            if (pathname.startsWith("/staff/bartender") && role !== "bartender") return sendToHome(role, request); // ADDED BARTENDER
 
             if (pathname === "/staff" || pathname === "/staff/") return sendToHome(role, request);
 
@@ -84,13 +86,31 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
+// --- CRITICAL FIX: Loop-Proof Routing ---
 function sendToHome(role: string, req: NextRequest) {
     const origin = req.nextUrl.origin;
-    if (role === "manager") return NextResponse.redirect(new URL("/staff/manager", origin));
-    if (role === "chef") return NextResponse.redirect(new URL("/staff/kitchen", origin));
-    if (role === "waiter") return NextResponse.redirect(new URL("/staff/waiter", origin));
-    if (role === "cashier") return NextResponse.redirect(new URL("/staff/cashier", origin)); 
-    return NextResponse.redirect(new URL("/staff/login", origin)); 
+    const safeRole = String(role || "").toLowerCase().trim();
+    let destination = "/staff/login";
+
+    if (safeRole === "manager") destination = "/staff/manager";
+    else if (safeRole === "chef") destination = "/staff/kitchen";
+    else if (safeRole === "waiter") destination = "/staff/waiter";
+    else if (safeRole === "cashier") destination = "/staff/cashier";
+    else if (safeRole === "bartender") destination = "/staff/bartender"; // ADDED BARTENDER
+
+    // 1. KILLS INFINITE LOOPS: If they are already exactly on the intended destination page (or a sub-page of it), let them through!
+    if (req.nextUrl.pathname.startsWith(destination)) {
+        return NextResponse.next();
+    }
+
+    const response = NextResponse.redirect(new URL(destination, origin));
+
+    // 2. SELF-HEALING: If the role is invalid and we are sending them back to login, destroy the bad cookie.
+    if (destination === "/staff/login") {
+        response.cookies.delete("gecko_staff_token");
+    }
+
+    return response;
 }
 
 export const config = {
