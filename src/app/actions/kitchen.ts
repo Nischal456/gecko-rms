@@ -32,15 +32,20 @@ async function getTenantId() {
 // --- ABSOLUTE BAR ITEM FILTER (Not Exported) ---
 // If split is active, the kitchen uses this to EXCLUDE these items.
 function isItemForBar(item: any): boolean {
-    const station = (item.station || '').toLowerCase().trim();
-    const category = (item.category || item.dietary || '').toLowerCase().trim();
-    const itemName = (item.name || '').toLowerCase().trim();
+    const station = String(item.prep_station || item.prepStation || item.station || '').toLowerCase().trim();
+    const category = String(item.category || item.dietary || '').toLowerCase().trim();
+    const itemName = String(item.name || '').toLowerCase().trim();
 
-    if (['bar', 'bot', 'coffee'].includes(station)) return true;
-    if (station === 'kitchen') return false; 
+    // 1. ABSOLUTE EXCLUSION: If assigned to Kitchen/Food, it is NOT for Bar.
+    if (['kitchen', 'food', 'main'].includes(station)) return false;
+
+    // 2. ABSOLUTE INCLUSION: If assigned to Bar/Coffee/Drinks, it IS for Bar.
+    if (['bar', 'bot', 'coffee', 'drinks'].includes(station)) return true;
     
-    if (category.includes('drink') || category.includes('bar') || category.includes('beverage') || category.includes('liquor') || category.includes('hookah')) return true;
+    // 3. STRICT CATEGORY FALLBACK
+    if (['drinks', 'beverage', 'bar', 'coffee', 'liquor', 'cocktail', 'mocktail', 'hookah'].includes(category)) return true;
 
+    // 4. KEYWORD FALLBACK
     const botKeywords = [
         'hookah', 'hukka', 'shisha', 'cigarette', 'smoke', 'coal', 'cigar',
         'coke', 'sprite', 'fanta', 'pepsi', 'dew', 'red bull', 'sting',
@@ -112,7 +117,7 @@ export async function getKitchenTickets() {
                 notes: item.note || item.notes || "",
                 variant: item.variant || item.variantName || "",
                 status: item.status || 'pending',
-                station: item.station || 'kitchen',
+                station: item.station || item.prep_station || 'kitchen',
                 category: item.category || item.dietary || 'food'
             }))
         };

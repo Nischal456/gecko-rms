@@ -261,7 +261,7 @@ export async function cleanTable(tableName: string) {
     return { success: !updateResult.error };
 }
 
-// --- 3. MARK ORDER SERVED ---
+// --- 3. MARK ORDER SERVED (NOW WITH INVENTORY SYNC) ---
 export async function markOrderServed(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
@@ -289,6 +289,7 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         
         let foundDate = null;
         let modifiedOrders = null;
+        let itemsToDeductFromInventory: any[] = []; // Tracks items marked as served
 
         for (const log of logs) {
             const currentOrders = safeParse(log.orders_data);
@@ -316,10 +317,12 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
                                                 itemIdentifiers.includes(fallbackSig);
 
                             if (isItemMatch && i.status === 'ready') {
+                                itemsToDeductFromInventory.push(i); // Add to inventory deduction queue
                                 return { ...i, status: 'served' };
                             }
                         } 
                         else if (i.status === 'ready') {
+                            itemsToDeductFromInventory.push(i); // Add to inventory deduction queue
                             return { ...i, status: 'served' };
                         }
 
@@ -348,6 +351,48 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
             return { success: false, error: "Order not found" };
         }
 
+        // --- INVENTORY SYNC (DEDUCT ONLY NEWLY SERVED ITEMS) ---
+        if (itemsToDeductFromInventory.length > 0) {
+            try {
+                const { data: inventoryItems } = await supabaseAdmin
+                    .from("inventory")
+                    .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
+                    .eq("tenant_id", tenantId);
+
+                if (inventoryItems && inventoryItems.length > 0) {
+                    const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    for (const servedItem of itemsToDeductFromInventory) {
+                        const rawName = servedItem.name || servedItem.n || "";
+                        const rawQty = Number(servedItem.qty || servedItem.q || 1);
+                        const cartClean = superClean(rawName);
+                        
+                        const stockItem = inventoryItems.find(i => {
+                            const invClean = superClean(i.name);
+                            const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
+                            return invClean === cartClean || 
+                                   (linkedClean !== "" && linkedClean === cartClean) ||
+                                   (linkedClean !== "" && cartClean.includes(linkedClean)) ||
+                                   (invClean !== "" && cartClean.includes(invClean));
+                        });
+                        
+                        if (stockItem) {
+                            const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
+                            const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
+                            const newStock = Math.max(0, Number(currentStock) - deductionAmount);
+                            
+                            await supabaseAdmin.from("inventory")
+                                .update({ stock: newStock, quantity: newStock })
+                                .eq("id", stockItem.id);
+                        }
+                    }
+                }
+            } catch (invError) {
+                console.error("Inventory Sync Error:", invError);
+            }
+        }
+        // --- END INVENTORY SYNC ---
+
         const { error } = await supabaseAdmin
             .from("daily_order_logs")
             .update({ orders_data: modifiedOrders })
@@ -359,6 +404,7 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         }
 
         revalidatePath("/staff/waiter");
+        revalidatePath("/admin/inventory");
         return { success: true };
 
     } catch (e: any) {

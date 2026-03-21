@@ -191,6 +191,7 @@ export async function getReportData(range: ReportRange) {
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
                   status: currentDue > 0 ? 'Partial/Credit' : 'Completed', 
                   items: order.items || [], // <--- Pass ALL items to frontend (Frontend will strike-through waste)
+                  served_by: order.served_by || order.staff || "Cashier",
                   customer: { name: order.customer_name, address: order.customer_address }
               });
           });

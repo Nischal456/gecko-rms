@@ -196,16 +196,20 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         if (token) staffName = JSON.parse(token).name;
     } catch (e) {}
 
-    // EXACTLY AS YOU PROVIDED IT. DO NOT CHANGE THIS.
+    // --- CRITICAL FIX: PRESERVE STATION AND CATEGORY DATA ---
     const compactItems = cartItems.map((i: any) => ({
         id: i.id,
         unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
         name: i.name,
         price: i.price,
         qty: i.qty,
-        variant: i.variantName || "",
-        note: i.note || "",
-        status: "pending"
+        variant: i.variantName || i.variant || "",
+        note: i.note || i.notes || "",
+        status: "pending",
+        // Pass these through so the Server Actions (Kitchen/Bar) know where to route them!
+        station: i.station || i.prep_station || "",
+        category: i.category || "",
+        dietary: i.dietary || ""
     }));
 
     try {
@@ -284,46 +288,6 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
 
         if (upsertError) throw upsertError;
 
-        // --- INVENTORY SYNC INJECTION (DOES NOT TOUCH POS LOGIC) ---
-        try {
-            const { data: inventoryItems } = await supabaseAdmin
-                .from("inventory")
-                .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
-                .eq("tenant_id", tenantId);
-
-            if (inventoryItems && inventoryItems.length > 0) {
-                const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                for (const cartItem of cartItems) {
-                    const rawName = cartItem.name || cartItem.n || "";
-                    const rawQty = Number(cartItem.qty || cartItem.q || 1);
-                    const cartClean = superClean(rawName);
-                    
-                    const stockItem = inventoryItems.find(i => {
-                        const invClean = superClean(i.name);
-                        const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
-                        return invClean === cartClean || 
-                               (linkedClean !== "" && linkedClean === cartClean) ||
-                               (linkedClean !== "" && cartClean.includes(linkedClean)) ||
-                               (invClean !== "" && cartClean.includes(invClean));
-                    });
-                    
-                    if (stockItem) {
-                        const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
-                        const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
-                        const newStock = Math.max(0, Number(currentStock) - deductionAmount);
-                        
-                        await supabaseAdmin.from("inventory")
-                            .update({ stock: newStock, quantity: newStock })
-                            .eq("id", stockItem.id);
-                    }
-                }
-            }
-        } catch (invError) {
-            console.error("Inventory Sync Error:", invError);
-        }
-        // --- END INVENTORY SYNC ---
-
         revalidatePath("/staff/waiter");
         revalidatePath("/staff/cashier");
         return { success: true };
@@ -369,11 +333,14 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
                     found = true;
                     foundDate = log.date; 
                     
-                    // Maintain existing item IDs if they had them, otherwise generate new ones
+                    // CRITICAL FIX: Maintain routing data (station/category) when modifying orders!
                     const itemsWithStatus = updatedItems.map(item => ({
                         ...item,
                         unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-                        status: item.status || 'pending'
+                        status: item.status || 'pending',
+                        station: item.station || item.prep_station || "",
+                        category: item.category || "",
+                        dietary: item.dietary || ""
                     }));
 
                     // Recalculate parent status dynamically

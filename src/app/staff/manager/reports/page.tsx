@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Sidebar from "@/app/staff/manager/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   TrendingUp, Wallet, ArrowUpRight, ArrowDownRight,
   BarChart3, Loader2, Award, CreditCard, UserCircle,
-  TrendingDown, ShoppingBag, AlertCircle, Download, IndianRupee, Banknote, QrCode, Search, ChevronUp, ChevronDown, Calendar, Table as TableIcon, Layers, ShieldCheck, X, BookOpen, Users,CheckCircle2
+  TrendingDown, ShoppingBag, AlertCircle, Download, IndianRupee, Banknote, QrCode, Search, ChevronUp, ChevronDown, Calendar, Table as TableIcon, Layers, ShieldCheck, X, BookOpen, Users, CheckCircle2, ArrowRight
 } from "lucide-react";
 import { getReportData, type ReportRange } from "@/app/actions/reports";
 import { getCashierReports, processCreditPayment } from "@/app/actions/cashier"; 
@@ -15,6 +15,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import NepaliDate from 'nepali-date-converter'; 
+import { NepaliDatePicker } from "nepali-datepicker-reactjs";
+import "nepali-datepicker-reactjs/dist/index.css";
 import { toast } from "sonner";
 import React from "react";
 
@@ -34,17 +36,22 @@ const toNepaliDate = (dateStr: string) => {
     }
 };
 
-// 100% ACCURATE NEPALI DATE CONVERTER FOR CSV
+// 100% ACCURATE NEPALI DATE CONVERTER FOR STRICT FILTERING & CSV
 const toBSFull = (dateStr: string) => { 
     try { 
         const date = new Date(dateStr);
         const bsDate = new NepaliDate(date);
-        return bsDate.format('YYYY/MM/DD'); 
+        return bsDate.format('YYYY-MM-DD'); 
     } catch { return "---"; }
 };
 
+const getBSDateFromDaysAgo = (daysAgo: number) => {
+    const pastDate = new Date(Date.now() - (daysAgo > 1 ? daysAgo - 1 : 0) * 24 * 60 * 60 * 1000);
+    return new NepaliDate(pastDate).format('YYYY-MM-DD');
+};
+
 // Premium CSV Export (STRICTLY Filters out Cancelled/Void Items)
-function exportToCSV(transactions: any[], range: string) {
+function exportToCSV(transactions: any[], startDate: string, endDate: string) {
     if(!transactions || transactions.length === 0) return toast.error("No data available to export");
     
     let csv = "ID,Date(AD),Date(BS),Time,Type,Details/Table,Items,Grand Total,Paid Amount,Due Amount,Method,Status,Customer Name,Customer Phone\n";
@@ -69,9 +76,26 @@ function exportToCSV(transactions: any[], range: string) {
     
     const link = document.createElement("a"); 
     link.href = "data:text/csv;charset=utf-8," + encodeURI(csv); 
-    link.download = `Gecko_Manager_Ledger_${range}_${new Date().toISOString().split('T')[0]}.csv`; 
+    link.download = `Gecko_Manager_Ledger_${startDate}_to_${endDate}.csv`; 
     link.click();
     toast.success("Ledger Exported Successfully");
+}
+
+// --- HOOK FOR CLICK OUTSIDE (Closes Popover) ---
+function useOnClickOutside(ref: any, handler: () => void) {
+    useEffect(() => {
+        const listener = (event: any) => {
+            if (!ref.current || ref.current.contains(event.target)) return;
+            if (event.target.closest('.ndp-datepicker')) return; // Ignore clicks inside the calendar
+            handler();
+        };
+        document.addEventListener("mousedown", listener);
+        document.addEventListener("touchstart", listener);
+        return () => {
+            document.removeEventListener("mousedown", listener);
+            document.removeEventListener("touchstart", listener);
+        };
+    }, [ref, handler]);
 }
 
 // --- CREDIT BOOK MODAL COMPONENT (WITH SEARCH & PAYMENT) ---
@@ -231,11 +255,17 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                     const isCancelled = ['cancelled', 'void'].includes((it.status || '').toLowerCase().trim());
                                                     return (
                                                         <div key={idx} className={`flex justify-between text-[11px] font-medium ${isCancelled ? 'text-red-400 line-through' : 'text-slate-500'}`}>
-                                                            <span className="flex items-center gap-1.5">
-                                                                {it.qty}x {it.name} {it.variant ? `(${it.variant})` : ''}
-                                                                {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm">Waste</span>}
+                                                            <span className="flex items-start gap-1.5 min-w-0 pr-2">
+                                                                <span className={`font-black text-white ${isCancelled ? 'bg-red-400' : 'bg-slate-800'} w-4 h-4 flex items-center justify-center rounded-[4px] text-[9px] shrink-0 mt-0.5`}>{it.qty}</span>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="break-words leading-tight">{it.name}</span>
+                                                                        {isCancelled && <span className="text-[8px] bg-red-100 text-red-600 px-1 rounded-sm no-underline border border-red-200 font-black tracking-widest uppercase shadow-sm shrink-0">Waste</span>}
+                                                                    </div>
+                                                                    {it.variant && <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 tracking-widest">{it.variant}</span>}
+                                                                </div>
                                                             </span>
-                                                            <span>Rs {it.price * it.qty}</span>
+                                                            <span className="shrink-0 mt-0.5">Rs {it.price * it.qty}</span>
                                                         </div>
                                                     )
                                                 })}
@@ -253,92 +283,198 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function ReportsPage() {
+  const npToday = getBSDateFromDaysAgo(1);
+  
+  // App State
   const [tenant, setTenant] = useState<any>(null);
-  const [range, setRange] = useState<ReportRange>("today");
-  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [rawTransactions, setRawTransactions] = useState<any[]>([]);
   const [expandedBill, setExpandedBill] = useState<string | null>(null);
   const [showCreditBook, setShowCreditBook] = useState(false);
 
-  useEffect(() => { loadAllData(); }, [range]);
+  // Filter State
+  const [startDate, setStartDate] = useState<string>(npToday);
+  const [endDate, setEndDate] = useState<string>(npToday);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Popover State
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [activeRangeButton, setActiveRangeButton] = useState<number | "custom">(1);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+  useOnClickOutside(datePickerRef, () => setShowDatePicker(false));
+
+  useEffect(() => { loadAllData(); }, []);
 
   async function loadAllData() {
       setLoading(true);
       try {
+          // Fetch 365 Days to allow Zero-Lag Frontend Filtering
           const [dashRes, reportRes] = await Promise.all([
               getDashboardData(), 
-              getReportData(range)
+              getReportData("1y")
           ]);
 
           if (dashRes?.tenant) setTenant(dashRes.tenant);
-
           const safeReportRes = reportRes as any;
 
-          if (safeReportRes.success && safeReportRes.stats) {
-              const nepaliChartData = (safeReportRes.chartData || []).map((d: any) => ({
-                  ...d,
-                  bsDate: toNepaliDate(d.date),
-                  rawDate: d.date 
-              }));
-              
-              setData({ ...safeReportRes, chartData: nepaliChartData });
-          } else {
-              setData(getEmptyState());
+          if (safeReportRes.success && safeReportRes.transactions) {
+              setRawTransactions(safeReportRes.transactions);
           }
       } catch (e) {
           console.error(e);
           toast.error("Failed to load reports");
-          setData(getEmptyState());
       } finally {
           setLoading(false);
       }
   }
 
-  function getEmptyState() {
-      return {
-          stats: { totalRevenue: 0, totalCreditDue: 0, totalExpense: 0, netProfit: 0, margin: 0, orderCount: 0, revenueTrend: 0 },
-          chartData: [],
-          paymentMethods: {},
-          staffPerformance: {},
-          topItems: [],
-          transactions: []
-      };
-  }
+  const handleQuickRange = (days: number) => {
+      setActiveRangeButton(days);
+      setStartDate(getBSDateFromDaysAgo(days));
+      setEndDate(npToday);
+      setShowDatePicker(false);
+  };
 
-  const chartData = data?.chartData || [];
-  const topItems = data?.topItems || [];
-  const transactions = data?.transactions || [];
-  const stats = data?.stats || getEmptyState().stats;
-  const paymentMethods = data?.paymentMethods || {};
-  const staffPerformance = data?.staffPerformance || {};
+  const handleCustomDateChange = (isStart: boolean, date: string) => {
+      setActiveRangeButton("custom");
+      if (isStart) setStartDate(date);
+      else setEndDate(date);
+  };
 
-  const expenseTransactions = transactions.filter((t: any) => t.type?.toLowerCase().includes('expense'));
-
-  // ZERO-LAG SEARCH ENGINE
+  // ZERO-LAG SEARCH & DATE RANGE ENGINE
   const filteredTransactions = useMemo(() => {
-      return transactions.filter((t: any) => {
-          const matchesSearch = t.id?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                t.details?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                t.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                t.method?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                (t.customer?.name && t.customer.name.toLowerCase().includes(searchTerm.toLowerCase()));
-          return matchesSearch;
+      return rawTransactions.filter((t: any) => {
+          // 1. Super Search Match
+          const search = searchTerm.toLowerCase();
+          const matchesSearch = 
+                (t.id || "").toLowerCase().includes(search) || 
+                (t.details || "").toLowerCase().includes(search) ||
+                (t.type || "").toLowerCase().includes(search) ||
+                (t.method || "").toLowerCase().includes(search) ||
+                (t.customer?.name || "").toLowerCase().includes(search);
+          
+          // 2. Strict Nepali Date Match
+          const billBS = toBSFull(t.date);
+          const isAfterStart = startDate ? billBS >= startDate : true;
+          const isBeforeEnd = endDate ? billBS <= endDate : true;
+
+          return matchesSearch && isAfterStart && isBeforeEnd;
       });
-  }, [transactions, searchTerm]);
+  }, [rawTransactions, searchTerm, startDate, endDate]);
+
+  // 100% ACCURATE DYNAMIC SALES ENGINE
+  const derivedData = useMemo(() => {
+      let totalRevenue = 0;
+      let totalExpense = 0;
+      let totalCreditDue = 0;
+      let orderCount = 0;
+      
+      const paymentMethods: any = {};
+      const staffPerformance: any = {};
+      const topItemsMap: any = {};
+      const chartGroup: any = {};
+
+      filteredTransactions.forEach((tx: any) => {
+          const bsDate = toBSFull(tx.date);
+          if (!chartGroup[bsDate]) chartGroup[bsDate] = { bsDate, revenue: 0, expense: 0, rawDate: tx.date };
+
+          const isExpense = tx.type?.toLowerCase().includes('expense');
+          const amt = Number(tx.amount) || 0;
+          
+          if (isExpense) {
+              totalExpense += amt;
+              chartGroup[bsDate].expense += amt;
+          } else {
+              // Income & POS Orders
+              orderCount++;
+              const actualRev = tx.method === 'Credit' ? (Number(tx.tendered) || 0) : amt;
+              totalRevenue += actualRev;
+              chartGroup[bsDate].revenue += actualRev;
+              
+              if (tx.method === 'Credit') {
+                  totalCreditDue += (Number(tx.due) || 0);
+              }
+
+              // Staff & Method Tracking
+              // Staff & Method Tracking
+              const method = tx.method || "Cash";
+              const staff = tx.served_by || tx.staff || "Cashier";
+              
+              if (method === 'Credit') {
+                  // Track the actual deferred credit amount
+                  paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + (Number(tx.due) || 0);
+                  // If they paid an advance deposit, log that portion as Cash
+                  if (Number(tx.tendered) > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
+                  }
+              } else {
+                  paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
+              }
+              
+              staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRev;
+
+              // Top Items Tracking
+              (tx.items || []).forEach((item: any) => {
+                  if (['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) return;
+                  const name = item.name;
+                  if (!topItemsMap[name]) topItemsMap[name] = { name, qty: 0, sales: 0 };
+                  topItemsMap[name].qty += (Number(item.qty) || 1);
+                  topItemsMap[name].sales += (Number(item.price) || 0) * (Number(item.qty) || 1);
+              });
+          }
+      });
+
+      const netProfit = totalRevenue - totalExpense;
+      const margin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
+
+      const topItems = Object.values(topItemsMap).sort((a:any, b:any) => b.qty - a.qty).slice(0, 5);
+      const chartData = Object.values(chartGroup).sort((a:any, b:any) => a.bsDate.localeCompare(b.bsDate));
+
+      return {
+          stats: { totalRevenue, totalCreditDue, totalExpense, netProfit, margin, orderCount },
+          paymentMethods,
+          staffPerformance,
+          topItems,
+          chartData
+      };
+  }, [filteredTransactions]);
+
+  const { stats, paymentMethods, staffPerformance, topItems, chartData } = derivedData;
+  const expenseTransactions = filteredTransactions.filter((t: any) => t.type?.toLowerCase().includes('expense'));
 
   // TYPE-SAFE Hardware Accelerated Animations
-  const containerVars = { 
-      hidden: { opacity: 0 }, 
-      show: { opacity: 1, transition: { staggerChildren: 0.05 } } 
-  };
-  const itemVars: any = { 
-      hidden: { opacity: 0, y: 15 }, 
-      show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 25 } } 
-  };
+  const containerVars = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
+  const itemVars: any = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 25 } } };
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
+      
+      {/* OVERRIDE NEPALI DATEPICKER CSS FOR ZERO CLIPPING & PREMIUM LOOK */}
+      <style jsx global>{`
+          .ndp-datepicker {
+              z-index: 999999 !important; /* Ultimate fix for clipping */
+              position: absolute !important;
+              border-radius: 16px !important;
+              border: 1px solid #e2e8f0 !important;
+              box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+              font-family: inherit !important;
+          }
+          .custom-np-input input {
+              background: transparent !important;
+              border: none !important;
+              outline: none !important;
+              font-weight: 800 !important;
+              color: #0f172a !important;
+              width: 100% !important;
+              cursor: pointer !important;
+              padding: 0 !important;
+              font-size: 14px !important;
+              text-align: left;
+              box-shadow: none !important;
+          }
+          .custom-np-input input:focus { box-shadow: none !important; }
+      `}</style>
+
       <AnimatePresence>{showCreditBook && <CreditBookModal onClose={() => {setShowCreditBook(false); loadAllData();}} />}</AnimatePresence>
 
       <Sidebar tenantName={tenant?.name} tenantCode={tenant?.code} logo={tenant?.logo_url} />
@@ -346,7 +482,7 @@ export default function ReportsPage() {
       <main className="flex-1 flex flex-col h-full overflow-y-auto pb-[140px] md:pb-8 relative custom-scrollbar transform-gpu">
         
         {/* HEADER */}
-        <header className="px-4 md:px-8 py-5 md:py-6 bg-white/85 backdrop-blur-2xl border-b border-slate-200/60 sticky top-0 z-30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm transform-gpu">
+        <header className="px-4 md:px-8 py-5 md:py-6 bg-white/85 backdrop-blur-2xl border-b border-slate-200/60 sticky top-0 z-30 flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-sm transform-gpu">
             <div>
                 <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
                     Financial Command
@@ -354,31 +490,82 @@ export default function ReportsPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Profit & Loss Analytics</p>
             </div>
             
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <div className="bg-slate-100 p-1 rounded-xl flex overflow-x-auto no-scrollbar w-full md:w-auto shadow-inner">
-                    {[ {k:"today",l:"Today"}, {k:"7d",l:"7 Days"}, {k:"30d",l:"1 Month"}, {k:"90d",l:"3 Months"}, {k:"1y",l:"1 Year"} ].map((opt) => (
-                        <button 
-                            key={opt.k} 
-                            onClick={() => setRange(opt.k as ReportRange)}
-                            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 ${range === opt.k ? 'bg-white shadow-md text-emerald-600 ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'}`}
-                        >
-                            {opt.l}
-                        </button>
-                    ))}
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                
+                {/* PREMIUM UNIFIED DATE RANGE POPOVER BUTTON */}
+                <div className="relative w-full sm:w-auto" ref={datePickerRef}>
+                    <button 
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        className={`w-full sm:w-auto px-5 py-3 bg-white border rounded-2xl flex items-center justify-between gap-3 shadow-sm transition-all active:scale-95 ${showDatePicker ? 'border-emerald-400 ring-2 ring-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs font-black text-slate-700">{startDate} <span className="text-slate-300 mx-1 font-normal">→</span> {endDate}</span>
+                        </div>
+                        {showDatePicker ? <ChevronUp className="w-4 h-4 text-slate-400"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
+                    </button>
+
+                    <AnimatePresence>
+                        {showDatePicker && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 10, scale: 0.98 }} 
+                                animate={{ opacity: 1, y: 0, scale: 1 }} 
+                                exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                                className="absolute top-full mt-3 right-0 w-[320px] sm:w-[400px] bg-white rounded-[2rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] border border-slate-100 p-5 z-[99999] flex flex-col gap-5 overflow-visible origin-top-right"
+                            >
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Quick Filters</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[1, 7, 30].map(d => (
+                                            <button 
+                                                key={d} 
+                                                onClick={() => handleQuickRange(d)} 
+                                                className={`py-2.5 rounded-xl text-xs font-black transition-all ${activeRangeButton === d ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'}`}
+                                            >
+                                                {d === 1 ? 'Today' : `${d} Days`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="h-px w-full bg-slate-100" />
+
+                                <div className="flex flex-col sm:flex-row gap-4 items-center">
+                                    <div className="w-full flex-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Start Date</label>
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 custom-np-input focus-within:border-emerald-400 focus-within:bg-white transition-all">
+                                            <NepaliDatePicker value={startDate} onChange={(v: string) => handleCustomDateChange(true, v)} options={{ calenderLocale: 'ne', valueLocale: 'en' }} />
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="w-4 h-4 text-slate-300 hidden sm:block mt-5" />
+                                    <div className="w-full flex-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">End Date</label>
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 custom-np-input focus-within:border-rose-400 focus-within:bg-white transition-all">
+                                            <NepaliDatePicker value={endDate} onChange={(v: string) => handleCustomDateChange(false, v)} options={{ calenderLocale: 'ne', valueLocale: 'en' }} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => setShowDatePicker(false)} className="w-full py-3 mt-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl text-xs font-black uppercase tracking-widest transition-colors">
+                                    Apply Filter
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
                 
                 {/* CREDIT BOOK BUTTON */}
-                <button onClick={() => setShowCreditBook(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group">
+                <button onClick={() => setShowCreditBook(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-50 text-blue-600 px-5 py-3 rounded-2xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group shrink-0">
                     <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Credit Ledger</span>
                 </button>
 
                 <button 
-                    onClick={() => exportToCSV(transactions, range)}
-                    disabled={transactions.length === 0}
-                    className="hidden md:flex h-10 px-5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest items-center justify-center gap-2 hover:bg-emerald-600 shadow-lg hover:shadow-emerald-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => exportToCSV(filteredTransactions, startDate, endDate)}
+                    disabled={filteredTransactions.length === 0}
+                    className="hidden sm:flex h-11 px-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest items-center justify-center gap-2 hover:bg-emerald-600 shadow-lg hover:shadow-emerald-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
-                    <Download className="w-4 h-4" /> Export Ledger
+                    <Download className="w-4 h-4" /> Export
                 </button>
             </div>
         </header>
@@ -395,10 +582,10 @@ export default function ReportsPage() {
                     
                     {/* 1. KEY METRICS */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-                        <StatCard title="Actual Received" value={formatRs(stats.totalRevenue)} icon={Banknote} color="emerald" trend={`${stats.revenueTrend > 0 ? '+' : ''}${stats.revenueTrend || 0}%`} isHighlight={true} />
+                        <StatCard title="Actual Received" value={formatRs(stats.totalRevenue)} icon={Banknote} color="emerald" trend="Income" isHighlight={true} />
                         <StatCard title="Khata/Credit Due" value={formatRs(stats.totalCreditDue)} icon={BookOpen} color="blue" trend="Floating Out" />
                         <StatCard title="Net Profit" value={formatRs(stats.netProfit)} icon={Wallet} color="emerald" trend={`${stats.margin || 0}% Margin`} />
-                        <StatCard title="Total Expenses" value={formatRs(stats.totalExpense)} icon={ArrowDownRight} color="red" trend={`${Math.round(((stats.totalExpense || 0) / (stats.totalRevenue || 1)) * 100)}% Ratio`} />
+                        <StatCard title="Total Expenses" value={formatRs(stats.totalExpense)} icon={ArrowDownRight} color="red" trend={`${Math.round(((stats.totalExpense || 0) / (stats.totalRevenue || 1)) * 100) || 0}% Ratio`} />
                         <StatCard title="Total Volume" value={stats.orderCount} icon={ShoppingBag} color="orange" trend="Transactions" />
                     </div>
 
@@ -422,7 +609,7 @@ export default function ReportsPage() {
                                             <XAxis dataKey="bsDate" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94A3B8', fontWeight: 'bold'}} dy={10} minTickGap={20} />
                                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94A3B8', fontWeight: 'bold'}} tickFormatter={(v) => `Rs ${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
                                             <Tooltip 
-                                                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)', fontFamily: 'inherit' }}
+                                                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)', fontFamily: 'inherit', zIndex: 1000 }}
                                                 cursor={{ fill: '#F8FAFC' }}
                                                 formatter={(val: any) => formatRs(Number(val || 0))}
                                                 labelStyle={{ fontWeight: '900', color: '#0F172A', marginBottom: '8px' }}
@@ -504,8 +691,7 @@ export default function ReportsPage() {
                                                     <span className="font-black text-slate-500 text-xs bg-slate-100 px-2 py-0.5 rounded-md">{item.qty} sold</span>
                                                 </div>
                                                 <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
-                                                    <motion.div initial={{ width: 0 }} animate={{ width: `${(item.sales / (topItems[0]?.sales || 1)) * 100}%` }} className="h-full bg-emerald-500 rounded-full" />
-                                                </div>
+<motion.div initial={{ width: 0 }} animate={{ width: `${(item.sales / ((topItems[0] as any)?.sales || 1)) * 100}%` }} className="h-full bg-emerald-500 rounded-full" />                                                </div>
                                             </div>
                                             <span className="text-sm font-black text-slate-900 min-w-[70px] text-right">{formatRs(item.sales)}</span>
                                         </div>
@@ -525,7 +711,7 @@ export default function ReportsPage() {
                             </div>
                             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 max-h-[350px] pr-2">
                                 {expenseTransactions.length > 0 ? (
-                                    expenseTransactions.map((pay: any, i: number) => (
+                                    expenseTransactions.slice(0, 10).map((pay: any, i: number) => (
                                         <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-100 transition-colors">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-slate-400">
@@ -553,7 +739,6 @@ export default function ReportsPage() {
                     {/* 4. MASTER LEDGER (TRANSACTIONS) */}
                     <motion.div variants={itemVars} className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden transform-gpu">
                         
-                        {/* Table Controls */}
                         <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gradient-to-b from-slate-50/50 to-white">
                             <div>
                                 <h3 className="font-black text-lg text-slate-900 flex items-center gap-2"><Layers className="w-5 h-5 text-blue-500"/> Master Ledger</h3>
@@ -588,8 +773,8 @@ export default function ReportsPage() {
                                         <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-bold">No records found.</td></tr>
                                     ) : filteredTransactions.map((tx:any, i:number) => {
                                         const isExpanded = expandedBill === tx.id;
-                                        const isIncome = tx.type.includes('Income') || tx.type.includes('POS');
-                                        const isExpense = tx.type === 'Manual Expense';
+                                        const isIncome = tx.type.includes('Income') || tx.type.includes('POS') || tx.type.includes('takeaway') || tx.type.includes('dine_in');
+                                        const isExpense = tx.type === 'Manual Expense' || tx.type.includes('expense');
                                         const isCleared = tx.method === 'Credit' && tx.due <= 0;
                                         
                                         return (
@@ -598,8 +783,8 @@ export default function ReportsPage() {
                                                     <td className="px-6 py-5 font-black text-slate-700 font-mono text-[11px] tracking-wide">{tx.id.slice(0,8)}...</td>
                                                     <td className="px-6 py-5">
                                                         <div className="flex flex-col gap-0.5">
-                                                            <span className="font-bold text-slate-900">{tx.details}</span>
-                                                            <span className="text-[10px] font-bold text-slate-500">{toNepaliDate(tx.date)} • {new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                                            <span className="font-bold text-slate-900">{tx.details || "POS Order"}</span>
+                                                            <span className="text-[10px] font-bold text-slate-500">{toBSFull(tx.date)} • {new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-5">
@@ -608,7 +793,7 @@ export default function ReportsPage() {
                                                                 {tx.type}
                                                             </span>
                                                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200`}>
-                                                                {tx.method}
+                                                                {tx.method || "Cash"}
                                                             </span>
                                                         </div>
                                                     </td>
@@ -637,7 +822,6 @@ export default function ReportsPage() {
                                                         <motion.tr initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-slate-50/80 border-b-2 border-slate-200">
                                                             <td colSpan={5} className="px-6 py-6">
                                                                 
-                                                                {/* IF POS BILL */}
                                                                 {tx.items?.length > 0 && (
                                                                     <div className="grid grid-cols-4 gap-4 mb-4">
                                                                         {tx.items.map((item:any, idx:number) => {
@@ -729,7 +913,7 @@ export default function ReportsPage() {
                                 <div className="p-8 text-center text-slate-400 font-bold">No records found.</div>
                             ) : filteredTransactions.map((tx:any, i:number) => {
                                 const isExpanded = expandedBill === tx.id;
-                                const isIncome = tx.type.includes('Income') || tx.type.includes('POS');
+                                const isIncome = tx.type.includes('Income') || tx.type.includes('POS') || tx.type.includes('takeaway') || tx.type.includes('dine_in');
                                 const isCleared = tx.method === 'Credit' && tx.due <= 0;
 
                                 return (
@@ -737,9 +921,9 @@ export default function ReportsPage() {
                                         <div onClick={() => setExpandedBill(isExpanded ? null : tx.id)} className={`p-4 flex flex-col gap-3 transition-colors ${isExpanded ? 'bg-slate-50' : 'active:bg-slate-50'}`}>
                                             <div className="flex justify-between items-start">
                                                 <div>
-                                                    <span className="font-black text-slate-900 text-base capitalize">{tx.details}</span>
+                                                    <span className="font-black text-slate-900 text-base capitalize">{tx.details || "POS Order"}</span>
                                                     <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                        <Calendar className="w-3 h-3" /> {toNepaliDate(tx.date)}
+                                                        <Calendar className="w-3 h-3" /> {toBSFull(tx.date)}
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex flex-col items-end">
@@ -761,7 +945,7 @@ export default function ReportsPage() {
                                             <div className="flex justify-between items-center border-t border-slate-100 pt-2">
                                                 <div className="flex gap-2">
                                                     <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${isIncome ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{tx.type}</span>
-                                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[9px] font-bold uppercase border border-slate-200">{tx.method}</span>
+                                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[9px] font-bold uppercase border border-slate-200">{tx.method || "Cash"}</span>
                                                 </div>
                                                 {(tx.items?.length > 0 || tx.note || tx.customer?.name) && (
                                                     isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500"/> : <ChevronDown className="w-4 h-4 text-slate-300"/>
@@ -799,7 +983,7 @@ export default function ReportsPage() {
                                                             })}
                                                         </div>
                                                     )}
-
+                                                    
                                                     <div className="bg-white p-4 rounded-xl border border-slate-200 text-[10px] flex flex-col gap-2 shadow-sm">
                                                         {tx.note && <span className="flex flex-col"><strong className="text-slate-400 uppercase tracking-widest text-[9px] mb-1">Description / Notes</strong> <span className="font-bold text-slate-700 leading-relaxed">{tx.note}</span></span>}
                                                         {tx.customer?.name && <span className="flex justify-between mt-2 pt-2 border-t border-slate-100"><strong className="text-slate-400 uppercase tracking-widest text-[9px]">Customer</strong> <span className="font-bold text-slate-700">{tx.customer.name}</span></span>}
@@ -827,8 +1011,8 @@ export default function ReportsPage() {
         {/* MOBILE EXPORT BUTTON */}
         <div className="md:hidden fixed bottom-[90px] right-4 z-40">
             <button 
-                onClick={() => exportToCSV(transactions, range)}
-                disabled={transactions.length === 0}
+                onClick={() => exportToCSV(filteredTransactions, startDate, endDate)}
+                disabled={filteredTransactions.length === 0}
                 className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
             >
                 <Download className="w-6 h-6" />
@@ -840,7 +1024,7 @@ export default function ReportsPage() {
   );
 }
 
-// PREMIUM STAT CARD
+// PREMIUM FIX: "whitespace-nowrap" + dynamic text sizing prevents the "59..." tablet truncation issue!
 function StatCard({ title, value, icon: Icon, color, trend, isHighlight = false }: any) {
     const styles: any = {
         emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
@@ -855,21 +1039,21 @@ function StatCard({ title, value, icon: Icon, color, trend, isHighlight = false 
     return (
         <motion.div 
             variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} 
-            className={`p-5 md:p-6 rounded-[2rem] border shadow-xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden ${isHighlight ? 'bg-slate-900 border-slate-800 shadow-slate-900/20' : 'bg-white border-slate-100 shadow-slate-200/30'}`}
+            className={`p-4 md:p-5 lg:p-6 rounded-[2rem] border shadow-xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden flex flex-col justify-between ${isHighlight ? 'bg-slate-900 border-slate-800 shadow-slate-900/20' : 'bg-white border-slate-100 shadow-slate-200/30'}`}
         >
             <div className="flex justify-between items-start mb-4 relative z-10">
-                <div className={`w-11 h-11 md:w-14 md:h-14 rounded-[1.2rem] flex items-center justify-center border shadow-inner ${isHighlight ? 'bg-white/10 text-white border-white/10' : styles[color]}`}>
-                    <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                <div className={`w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-[1rem] lg:rounded-[1.2rem] flex items-center justify-center border shadow-inner shrink-0 ${isHighlight ? 'bg-white/10 text-white border-white/10' : styles[color]}`}>
+                    <Icon className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6" />
                 </div>
-                <span className={`text-[9px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 uppercase tracking-widest ${isHighlight ? 'bg-white/10 text-slate-300' : styles[color]}`}>
+                <span className={`text-[8px] lg:text-[9px] font-black px-2 py-1.5 rounded-lg flex items-center gap-1 uppercase tracking-widest shrink-0 ${isHighlight ? 'bg-white/10 text-slate-300' : styles[color]}`}>
                     {color === 'red' ? <ArrowDownRight className="w-3 h-3" /> : (color === 'emerald' && title !== 'Net Profit' ? <ArrowUpRight className="w-3 h-3" /> : '')} {trend}
                 </span>
             </div>
-            <div className="relative z-10">
-                <h4 className={`text-[10px] md:text-xs font-black uppercase tracking-widest mb-1.5 ${isHighlight ? 'text-slate-400' : 'text-slate-400'}`}>{title}</h4>
-                <div className="flex items-baseline gap-1.5">
-                    {isCurrency && <span className={`text-sm font-black opacity-70 ${isHighlight ? 'text-white' : styles[color].split(' ')[1]}`}>Rs</span>}
-                    <p className={`text-3xl md:text-4xl font-black tracking-tighter truncate leading-none ${isHighlight ? 'text-white' : 'text-slate-900'}`}>{valString}</p>
+            <div className="relative z-10 w-full min-w-0">
+                <h4 className={`text-[9px] md:text-[10px] lg:text-xs font-black uppercase tracking-widest mb-1 md:mb-1.5 ${isHighlight ? 'text-slate-400' : 'text-slate-400'}`}>{title}</h4>
+                <div className="flex items-baseline gap-1 md:gap-1.5 w-full min-w-0">
+                    {isCurrency && <span className={`text-xs md:text-sm font-black opacity-70 shrink-0 ${isHighlight ? 'text-white' : styles[color].split(' ')[1]}`}>Rs</span>}
+                    <p className={`text-2xl lg:text-3xl xl:text-4xl font-black tracking-tighter leading-tight whitespace-nowrap min-w-0 ${isHighlight ? 'text-white' : 'text-slate-900'}`}>{valString}</p>
                 </div>
             </div>
         </motion.div>

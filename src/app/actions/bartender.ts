@@ -27,18 +27,20 @@ async function getTenantId() {
 
 // --- ABSOLUTE BAR ITEM FILTER (Not Exported) ---
 function isItemForBar(item: any): boolean {
-    const station = (item.station || '').toLowerCase().trim();
-    const category = (item.category || item.dietary || '').toLowerCase().trim();
-    const itemName = (item.name || '').toLowerCase().trim();
+    const station = String(item.prep_station || item.prepStation || item.station || '').toLowerCase().trim();
+    const category = String(item.category || item.dietary || '').toLowerCase().trim();
+    const itemName = String(item.name || '').toLowerCase().trim();
 
-    // 1. Strict Station Priority
-    if (['bar', 'bot', 'coffee'].includes(station)) return true;
-    if (station === 'kitchen') return false;
+    // 1. ABSOLUTE EXCLUSION: If assigned to Kitchen/Food, BAN from Bar immediately.
+    if (['kitchen', 'food', 'main'].includes(station)) return false;
 
-    // 2. Strict Category Priority
-    if (category.includes('drink') || category.includes('bar') || category.includes('beverage') || category.includes('liquor') || category.includes('hookah')) return true;
+    // 2. ABSOLUTE INCLUSION: If assigned to Bar/Coffee/Drinks, ALLOW to Bar immediately.
+    if (['bar', 'bot', 'coffee', 'drinks'].includes(station)) return true;
 
-    // 3. Keyword Fallback (Includes 'hukka' for Cloud aHUkka)
+    // 3. STRICT CATEGORY FALLBACK (Only runs if Station is totally empty)
+    if (['drinks', 'beverage', 'bar', 'coffee', 'liquor', 'cocktail', 'mocktail', 'hookah'].includes(category)) return true;
+
+    // 4. KEYWORD FALLBACK (Includes 'hukka' for Cloud aHUkka)
     const botKeywords = [
         'hookah', 'hukka', 'shisha', 'cigarette', 'smoke', 'coal', 'cigar',
         'coke', 'sprite', 'fanta', 'pepsi', 'dew', 'red bull', 'sting',
@@ -111,7 +113,7 @@ export async function getBartenderTickets() {
                 notes: item.note || item.notes || "",
                 variant: item.variant || item.variantName || "",
                 status: item.status || 'pending',
-                station: item.station || 'bar',
+                station: item.station || item.prep_station || 'bar',
                 category: item.category || item.dietary || 'drinks'
             }))
         };

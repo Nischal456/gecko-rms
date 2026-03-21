@@ -1,37 +1,69 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
-import {
-    Clock, CheckCircle2, Flame, Bell, GlassWater,
-    X, Check, CheckCheck, Volume2, VolumeX, AlertTriangle, Play, GripVertical, ChevronRight, Wine
+import { 
+  ChefHat, Clock, CheckCircle2, Flame, Bell, GlassWater, 
+  X, LogOut, RefreshCcw, Check, CheckCheck, 
+  Volume2, VolumeX, LayoutGrid, FileBarChart, AlertTriangle, Play, GripVertical, ChevronRight, Wine
 } from "lucide-react";
 import { toast } from "sonner";
 import { getBartenderTickets, updateBartenderTicketStatus, updateBartenderItemStatus } from "@/app/actions/bartender";
-import { getPublicStaffList } from "@/app/actions/staff-auth";
+import { getPublicStaffList, logoutStaff } from "@/app/actions/staff-auth";
 import NepaliDate from 'nepali-date-converter';
 
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
-const SWIPE_THRESHOLD = 80;
+const SWIPE_THRESHOLD = 80; 
 
-interface BartenderItem { id: string; unique_id?: string; name: string; quantity: number; notes?: string; variant?: string; status: string; category?: string; }
-interface BartenderTicket { id: string; table_name: string; status: 'pending' | 'preparing' | 'cooking' | 'ready' | 'served'; created_at: string; order_items: BartenderItem[]; }
+interface BartenderItem { 
+    id: string; 
+    unique_id?: string; 
+    name: string; 
+    quantity: number; 
+    notes?: string; 
+    variant?: string; 
+    status: string; 
+    category?: string; 
+    dietary?: string;
+    station?: string;
+    prep_station?: string;
+    prepStation?: string;
+}
+
+interface BartenderTicket { 
+    id: string; 
+    table_name: string; 
+    status: 'pending' | 'preparing' | 'cooking' | 'ready' | 'served'; 
+    created_at: string; 
+    order_items: BartenderItem[]; 
+}
 
 const nepaliMonths = ["Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
-function toNepaliDigits(num: number | string): string { return num.toString().split('').map(c => nepaliDigits[parseInt(c)] || c).join(''); }
+
+function toNepaliDigits(num: number | string): string { 
+    return num.toString().split('').map(c => nepaliDigits[parseInt(c)] || c).join(''); 
+}
 
 function SystemInitScreen({ onStart }: { onStart: () => void }) {
     return (
         <div className="fixed inset-0 z-[100] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl border border-emerald-100 p-10 flex flex-col items-center relative overflow-hidden transform-gpu">
+            <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }} 
+                animate={{ scale: 1, opacity: 1 }} 
+                className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl border border-emerald-100 p-10 flex flex-col items-center relative overflow-hidden transform-gpu"
+            >
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-emerald-600" />
                 <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner ring-4 ring-white border border-emerald-100 animate-pulse">
                     <Wine className="w-12 h-12 text-emerald-600" />
                 </div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-2">Bar<span className="text-emerald-500">OS</span></h1>
                 <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-8">Click to Enable Order Alerts</p>
-                <button onClick={onStart} className="group relative w-full h-16 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/20 overflow-hidden active:scale-95 transition-all transform-gpu">
+                <button 
+                    onClick={onStart} 
+                    className="group relative w-full h-16 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/20 overflow-hidden active:scale-95 transition-all transform-gpu"
+                >
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <span className="relative flex items-center justify-center gap-3">
                         <Play className="w-5 h-5 fill-current" /> START SHIFT
@@ -79,7 +111,6 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: a
                 )}
             </AnimatePresence>
 
-            {/* BRAND LOGO & INFO */}
             <div className="flex items-center gap-3 md:gap-5">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-50 rounded-xl flex items-center justify-center shadow-inner border border-slate-100 overflow-hidden shrink-0">
                     {tenantInfo.logo ? <img src={tenantInfo.logo} className="w-full h-full object-cover" /> : <Wine className="w-5 h-5 md:w-6 md:h-6 text-emerald-600" />}
@@ -100,6 +131,80 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: a
                 </button>
             </div>
         </header>
+    )
+}
+
+function KitchenDock({ onRefresh }: any) {
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">Power Down Terminal?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to end your bar shift and sign out of BarOS?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Powering down terminal...");
+                            sessionStorage.removeItem("gecko_bar_init");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Sign Out
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
+    };
+
+    return (
+        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
+            <motion.div 
+                initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10 transform-gpu"
+            >
+                <DockButton icon={<RefreshCcw className="w-[18px] h-[18px]" />} onClick={onRefresh} label="Sync Feed" />
+                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <DockLink href="/staff/bartender/menu" icon={<LayoutGrid className="w-[18px] h-[18px]" />} label="Menu" />
+                <DockLink href="/staff/bartender/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
+                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
+                <DockButton icon={<LogOut className="w-[18px] h-[18px] text-red-400" />} onClick={handleLogout} label="Sign Out" />
+            </motion.div>
+        </div>
+    )
+}
+
+function DockButton({ icon, onClick, label }: any) {
+    return (
+        <button onClick={onClick} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
+            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
+        </button>
+    )
+}
+
+function DockLink({ href, icon, label }: any) {
+    return (
+        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
+            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
+        </Link>
     )
 }
 
@@ -182,17 +287,45 @@ export default function BartenderPage() {
         const kdsRes = await getBartenderTickets();
         if (kdsRes.success && Array.isArray(kdsRes.data)) {
             const rawData = kdsRes.data as any[];
-            const activeOrders = rawData.filter(t => t.status !== 'served');
+
+            // --- STRICT STATION FILTERING ENGINE (BAROS) ---
+            const stationFilteredData = rawData.map(t => {
+                const barItems = (t.order_items || []).filter((item: BartenderItem) => {
+                    const st = String(item.station || item.prep_station || item.prepStation || '').toLowerCase().trim();
+                    const dietary = String(item.dietary || item.category || '').toLowerCase().trim();
+
+                    // 1. THE ULTIMATE AUTHORITY: PREP STATION (Overrides everything)
+                    if (st === 'bar' || st === 'coffee') return true;
+                    if (st === 'kitchen' || st === 'food' || st === 'main') return false; 
+
+                    // 2. FALLBACK: DIETARY TYPE (Only runs if Station is completely empty)
+                    if (st === '') {
+                        const isDrinkType = ['drinks', 'beverage', 'liquor', 'cocktail', 'mocktail'].includes(dietary);
+                        return isDrinkType;
+                    }
+
+                    return false;
+                });
+                return { ...t, order_items: barItems };
+            }).filter(t => t.order_items.length > 0); 
+
+            const activeOrders = stationFilteredData.filter(t => t.status !== 'served');
             const sorted = activeOrders.sort((a, b) => {
                 const statusOrder = { 'pending': 0, 'preparing': 1, 'cooking': 1, 'ready': 2, 'served': 3 };
                 const statusDiff = (statusOrder[a.status as keyof typeof statusOrder] || 0) - (statusOrder[b.status as keyof typeof statusOrder] || 0);
                 if (statusDiff !== 0) return statusDiff;
                 return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             });
+            
             setTickets(sorted as BartenderTicket[]);
+            
             if (selectedTicket) {
                 const freshTicket = sorted.find(t => t.id === selectedTicket.id);
-                if (freshTicket) setSelectedTicket(freshTicket as BartenderTicket);
+                if (freshTicket) {
+                    setSelectedTicket(freshTicket as BartenderTicket);
+                } else {
+                    setSelectedTicket(null); 
+                }
             }
         }
         setLoading(false);
@@ -264,7 +397,7 @@ export default function BartenderPage() {
         <div className="flex h-full w-full bg-[#F8FAFC] flex-col relative overflow-hidden">
             <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} />
 
-            {/* --- KANBAN BOARD (Vertical on Mobile, Horizontal on Desktop) --- */}
+            {/* --- KANBAN BOARD --- */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">
                 <div className="flex flex-col md:flex-row gap-6 md:gap-6 h-auto md:h-full min-w-full md:min-w-[1200px] justify-center">
 
@@ -294,6 +427,8 @@ export default function BartenderPage() {
 
                 </div>
             </div>
+
+            <KitchenDock onRefresh={loadData} />
 
             {/* --- DETAIL MODAL --- */}
             <AnimatePresence>
@@ -325,15 +460,24 @@ export default function BartenderPage() {
                                                 </div>
                                                 <div className="flex flex-col justify-center min-w-0 pr-2">
                                                     <h4 className={`font-black text-base md:text-xl leading-tight truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
+                                                    
                                                     <div className="flex flex-wrap gap-1.5 mt-1">
                                                         {item.variant && <span className="text-[9px] md:text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wider truncate max-w-[150px]">{item.variant}</span>}
                                                         {item.notes && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100"><AlertTriangle className="w-2.5 h-2.5 md:w-3 md:h-3" /><span className="text-[9px] md:text-[10px] font-black uppercase tracking-wide truncate max-w-[150px]">{item.notes}</span></span>}
                                                     </div>
                                                 </div>
                                             </div>
-
+                                            
                                             <div className="flex flex-wrap gap-2 items-center sm:items-end justify-end shrink-0 sm:ml-auto w-full sm:w-auto">
-                                                <button disabled={isCompleted} onClick={() => handleItemClick(item, selectedTicket.id)} className={`w-full sm:w-auto px-4 py-2.5 md:py-3 rounded-xl text-[10px] md:text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors ${safeStatus === 'served' ? 'bg-slate-200 text-slate-400' : safeStatus === 'ready' ? 'bg-emerald-100 text-emerald-700' : safeStatus === 'cooking' ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-100 shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                                <button 
+                                                    disabled={isCompleted}
+                                                    onClick={() => handleItemClick(item, selectedTicket.id)}
+                                                    className={`w-full sm:w-auto px-4 py-2.5 md:py-3 rounded-xl text-[10px] md:text-xs font-black uppercase flex items-center justify-center gap-2 transition-colors ${
+                                                        safeStatus === 'served' ? 'bg-slate-200 text-slate-400' :
+                                                        safeStatus === 'ready' ? 'bg-emerald-100 text-emerald-700' : 
+                                                        safeStatus === 'cooking' ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-100 shadow-sm' : 
+                                                        'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                }`}>
                                                     {safeStatus === 'served' ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" /> : safeStatus === 'ready' ? <CheckCheck className="w-3.5 h-3.5 md:w-4 md:h-4" /> : safeStatus === 'cooking' ? <Wine className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />}
                                                     {safeStatus === 'cooking' ? 'Preparing' : safeStatus === 'pending' ? 'Prepare' : safeStatus}
                                                 </button>
@@ -438,7 +582,6 @@ function TicketCardContent({ ticket }: { ticket: BartenderTicket }) {
     const readyItems = ticket.order_items.filter(i => { const s = (i.status || '').toLowerCase().trim(); return s === 'ready' || s === 'served'; }).length;
     const validItems = ticket.order_items.filter(i => { const s = (i.status || '').toLowerCase().trim(); return s !== 'cancelled' && s !== 'void' && i.quantity > 0; });
     const progress = validItems.length > 0 ? Math.round((readyItems / validItems.length) * 100) : 0;
-    const hasNotes = validItems.some(i => i.notes);
 
     return (
         <div className={`w-full ${isLate ? 'ring-2 ring-red-100 rounded-2xl md:rounded-[1.8rem]' : ''}`}>

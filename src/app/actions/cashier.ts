@@ -47,7 +47,6 @@ export async function getCashierData() {
     const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
     const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
     
-    // Fetch logs for the last 2 days to ensure we get exactly 24 hours of cancellation history
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
@@ -89,14 +88,13 @@ export async function getCashierData() {
     let totalRevenue = 0;
     let pendingBills = 0;
     const tableOrderMap = new Map();
-    const cancelledItemsMap = new Map(); // Using Map prevents duplicates across day logs
+    const cancelledItemsMap = new Map(); 
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     logs?.forEach(log => {
         const activeOrders = safeParse(log.orders_data);
         const paidHistory = safeParse(log.paid_history);
 
-        // ONLY count revenue for TODAY
         if (log.date === today) {
             paidHistory.forEach((bill: any) => {
                 if (bill.payment_method === 'Credit') {
@@ -106,8 +104,7 @@ export async function getCashierData() {
                 }
             });
         }
-
-        // 24-HOUR CANCEL/WASTE TRACKER: Scans BOTH active and checked-out orders!
+        
         const allOrdersForWaste = [...activeOrders, ...paidHistory];
         
         allOrdersForWaste.forEach((order: any) => {
@@ -132,7 +129,6 @@ export async function getCashierData() {
             });
         });
 
-        // Populate Table Map for Pending Orders
         activeOrders.forEach((order: any) => {
             if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
             
@@ -189,7 +185,6 @@ export async function getCashierData() {
       bank_accounts: tenant?.settings?.bank_accounts || [] 
     };
 
-    // Convert map to array and sort newest first
     const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
 
     return {
@@ -273,7 +268,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     return { success: true };
 }
 
-// --- 3. CANCEL ORDER (SUPPORTS REASONS + ANY ITEM STATE) ---
+// --- 3. CANCEL ORDER ---
 export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string, reason?: string) {
     const tenantId = await getTenantId();
     
@@ -516,7 +511,7 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
     }
 }
 
-// --- 5. FINALIZE (Checkout) ---
+// --- 5. FINALIZE (Checkout) WITH DOUBLE ENTRY LOCK ---
 export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, paymentDetails: any, tenantInfo: any, customerDetails?: any) {
     const tenantId = await getTenantId();
     const today = new Date().toISOString().split('T')[0];
@@ -526,14 +521,28 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
 
     const currentOrders = safeParse(log.orders_data);
     const currentHistory = safeParse(log.paid_history);
+
+    // --- ABSOLUTE DOUBLE-ENTRY LOCK ---
+    // If the orderId is already inside paid_history, kill the request instantly.
+    const isAlreadyPaid = currentHistory.some((h: any) => String(h.original_order_id).trim() === String(orderId).trim());
+    if (isAlreadyPaid) {
+        return { success: false, error: "Order already checked out! Prevented double-entry." };
+    }
+
     const remainingOrders: any[] = [];
     const newHistoryItems: any[] = [];
     let found = false;
+    let itemsToDeductFromInventory: any[] = [];
 
     currentOrders.forEach((order: any) => {
-        if (order.tbl === tableId && !['cancelled', 'completed', 'paid'].includes(order.status)) {
+        // Using strict orderId match to prevent wrong table checkouts
+        if (String(order.id).trim() === String(orderId).trim() && !['cancelled', 'completed', 'paid'].includes(order.status)) {
             found = true;
             const displayBillNo = order.bill_no || order.id.slice(-6).toUpperCase();
+
+            // Track non-cancelled items for inventory deduction
+            const validServedItems = order.items.filter((i: any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+            itemsToDeductFromInventory = [...itemsToDeductFromInventory, ...validServedItems];
 
             newHistoryItems.push({
                 invoice_no: displayBillNo,
@@ -560,7 +569,49 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         }
     });
 
-    if(!found) return { success: false, error: "No active orders." };
+    if(!found) return { success: false, error: "Order not found or already checked out." };
+
+    // --- EXACT INVENTORY SYNC (RUNS AT CHECKOUT) ---
+    try {
+        if (itemsToDeductFromInventory.length > 0) {
+            const { data: inventoryItems } = await supabaseAdmin
+                .from("inventory")
+                .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
+                .eq("tenant_id", tenantId);
+
+            if (inventoryItems && inventoryItems.length > 0) {
+                const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                for (const cartItem of itemsToDeductFromInventory) {
+                    const rawName = cartItem.name || cartItem.n || "";
+                    const rawQty = Number(cartItem.qty || cartItem.q || 1);
+                    const cartClean = superClean(rawName);
+                    
+                    const stockItem = inventoryItems.find(i => {
+                        const invClean = superClean(i.name);
+                        const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
+                        return invClean === cartClean || 
+                               (linkedClean !== "" && linkedClean === cartClean) ||
+                               (linkedClean !== "" && cartClean.includes(linkedClean)) ||
+                               (invClean !== "" && cartClean.includes(invClean));
+                    });
+                    
+                    if (stockItem) {
+                        const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
+                        const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
+                        const newStock = Math.max(0, Number(currentStock) - deductionAmount);
+                        
+                        await supabaseAdmin.from("inventory")
+                            .update({ stock: newStock, quantity: newStock })
+                            .eq("id", stockItem.id);
+                    }
+                }
+            }
+        }
+    } catch (invError) {
+        console.error("Inventory Sync Error:", invError);
+    }
+    // --- END INVENTORY SYNC ---
 
     await supabaseAdmin.from("daily_order_logs").update({ 
         orders_data: remainingOrders, 
@@ -572,6 +623,7 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     }
     
     revalidatePath("/staff/cashier");
+    revalidatePath("/admin/inventory");
     return { success: true };
 }
 

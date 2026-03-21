@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, Menu, X, Plus } from "lucide-react";
+import { LayoutDashboard, LogOut, Settings, PieChart, Store, PlusCircle, Clock, Menu, X, Plus, Package } from "lucide-react";
 import { logoutStaff } from "@/app/actions/staff-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
 
   const handleLogout = () => {
       toast.custom((t) => (
-          <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+          <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
               <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
                       <LogOut className="w-5 h-5 ml-1" />
@@ -48,6 +48,7 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
     { id: "terminal", icon: LayoutDashboard, label: "Overview" },
     { id: "new_order_select", icon: PlusCircle, label: "New Order" }, 
     { id: "active_orders", icon: Clock, label: "Kitchen Status", badge: hasUpdates }, 
+    { id: "inventory", icon: Package, label: "Vault & Ledger" }, 
     { id: "reports", icon: PieChart, label: "Reports" },
     { id: "settings", icon: Settings, label: "Settings" }, 
   ];
@@ -58,15 +59,10 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
       <aside className="hidden md:block w-72 h-full relative z-30 shadow-2xl shadow-slate-200/50">
         <div className="flex flex-col h-full bg-[#f8fafc]/80 backdrop-blur-3xl border-r border-slate-200/60">
             
-            {/* --- ULTRA PREMIUM LOGO AREA (Code Removed) --- */}
             <div className="p-5 pb-2">
                 <div className="relative p-4 rounded-[1.5rem] bg-gradient-to-b from-white/90 to-white/50 backdrop-blur-xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] overflow-hidden group transition-all duration-500 hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)]">
-                    
-                    {/* Subtle ambient glow behind */}
                     <div className="absolute -inset-10 bg-gradient-to-br from-emerald-400/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-2xl pointer-events-none" />
-
                     <div className="relative z-10 flex items-center gap-4">
-                        {/* 3D Floating Logo */}
                         <div className="relative shrink-0">
                             <div className="absolute inset-0 bg-slate-900 rounded-[1rem] blur-md opacity-15 translate-y-1.5 transition-all group-hover:translate-y-2 group-hover:opacity-20" />
                             {logo ? (
@@ -77,8 +73,6 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
                                 </div>
                             )}
                         </div>
-
-                        {/* Clean Text Area */}
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <h2 className="text-[17px] font-black tracking-tight text-slate-900 truncate drop-shadow-sm">
                                 {tenantName || "POS"}
@@ -167,9 +161,22 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
                  </div>
              </div>
           </div>
-          <button onClick={handleLogout} className="p-2.5 bg-white text-slate-500 hover:text-red-500 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-full transition-colors shadow-sm shrink-0 active:scale-90">
-              <LogOut className="w-5 h-5"/>
-          </button>
+          
+          {/* MOBILE TOP ACTIONS (Settings & Logout) */}
+          <div className="flex items-center gap-2">
+              <button 
+                  onClick={() => setView('settings')} 
+                  className={`p-2.5 rounded-full transition-colors shadow-sm shrink-0 active:scale-90 ${currentView === 'settings' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-200'}`}
+              >
+                  <Settings className="w-5 h-5"/>
+              </button>
+              <button 
+                  onClick={handleLogout} 
+                  className="p-2.5 bg-white text-slate-500 hover:text-red-500 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-full transition-colors shadow-sm shrink-0 active:scale-90"
+              >
+                  <LogOut className="w-5 h-5"/>
+              </button>
+          </div>
       </div>
 
       {/* --- MOBILE BOTTOM NAVIGATION DOCK (App-Like) --- */}
@@ -198,16 +205,16 @@ export default function CashierSidebar({ tenantName, tenantCode, logo, currentVi
               </button>
           </div>
 
+          <button onClick={() => setView('inventory')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors relative ${currentView === 'inventory' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+              <Package className={`w-6 h-6 transition-transform ${currentView === 'inventory' ? 'fill-emerald-50 text-emerald-600 scale-110' : ''}`} />
+              <span className="text-[9px] font-bold tracking-wide">Vault</span>
+              {currentView === 'inventory' && <motion.div layoutId="nav-indicator" className="absolute top-0 w-8 h-1 bg-emerald-500 rounded-b-full" />}
+          </button>
+
           <button onClick={() => setView('reports')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors relative ${currentView === 'reports' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
               <PieChart className={`w-6 h-6 transition-transform ${currentView === 'reports' ? 'fill-emerald-50 text-emerald-600 scale-110' : ''}`} />
               <span className="text-[9px] font-bold tracking-wide">Reports</span>
               {currentView === 'reports' && <motion.div layoutId="nav-indicator" className="absolute top-0 w-8 h-1 bg-emerald-500 rounded-b-full" />}
-          </button>
-
-          <button onClick={() => setView('settings')} className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors relative ${currentView === 'settings' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
-              <Settings className={`w-6 h-6 transition-transform ${currentView === 'settings' ? 'fill-emerald-50 text-emerald-600 scale-110' : ''}`} />
-              <span className="text-[9px] font-bold tracking-wide">Settings</span>
-              {currentView === 'settings' && <motion.div layoutId="nav-indicator" className="absolute top-0 w-8 h-1 bg-emerald-500 rounded-b-full" />}
           </button>
 
       </div>

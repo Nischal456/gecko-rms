@@ -24,7 +24,11 @@ interface KitchenItem {
     notes?: string;
     variant?: string;
     status: string; 
-    station: string;
+    category?: string;
+    dietary?: string;
+    station?: string;
+    prep_station?: string;
+    prepStation?: string;
 }
 
 interface KitchenTicket {
@@ -307,7 +311,29 @@ export default function KitchenPage() {
     const kdsRes = await getKitchenTickets();
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
         const rawData = kdsRes.data as any[]; 
-        const activeOrders = rawData.filter(t => t.status !== 'served');
+
+        // --- STRICT STATION FILTERING ENGINE (KITCHENOS) ---
+        const stationFilteredData = rawData.map(t => {
+            const kitchenItems = (t.order_items || []).filter((item: KitchenItem) => {
+                const st = String(item.station || item.prep_station || item.prepStation || '').toLowerCase().trim();
+                const dietary = String(item.dietary || item.category || '').toLowerCase().trim();
+
+                // 1. THE ULTIMATE AUTHORITY: PREP STATION (Overrides everything)
+                if (st === 'kitchen' || st === 'food' || st === 'main') return true;
+                if (st === 'bar' || st === 'coffee') return false; // Ban bar items even if dietary is food
+
+                // 2. FALLBACK: DIETARY TYPE (Only runs if Station is completely empty)
+                if (st === '') {
+                    const isDrinkType = ['drinks', 'beverage', 'liquor', 'cocktail', 'mocktail'].includes(dietary);
+                    return !isDrinkType; // Kitchen takes everything that isn't a drink
+                }
+
+                return true; 
+            });
+            return { ...t, order_items: kitchenItems };
+        }).filter(t => t.order_items.length > 0); 
+
+        const activeOrders = stationFilteredData.filter(t => t.status !== 'served');
         
         const sorted = activeOrders.sort((a, b) => {
             const statusOrder = { 'pending': 0, 'preparing': 1, 'cooking': 1, 'ready': 2, 'served': 3 };
@@ -320,7 +346,11 @@ export default function KitchenPage() {
 
         if (selectedTicket) {
             const freshTicket = sorted.find(t => t.id === selectedTicket.id);
-            if (freshTicket) setSelectedTicket(freshTicket as KitchenTicket);
+            if (freshTicket) {
+                setSelectedTicket(freshTicket as KitchenTicket);
+            } else {
+                setSelectedTicket(null); // Clear modal if ticket vanished
+            }
         }
     }
     setLoading(false);

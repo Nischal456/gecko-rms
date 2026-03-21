@@ -16,7 +16,7 @@ import {
     getKitchenMenuData, saveKitchenCategory, deleteKitchenCategory, 
     saveKitchenItem, deleteKitchenItem, quickToggleItem 
 } from "@/app/actions/kitchen-menu";
-import { getDashboardData } from "@/app/actions/dashboard"; // Added to fetch tenant feature flags
+import { getDashboardData } from "@/app/actions/dashboard"; 
 
 // --- CONFIGURATION ---
 const CLOUDINARY_CLOUD_NAME = "dczy4dbgc"; 
@@ -109,7 +109,6 @@ function KitchenDock() {
                 <DockLink href="/staff/kitchen" icon={<ChefHat className="w-[18px] h-[18px]" />} label="Kitchen" />
                 <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
                 
-                {/* Active Tab */}
                 <button className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all group relative">
                     <LayoutGrid className="w-[18px] h-[18px]" />
                 </button>
@@ -169,7 +168,7 @@ export default function KitchenMenuPage() {
 
   const catInputRef = useRef<HTMLInputElement>(null);
 
-  // NOTIFICATION STATE (Persistent Loop exactly like Kitchen page)
+  // NOTIFICATION STATE
   const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
   const prevTicketIds = useRef<Set<string>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -179,13 +178,11 @@ export default function KitchenMenuPage() {
   useEffect(() => { 
       loadData(); 
 
-      // Init Audio
       const audio = new Audio(ALERT_SOUND);
       audio.volume = 1.0;
-      audio.loop = true; // Loop until acknowledged
+      audio.loop = true; 
       audioRef.current = audio;
 
-      // Start Live Order Polling
       pollForNewOrders();
       const pollInterval = setInterval(pollForNewOrders, 3000);
       return () => clearInterval(pollInterval);
@@ -205,32 +202,18 @@ export default function KitchenMenuPage() {
       
       let filteredCategories = res.categories;
 
-      // 3. APPLY KOT SPLIT LOGIC (Hide Drinks/Bar from Kitchen Menu Editor if active)
+      // 3. APPLY KOT SPLIT LOGIC (Strictly filter out anything that is NOT 'kitchen' station)
       if (splitEnabled) {
           filteredCategories = res.categories.map((cat: any) => {
               const safeItems = cat.items.filter((item: any) => {
-                  const category = (item.category || item.dietary || '').toLowerCase();
-                  const itemName = (item.name || '').toLowerCase();
                   const station = (item.station || '').toLowerCase();
-
-                  if (station === 'bar' || station === 'bot') return false;
-                  if (category.includes('drink') || category.includes('bar') || category.includes('beverage') || category.includes('liquor')) return false;
-
-                  const botKeywords = [
-                      'hookah', 'shisha', 'cigarette', 'smoke', 'coal', 'cigar',
-                      'coke', 'sprite', 'fanta', 'pepsi', 'dew', 'red bull', 'sting',
-                      'mojito', 'beer', 'wine', 'vodka', 'whiskey', 'rum', 'gin', 'tequila', 
-                      'cocktail', 'mocktail', 'juice', 'shake', 'smoothie', 'water',
-                      'tea', 'coffee', 'latte', 'espresso', 'americano', 'cappuccino'
-                  ];
-
-                  if (botKeywords.some(keyword => itemName.includes(keyword))) return false;
-
+                  // STRICT LOCK: If split is active, Kitchen OS can ONLY see 'kitchen' items.
+                  if (station === 'bar' || station === 'bot' || station === 'coffee') return false;
                   return true;
               });
 
               return { ...cat, items: safeItems };
-          }).filter((cat: any) => cat.items.length > 0); // Remove completely empty categories after filtering
+          }).filter((cat: any) => cat.items.length > 0); 
       }
 
       setCategories(filteredCategories);
@@ -435,11 +418,15 @@ export default function KitchenMenuPage() {
             </div>
             
             <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-center">
-                <div className="flex p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
-                    <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}>All</button>
-                    <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "kitchen" ? "bg-white shadow text-orange-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><ChefHat className="w-3.5 h-3.5" /> Kitchen</button>
-                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-violet-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
-                </div>
+                
+                {/* STATION FILTERS (Hidden if Split is Active because Kitchen shouldn't filter for Bar) */}
+                {!isSplitActive && (
+                    <div className="flex p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
+                        <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}>All</button>
+                        <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "kitchen" ? "bg-white shadow text-orange-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><ChefHat className="w-3.5 h-3.5" /> Kitchen</button>
+                        <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-violet-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
+                    </div>
+                )}
 
                 <div className="relative group w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
@@ -552,10 +539,10 @@ export default function KitchenMenuPage() {
                                 </div>
                                 <div className="flex-1">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Prep Station</label>
-                                    <select value={formStation} onChange={e => setFormStation(e.target.value)} className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100">
+                                    <select value={formStation} onChange={e => setFormStation(e.target.value)} disabled={isSplitActive} className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100 disabled:opacity-50 disabled:bg-slate-50">
                                         <option value="kitchen">🍳 Kitchen</option>
-                                        <option value="bar">🍷 Bar</option>
-                                        <option value="coffee">☕ Coffee</option>
+                                        {!isSplitActive && <option value="bar">🍷 Bar</option>}
+                                        {!isSplitActive && <option value="coffee">☕ Coffee</option>}
                                     </select>
                                 </div>
                             </div>

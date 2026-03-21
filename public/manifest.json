@@ -1,8 +1,8 @@
 {
   "name": "Gecko RMS",
-  "short_name": "Gecko",
+  "short_name": "GeckoRMS",
   "description": "Intelligent Restaurant Management System",
-  "start_url": "/",
+  "start_url": "/staff/login",
   "display": "standalone",
   "background_color": "#F8FAFC",
   "theme_color": "#10b981",

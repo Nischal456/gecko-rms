@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Search, Image as ImageIcon, Loader2, Trash2, Edit2, 
-  X, UploadCloud, Database, Save, LayoutGrid, GlassWater, Wine, Layers, ToggleLeft, ToggleRight, LogOut, FileBarChart, Bell
+  X, UploadCloud, Database, Save, LayoutGrid, GlassWater, Wine, Coffee, Layers, ToggleLeft, ToggleRight, LogOut, FileBarChart, Bell, Ticket
 } from "lucide-react";
 import { toast } from "sonner";
 import { logoutStaff } from "@/app/actions/staff-auth";
@@ -56,13 +56,98 @@ async function compressImage(file: File): Promise<File> {
     });
 }
 
+// --- PREMIUM DOCK ---
+function BarDock() {
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">Power Down Terminal?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to end your bar shift and sign out of BarOS?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Powering down terminal...");
+                            sessionStorage.removeItem("gecko_bar_init");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Sign Out
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
+    };
+
+    return (
+        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
+            <motion.div 
+                initial={{ y: 100, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100"
+            >
+                <DockLink href="/staff/bartender" icon={<Wine className="w-[18px] h-[18px]" />} label="Bar" />
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                
+                {/* Active Tab */}
+                <button className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 transition-all group relative">
+                    <LayoutGrid className="w-[18px] h-[18px]" />
+                </button>
+                
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                <DockLink href="/staff/bartender/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all group relative">
+                    <LogOut className="w-[18px] h-[18px]" />
+                    <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none">
+                        Sign Out
+                    </span>
+                </button>
+            </motion.div>
+        </div>
+    )
+}
+
+function DockLink({ href, icon, label }: any) {
+    return (
+        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
+            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
+            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
+                {label}
+            </span>
+        </Link>
+    )
+}
+
 // --- MAIN PAGE ---
 export default function BartenderMenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isSplitActive, setIsSplitActive] = useState(false);
   
+  // FILTERS
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterStation, setFilterStation] = useState<"all" | "bar" | "coffee">("all");
+  
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,33 +191,23 @@ export default function BartenderMenuPage() {
     // Fetch Tenant settings to check KOT/BOT Split Status
     const dashRes = await getDashboardData();
     const splitEnabled = dashRes?.tenant?.feature_flags?.split_kot_bot === true;
+    setIsSplitActive(splitEnabled);
 
     const res = await getKitchenMenuData();
     if(res.success && res.categories) {
       
       let filteredCategories = res.categories;
 
+      // STRICT BOT FILTERING: If split is active, BarOS ONLY sees 'bar' and 'coffee' station items.
       if (splitEnabled) {
           filteredCategories = res.categories.map((cat: any) => {
               const safeItems = cat.items.filter((item: any) => {
-                  const category = (item.category || item.dietary || '').toLowerCase();
-                  const itemName = (item.name || '').toLowerCase();
                   const station = (item.station || '').toLowerCase();
-
-                  if (station === 'bar' || station === 'bot') return true;
-                  if (category.includes('drink') || category.includes('bar') || category.includes('beverage') || category.includes('liquor')) return true;
-
-                  const botKeywords = [
-                      'hookah', 'shisha', 'cigarette', 'smoke', 'coal', 'cigar',
-                      'coke', 'sprite', 'fanta', 'pepsi', 'dew', 'red bull', 'sting',
-                      'mojito', 'beer', 'wine', 'vodka', 'whiskey', 'rum', 'gin', 'tequila', 
-                      'cocktail', 'mocktail', 'juice', 'shake', 'smoothie', 'water',
-                      'tea', 'coffee', 'latte', 'espresso', 'americano', 'cappuccino'
-                  ];
-
-                  if (botKeywords.some(keyword => itemName.includes(keyword))) return true;
-
-                  return false; // Hide food from the bartender menu
+                  
+                  // Hide Kitchen food
+                  if (station === 'kitchen') return false;
+                  
+                  return true; 
               });
 
               return { ...cat, items: safeItems };
@@ -288,25 +363,27 @@ export default function BartenderMenuPage() {
 
   const activeCategory = categories.find(c => c.id === activeTabId);
   
-  // FIX: Properly typed itemsToDisplay 
-  const itemsToDisplay: MenuItem[] = activeCategory?.items?.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase())) || [];
+  // FIX: Properly typed itemsToDisplay & Station Filtering for BarOS
+  const itemsToDisplay: MenuItem[] = activeCategory?.items
+      ?.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      ?.filter(i => filterStation === "all" || i.station === filterStation) || [];
 
   if (loading) return (
       <div className="w-full h-full flex flex-col gap-4 items-center justify-center bg-[#F8FAFC]">
-          <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
+          <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
           <span className="text-xs font-black uppercase tracking-widest text-slate-400 animate-pulse">Syncing Bar Menu...</span>
       </div>
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-[#F8FAFC]">
+    <div className="flex-1 flex flex-col h-[100dvh] relative overflow-hidden bg-[#F8FAFC]">
         
         {/* LIVE ALERT BANNER */}
         <AnimatePresence>
             {latestOrderTable && (
                 <motion.div 
                     initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
-                    className="fixed top-0 left-0 right-0 bg-red-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer"
+                    className="fixed top-0 left-0 right-0 bg-indigo-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer"
                     onClick={stopAlert}
                 >
                     <div className="flex items-center gap-4 animate-pulse">
@@ -318,7 +395,7 @@ export default function BartenderMenuPage() {
                             <h3 className="text-xl md:text-2xl font-black leading-none">{latestOrderTable}</h3>
                         </div>
                     </div>
-                    <button className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
+                    <button className="bg-white text-indigo-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
                         Acknowledge
                     </button>
                 </motion.div>
@@ -327,17 +404,28 @@ export default function BartenderMenuPage() {
 
         <header className="flex-shrink-0 px-4 md:px-8 py-4 bg-white/90 backdrop-blur-xl border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 z-20 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shadow-inner border border-emerald-100"><Database className="w-5 h-5 text-emerald-600" /></div>
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shadow-inner border border-indigo-100"><Database className="w-5 h-5 text-indigo-600" /></div>
                 <div>
                     <h1 className="text-xl font-black text-slate-900 leading-tight">Bar Menu Manager</h1>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mixology Edition</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Mixology Edition</p>
+                        {isSplitActive && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1 border border-indigo-200"><Ticket className="w-2.5 h-2.5" /> BOT Only</span>}
+                    </div>
                 </div>
             </div>
             
             <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-center">
+                
+                {/* STATION FILTERS (Visible to Bartenders to switch between Alcohol & Coffee) */}
+                <div className="flex p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
+                    <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}>All</button>
+                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-indigo-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
+                    <button onClick={() => setFilterStation("coffee")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "coffee" ? "bg-white shadow text-amber-700 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Coffee className="w-3.5 h-3.5" /> Coffee</button>
+                </div>
+
                 <div className="relative group w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                    <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search drinks..." className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 shadow-[0_2px_10px_rgb(0,0,0,0.02)] rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search drinks..." className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 shadow-[0_2px_10px_rgb(0,0,0,0.02)] rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all outline-none" />
                 </div>
                 
                 <button onClick={() => { setEditingItem(null); setFormName(""); setFormDesc(""); setFormImage(""); setFormDietary("drinks"); setFormStation("bar"); setFormAvailable(true); setVariants([{name:"", price:0}]); setIsItemModalOpen(true); }} disabled={!activeTabId} className="w-full md:w-auto h-11 px-5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap">
@@ -348,7 +436,7 @@ export default function BartenderMenuPage() {
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-[100px] md:pb-0">
             <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex-shrink-0 flex md:flex-col overflow-x-auto md:overflow-y-auto no-scrollbar p-3 md:p-5 gap-2 z-10 shadow-[4px_0_24px_rgb(0,0,0,0.02)]">
-                <button onClick={() => setIsCatModalOpen(true)} className="flex-shrink-0 w-auto md:w-full h-11 md:h-12 px-4 border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-xs uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap">
+                <button onClick={() => setIsCatModalOpen(true)} className="flex-shrink-0 w-auto md:w-full h-11 md:h-12 px-4 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-xs uppercase tracking-wider hover:bg-indigo-100 transition-all whitespace-nowrap">
                     <Plus className="w-4 h-4 mr-1.5" /> Category
                 </button>
                 <div className="w-full h-[1px] bg-slate-100 my-2 hidden md:block"></div>
@@ -380,6 +468,8 @@ export default function BartenderMenuPage() {
             </div>
         </div>
 
+        <BarDock />
+
         {/* --- MODALS --- */}
         <AnimatePresence>
             {isCatModalOpen && (
@@ -387,10 +477,10 @@ export default function BartenderMenuPage() {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsCatModalOpen(false)} />
                     <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[2rem] p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100">
                         <h3 className="text-2xl font-black text-slate-900 mb-6">New Category</h3>
-                        <input ref={catInputRef} autoFocus placeholder="e.g. Cocktails, Hookah" className="w-full h-14 px-5 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none mb-6 focus:ring-4 focus:ring-emerald-50 focus:border-emerald-400 transition-all text-lg" />
+                        <input ref={catInputRef} autoFocus placeholder="e.g. Cocktails, Hookah" className="w-full h-14 px-5 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none mb-6 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all text-lg" />
                         <div className="flex gap-3">
                             <button onClick={() => setIsCatModalOpen(false)} className="flex-1 h-12 rounded-xl font-bold text-slate-500 hover:bg-slate-50 border border-slate-200 transition-colors">Cancel</button>
-                            <button onClick={() => handleAddCategory()} disabled={isSubmitting} className="flex-[2] h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black shadow-lg shadow-emerald-500/20 flex items-center justify-center transition-colors">
+                            <button onClick={() => handleAddCategory()} disabled={isSubmitting} className="flex-[2] h-12 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-500/20 flex items-center justify-center transition-colors">
                                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Create"}
                             </button>
                         </div>
@@ -409,37 +499,48 @@ export default function BartenderMenuPage() {
                         
                         <form onSubmit={handleSaveItem} className="space-y-5">
                             {/* IMAGE */}
-                            <div className="group relative w-full h-40 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[1.5rem] flex items-center justify-center overflow-hidden cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors">
-                                {formImage ? <img src={formImage} className="w-full h-full object-cover" /> : <div className="text-slate-400 font-bold flex flex-col items-center group-hover:text-emerald-500 transition-colors"><UploadCloud className="w-8 h-8 mb-2" /> Upload Photo</div>}
+                            <div className="group relative w-full h-40 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[1.5rem] flex items-center justify-center overflow-hidden cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors">
+                                {formImage ? <img src={formImage} className="w-full h-full object-cover" /> : <div className="text-slate-400 font-bold flex flex-col items-center group-hover:text-indigo-500 transition-colors"><UploadCloud className="w-8 h-8 mb-2" /> Upload Photo</div>}
                                 <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                {isUploading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col gap-2 items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin" /><span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Processing...</span></div>}
+                                {isUploading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col gap-2 items-center justify-center"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /><span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Processing...</span></div>}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Name</label>
-                                    <input value={formName} onChange={e => setFormName(e.target.value)} required placeholder="e.g. Classic Mojito" className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-50 focus:border-emerald-400 transition-all" />
+                                    <input value={formName} onChange={e => setFormName(e.target.value)} required placeholder="e.g. Classic Mojito" className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all" />
                                 </div>
                             </div>
                             
-                            {/* FIX: Removed Tailwind conflict (flex and hidden) */}
+                            {/* HIDDEN STATION LOGIC */}
                             <div className="hidden gap-4">
                                 <input value={formDietary} onChange={e => setFormDietary(e.target.value)} />
                                 <input value={formStation} onChange={e => setFormStation(e.target.value)} />
                             </div>
 
+                            {/* EXPOSED STATION TOGGLE FOR BARTENDER */}
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Prep Station</label>
+                                    <select value={formStation} onChange={e => setFormStation(e.target.value)} className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100">
+                                        <option value="bar">🍷 Bar</option>
+                                        <option value="coffee">☕ Coffee</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div className="bg-slate-50 p-5 rounded-[1.5rem] border border-slate-100">
                                 <div className="flex justify-between items-center mb-4">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-slate-400" /> Variants & Pricing</label>
-                                    <button type="button" onClick={addVariant} className="text-[10px] font-black uppercase tracking-wider bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors">+ Add Size</button>
+                                    <button type="button" onClick={addVariant} className="text-[10px] font-black uppercase tracking-wider bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors">+ Add Size</button>
                                 </div>
                                 <div className="space-y-3">
                                     {variants.map((v, i) => (
                                         <div key={i} className="flex gap-2">
-                                            <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value)} placeholder="Type (e.g. Pitcher, Glass)" className="flex-1 h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold outline-none focus:border-emerald-400" />
+                                            <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value)} placeholder="Type (e.g. Pitcher, Glass)" className="flex-1 h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold outline-none focus:border-indigo-400" />
                                             <div className="relative w-28">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs</span>
-                                                <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", e.target.value)} placeholder="0" className="w-full h-11 pl-8 pr-3 rounded-xl border border-slate-200 text-sm font-black text-slate-900 outline-none focus:border-emerald-400" />
+                                                <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", e.target.value)} placeholder="0" className="w-full h-11 pl-8 pr-3 rounded-xl border border-slate-200 text-sm font-black text-slate-900 outline-none focus:border-indigo-400" />
                                             </div>
                                             {variants.length > 1 && <button type="button" onClick={() => removeVariant(i)} className="w-11 h-11 flex items-center justify-center text-red-400 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-colors"><X className="w-4 h-4" /></button>}
                                         </div>
@@ -454,10 +555,15 @@ export default function BartenderMenuPage() {
                                 </button>
                             </div>
 
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Description</label>
+                                <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Delicious details about this drink..." className="w-full h-24 p-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold resize-none text-slate-700 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all" />
+                            </div>
+                            
                             <div className="pt-4 border-t border-slate-100 flex gap-3">
                                 <button type="button" onClick={() => setIsItemModalOpen(false)} className="flex-1 h-14 rounded-2xl border-2 border-slate-200 font-bold text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
-                                <button type="submit" disabled={isSubmitting} className="flex-[2] h-14 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-600/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-                                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Save</>}
+                                <button type="submit" disabled={isSubmitting} className="flex-[2] h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-600/30 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Save Drink</>}
                                 </button>
                             </div>
                         </form>
@@ -471,6 +577,13 @@ export default function BartenderMenuPage() {
 
 // --- PREMIUM MOBILE-OPTIMIZED ITEM CARD ---
 function ItemCard({ item, onEdit, onDelete, onToggle }: { item: MenuItem; onEdit: () => void; onDelete: () => void; onToggle: () => void }) {
+    const isCoffee = item.station === 'coffee';
+    
+    let BadgeIcon = GlassWater;
+    let badgeColor = 'bg-blue-100 text-blue-700';
+    if(isCoffee) { BadgeIcon = Coffee; badgeColor = 'bg-amber-100 text-amber-700'; }
+    else if(item.name.toLowerCase().includes('wine')) { BadgeIcon = Wine; badgeColor = 'bg-purple-100 text-purple-700'; }
+
     const prices: number[] = item.variants?.map((v: Variant) => v.price) || [];
     const priceDisplay = prices.length > 1 ? `Rs ${Math.min(...prices)} - ${Math.max(...prices)}` : `Rs ${item.price}`;
 
@@ -485,7 +598,7 @@ function ItemCard({ item, onEdit, onDelete, onToggle }: { item: MenuItem; onEdit
                     <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><ImageIcon className="w-8 h-8 md:w-10 md:h-10 opacity-50" /></div>
                 )}
                 {!item.is_available && <div className="absolute inset-0 bg-red-900/30 flex items-center justify-center text-white font-black text-[10px] md:text-xs uppercase tracking-widest backdrop-blur-sm border-2 border-red-500/50 rounded-xl md:rounded-2xl">Sold Out</div>}
-                <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg shadow-sm text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 bg-blue-100 text-blue-700`}><GlassWater className="w-3 h-3" /></div>
+                <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg shadow-sm text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${badgeColor}`}><BadgeIcon className="w-3 h-3" /></div>
             </div>
             
             <div className="flex-1 flex flex-col">
@@ -493,7 +606,7 @@ function ItemCard({ item, onEdit, onDelete, onToggle }: { item: MenuItem; onEdit
                 {item.sub_category && <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 px-2 py-1 rounded-md mb-2 w-fit">{item.sub_category}</span>}
                 
                 <div className="flex items-center gap-1.5 md:gap-2 mt-auto pt-1">
-                    <span className="text-emerald-600 font-black text-xs md:text-sm">{priceDisplay}</span>
+                    <span className="text-indigo-600 font-black text-xs md:text-sm">{priceDisplay}</span>
                     {item.variants?.length > 1 && <span className="text-[8px] md:text-[9px] bg-slate-100 px-1.5 md:px-2 py-1 rounded-md font-bold text-slate-500 flex items-center gap-1"><Layers className="w-2.5 h-2.5 md:w-3 md:h-3" /> {item.variants.length} Sizes</span>}
                 </div>
             </div>

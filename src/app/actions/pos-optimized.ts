@@ -30,7 +30,7 @@ export async function createOrderJSON(orderData: any) {
       return { success: false, error: "Cart is empty" };
   }
 
-  // EXACTLY AS YOU PROVIDED IT
+  // --- CRITICAL FIX: Preserve routing data (station/category) for KDS ---
   const newOrder = {
       id: crypto.randomUUID(),
       tbl: orderData.table_no, // Short key 'tbl' to save space
@@ -38,10 +38,21 @@ export async function createOrderJSON(orderData: any) {
       status: "pending",
       total: orderData.total,
       items: orderData.items.map((i: any) => ({
-          n: i.name || i.n, // 'n' for name
-          q: Number(i.qty || i.q || 1),  // 'q' for qty
-          p: Number(i.price || i.p || 0),// 'p' for price
-          note: i.notes || ""
+          id: i.id || "",
+          unique_id: i.unique_id || i.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+          n: i.name || i.n, // 'n' for optimized size
+          name: i.name || i.n, // 'name' required for Kitchen/Bar OS
+          q: Number(i.qty || i.q || 1),  
+          qty: Number(i.qty || i.q || 1), // 'qty' required for Kitchen/Bar OS
+          p: Number(i.price || i.p || 0),
+          price: Number(i.price || i.p || 0), 
+          note: i.notes || i.note || "",
+          status: "pending",
+          
+          // These are mandatory for the Bar/Kitchen routing engine!
+          station: i.station || i.prep_station || "",
+          category: i.category || "",
+          dietary: i.dietary || ""
       }))
   };
 
@@ -75,46 +86,6 @@ export async function createOrderJSON(orderData: any) {
       console.error("Order Save Failed:", error);
       return { success: false, error: "Failed to save order" };
   }
-
-  // --- INVENTORY SYNC INJECTION ---
-  try {
-      const { data: inventoryItems } = await supabaseAdmin
-          .from("inventory")
-          .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
-          .eq("tenant_id", tenantId);
-
-      if (inventoryItems && inventoryItems.length > 0) {
-          const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
-
-          for (const cartItem of orderData.items) {
-              const rawName = cartItem.name || cartItem.n || "";
-              const rawQty = Number(cartItem.qty || cartItem.q || 1);
-              const cartClean = superClean(rawName); 
-              
-              const stockItem = inventoryItems.find(i => {
-                  const invClean = superClean(i.name);
-                  const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
-                  return invClean === cartClean ||
-                         (linkedClean !== "" && linkedClean === cartClean) ||
-                         (linkedClean !== "" && cartClean.includes(linkedClean)) ||
-                         (invClean !== "" && cartClean.includes(invClean));
-              });
-              
-              if (stockItem) {
-                  const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
-                  const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
-                  const newStock = Math.max(0, Number(currentStock) - deductionAmount);
-                  
-                  await supabaseAdmin.from("inventory")
-                      .update({ stock: newStock, quantity: newStock })
-                      .eq("id", stockItem.id);
-              }
-          }
-      }
-  } catch (invError) {
-      console.error("Inventory Sync Error:", invError);
-  }
-  // --- END INVENTORY SYNC ---
 
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");

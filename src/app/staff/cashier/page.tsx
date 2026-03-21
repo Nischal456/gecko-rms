@@ -10,6 +10,7 @@ import {
   ChevronUp, User, MapPin, Plus, ShoppingBag, Utensils, ArrowRight, Circle, Square, Clock, Bell,
   CreditCard, LayoutDashboard, Check, Eye, EyeOff, CalendarClock, ShieldCheck, BookOpen, Users, Layers, StickyNote
 } from "lucide-react";
+import InventoryView from "./components/InventoryView";
 import { useRouter } from "next/navigation"; 
 import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment } from "@/app/actions/cashier"; 
 import { logoutStaff } from "@/app/actions/staff-auth"; 
@@ -200,6 +201,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     // --- FINANCIAL ENGINE ---
     const [discountInput, setDiscountInput] = useState<string>("");
     const [tenderedInput, setTenderedInput] = useState<string>("");
+    const [isProcessing, setIsProcessing] = useState(false); // FRONTEND DOUBLE-CLICK LOCK
     
     const dragControls = useDragControls();
 
@@ -224,11 +226,16 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const activeItems = getActiveItems(order.items);
     const displayItems = getDisplayItems(order.items);
     
-    // STRICT PAYMENT LOCK: Only allows checkout if NO active items are pending/cooking/ready
-    const hasUnservedItems = activeItems.some(i => ['pending', 'cooking', 'ready'].includes((i.status || '').toLowerCase().trim()));
+    // STRICT PAYMENT LOCK: Scans every single active item. 
+    // If even ONE item is pending, cooking, or ready, checkout is blocked.
+    const hasUnservedItems = activeItems.some(i => {
+        const s = (i.status || '').toLowerCase().trim();
+        return ['pending', 'cooking', 'ready', 'preparing'].includes(s);
+    });
+    
     const isPayable = !hasUnservedItems && activeItems.length > 0;
     
-    // CALCULATIONS (Strictly uses activeItems so cancelled food does not add to bill)
+    // CALCULATIONS 
     const subTotal = activeItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const discountAmt = discountInput === "" ? 0 : Number(discountInput);
     const grandTotal = Math.max(0, subTotal - discountAmt);
@@ -255,12 +262,20 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const activeMethod = paymentMethods.find((m:any) => m.name === method);
     const handlePrint = () => { setTimeout(() => window.print(), 300); };
 
-    const handleConfirmCheckout = () => {
+    const handleConfirmCheckout = async () => {
+        if (isProcessing || !isPayable) return; // Immediate lock
+        
         if (method === "Credit" && (!customer.name || customer.name.trim() === "")) {
             toast.error("Customer Name is required for Credit orders!", { description: "Please enter the customer name below." });
             return;
         }
-        onConfirm(table.label, order.id, method, paymentDetails, customer);
+
+        setIsProcessing(true); // Disable the button instantly
+        try {
+            await onConfirm(table.label, order.id, method, paymentDetails, customer);
+        } catch(e) {
+            setIsProcessing(false); // Only unlock if it errors out
+        }
     };
 
     return (
@@ -487,9 +502,14 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                         <div className="flex gap-3 md:gap-4">
                             {isCancellable && <button onClick={() => onCancel(order.id, table.label)} className="flex-1 py-4 md:py-5 rounded-2xl font-black text-red-500 bg-white hover:bg-red-50 transition-all flex items-center justify-center gap-2 border border-red-200 active:scale-95 text-xs md:text-sm uppercase tracking-wider shadow-sm"><Trash2 className="w-5 h-5"/> Cancel</button>}
                             
-                            {/* STRICT PAYMENT LOCK */}
-                            <button disabled={!isPayable} onClick={handleConfirmCheckout} className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>
-                                {isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}
+                            {/* STRICT PAYMENT LOCK + DOUBLE CLICK PREVENTION */}
+                            <button 
+                                disabled={!isPayable || isProcessing} 
+                                onClick={handleConfirmCheckout} 
+                                className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable && !isProcessing ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>
+                                {isProcessing ? <><Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin"/> Processing...</> : 
+                                 isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : 
+                                 <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}
                             </button>
                         </div>
                     </div>
@@ -793,6 +813,7 @@ export default function CashierDashboard() {
             <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-[72px] md:pt-0 pb-[80px] md:pb-0">
                 {view === 'settings' ? <SettingsPage data={data} onSave={updateStoreSettings} /> : 
                  view === 'reports' ? <ReportsPage data={data} /> : 
+                 view === 'inventory' ? <InventoryView /> :
                  view === 'active_orders' ? <ActiveOrdersView data={data} onSelectOrder={(o:any) => handleSettleClick({ label: o.tbl, currentOrder: o })} onServeOrder={handleServeOrder} onCancelOrder={handleCancelOrder} onEditOrder={handleEditOrder} /> :
                  view === 'new_order_select' ? <NewOrderSelection onSelect={handleSelectService} /> :
                  view === 'table_select' ? <TableSelector tables={data.tables} onSelectTable={handleSelectTableForOrder} onBack={() => setView('new_order_select')} /> :
