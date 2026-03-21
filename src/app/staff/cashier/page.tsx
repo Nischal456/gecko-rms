@@ -741,19 +741,44 @@ export default function CashierDashboard() {
       return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const t = setInterval(() => { if(['terminal', 'active_orders'].includes(view)) loadData(); }, 5000);
-    loadData();
+ useEffect(() => {
+    // 1. Initial Heavy Load (Downloads everything once)
+    loadData(false); 
+    
+    // 2. Ultra-Lightweight Micro-Polling (Saves Bandwidth)
+    const t = setInterval(() => { 
+        if(['terminal', 'active_orders'].includes(view)) {
+            loadData(true); 
+        }
+    }, 5000);
+    
     if(window.innerWidth < 768) setScale(0.5);
     return () => clearInterval(t);
   }, [view]);
 
-  async function loadData() {
-      const res = await getCashierData();
+  async function loadData(isPolling = false) {
+      if (!isPolling) setLoading(true); // Only show spinner on first load
+      
+      const res = await getCashierData(isPolling);
+      
       if (res.success) {
-          setData(res as any);
+          setData(prev => {
+              // If polling, keep the old menu/restaurant data, just update the live orders/tables!
+              if (isPolling && prev) {
+                  return {
+                      ...prev,
+                      stats: res.stats as any,
+                      tables: res.tables,
+                      activeOrders: res.activeOrders,
+                      cancelledItems: res.cancelledItems
+                  };
+              }
+              return res as any; // Full initial load
+          });
+
+          // Notification Engine
           let newUpdate = false;
-          res.activeOrders.forEach((o: any) => {
+          res.activeOrders?.forEach((o: any) => {
               if (o.status === 'ready' && !notifiedOrders.current.has(o.id)) {
                   setNotification(`Order Ready: Table ${o.tbl}`);
                   new Audio(SOUND_NOTIFICATION).play().catch(()=>{});
@@ -765,7 +790,8 @@ export default function CashierDashboard() {
           });
           setHasUpdates(newUpdate);
       }
-      setLoading(false);
+      
+      if (!isPolling) setLoading(false);
   }
 
   const handleSettleClick = (table: any) => { if (!table.currentOrder) return; setSelectedTable(table); };

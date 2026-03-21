@@ -38,8 +38,8 @@ async function getTenantId() {
   return 5; 
 }
 
-// --- 1. GET CASHIER DATA ---
-export async function getCashierData() {
+// --- 1. GET CASHIER DATA (MICRO-POLLING UPGRADE) ---
+export async function getCashierData(isPolling: boolean = false) {
   const tenantId = await getTenantId();
   const today = new Date().toISOString().split('T')[0];
 
@@ -47,19 +47,26 @@ export async function getCashierData() {
     const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
     const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
     
+    // PREMIUM FIX 1: If just polling for new orders, ONLY fetch today. Saves massive bandwidth!
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
 
     const { data: logs } = await supabaseAdmin
         .from("daily_order_logs")
         .select("date, orders_data, paid_history")
         .eq("tenant_id", tenantId)
-        .in("date", [yesterdayStr, today]);
+        .in("date", datesToFetch);
 
-    const { data: optimizedMenu } = await supabaseAdmin
-        .from("menu_optimized")
-        .select("category_name, items")
-        .eq("tenant_id", tenantId);
+    // PREMIUM FIX 2: Skip downloading the heavy Menu every 5 seconds!
+    let optimizedMenu = null;
+    if (!isPolling) {
+        const { data } = await supabaseAdmin
+            .from("menu_optimized")
+            .select("category_name, items")
+            .eq("tenant_id", tenantId);
+        optimizedMenu = data;
+    }
 
     const flatMenu: any[] = [];
     const categories: any[] = [];
@@ -195,7 +202,8 @@ export async function getCashierData() {
       menu: flatMenu, 
       categories: categories, 
       activeOrders: Array.from(tableOrderMap.values()).reverse(),
-      cancelledItems: finalCancelledItems 
+      cancelledItems: finalCancelledItems,
+      isPolling // <--- Tells frontend if this was a micro-poll to prevent re-rendering the menu
     };
   } catch (error) {
     return { success: false, activeOrders: [], cancelledItems: [] };
