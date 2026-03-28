@@ -363,6 +363,7 @@ export default function ReportsPage() {
   }, [rawTransactions, searchTerm, startDate, endDate]);
 
   // 100% ACCURATE DYNAMIC SALES ENGINE
+  // 100% ACCURATE DYNAMIC SALES ENGINE
   const derivedData = useMemo(() => {
       let totalRevenue = 0;
       let totalExpense = 0;
@@ -378,12 +379,16 @@ export default function ReportsPage() {
           const bsDate = toBSFull(tx.date);
           if (!chartGroup[bsDate]) chartGroup[bsDate] = { bsDate, revenue: 0, expense: 0, rawDate: tx.date };
 
-          const isExpense = tx.type?.toLowerCase().includes('expense');
+          const isExpense = tx.type?.toLowerCase().includes('expense') || tx.type === 'Manual Expense';
           const amt = Number(tx.amount) || 0;
           
           if (isExpense) {
               totalExpense += amt;
               chartGroup[bsDate].expense += amt;
+              
+              // PREMIUM FIX: Deduct expenses directly from the Cash Drawer
+              paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - amt;
+              
           } else {
               // Income & POS Orders
               orderCount++;
@@ -395,11 +400,10 @@ export default function ReportsPage() {
                   totalCreditDue += (Number(tx.due) || 0);
               }
 
-              // Staff & Method Tracking
-              // Staff & Method Tracking
-              const method = tx.method || "Cash";
+              // PREMIUM FIX: Route "Manual Log" income straight into the Cash Drawer
+              const method = tx.method === 'Manual Log' ? 'Cash' : (tx.method || "Cash");
               const staff = tx.served_by || tx.staff || "Cashier";
-              
+
               if (method === 'Credit') {
                   // Track the actual deferred credit amount
                   paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + (Number(tx.due) || 0);
@@ -408,9 +412,10 @@ export default function ReportsPage() {
                       paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
                   }
               } else {
+                  // Standard Cash/QR/Card additions
                   paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
               }
-              
+
               staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRev;
 
               // Top Items Tracking
@@ -438,7 +443,7 @@ export default function ReportsPage() {
           chartData
       };
   }, [filteredTransactions]);
-
+  
   const { stats, paymentMethods, staffPerformance, topItems, chartData } = derivedData;
   const expenseTransactions = filteredTransactions.filter((t: any) => t.type?.toLowerCase().includes('expense'));
 

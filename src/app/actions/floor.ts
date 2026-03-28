@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 async function getTenantId() {
   const cookieStore = await cookies();
@@ -13,14 +13,22 @@ export async function getTables() {
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, error: "Unauthorized" };
 
-  const { data, error } = await supabaseAdmin
-    .from("restaurant_tables")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("label", { ascending: true });
+  const getCachedTables = unstable_cache(
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("restaurant_tables")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("label", { ascending: true });
 
-  if (error) return { success: false, error: error.message };
-  return { success: true, data };
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    },
+    [`floor-tables-${tenantId}`],
+    { tags: [`tables-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedTables();
 }
 
 export async function saveTableLayout(tables: any[]) {
@@ -49,13 +57,16 @@ export async function saveTableLayout(tables: any[]) {
       return { success: false, error: error.message };
   }
   
+  revalidateTag(`tables-${tenantId}`, undefined as any);
   revalidatePath("/admin/floor");
   return { success: true };
 }
 
 export async function deleteTable(tableId: string) {
+  const tenantId = await getTenantId();
   const { error } = await supabaseAdmin.from("restaurant_tables").delete().eq("id", tableId);
   if (error) return { success: false, error: error.message };
+  if (tenantId) revalidateTag(`tables-${tenantId}`, undefined as any);
   revalidatePath("/admin/floor");
   return { success: true };
 }

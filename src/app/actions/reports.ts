@@ -23,7 +23,7 @@ function safeParse(data: any): any[] {
   return [];
 }
 
-async function getTenantId(): Promise<number> {
+async function getTenantId(): Promise<string | number> {
   const cookieStore = await cookies();
   const rawId = cookieStore.get("gecko_tenant_id")?.value;
   if (rawId) return getSafeId(rawId);

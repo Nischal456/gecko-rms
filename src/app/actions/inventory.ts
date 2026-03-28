@@ -2,8 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
-import { unstable_noStore as noStore } from 'next/cache'; // CRITICAL: Prevents stale data caching
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 async function getTenantId() {
   const cookieStore = await cookies();
@@ -12,33 +11,40 @@ async function getTenantId() {
 
 // --- 1. GET INVENTORY ---
 export async function getInventory() {
-  noStore(); // Force real-time fetch
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, error: "Unauthorized" };
 
-  const { data, error } = await supabaseAdmin
-    .from("inventory")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("category", { ascending: true })
-    .order("name", { ascending: true });
+  const getCachedInventory = unstable_cache(
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("inventory")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("category", { ascending: true })
+        .order("name", { ascending: true });
 
-  const formattedData = data?.map(item => {
-      const currentStock = item.stock !== undefined ? item.stock : (item.quantity || 0);
-      const totalUnits = item.volume_per_unit > 1 
-        ? (currentStock / item.volume_per_unit).toFixed(2) 
-        : currentStock;
+      const formattedData = data?.map(item => {
+          const currentStock = item.stock !== undefined ? item.stock : (item.quantity || 0);
+          const totalUnits = item.volume_per_unit > 1 
+            ? (currentStock / item.volume_per_unit).toFixed(2) 
+            : currentStock;
 
-      return {
-        ...item,
-        stock: currentStock,
-        display_stock: item.volume_per_unit > 1 
-            ? `${totalUnits} ${item.unit}s (${currentStock}${item.base_unit})`
-            : `${currentStock} ${item.unit}`
-      }
-  }) || [];
+          return {
+            ...item,
+            stock: currentStock,
+            display_stock: item.volume_per_unit > 1 
+                ? `${totalUnits} ${item.unit}s (${currentStock}${item.base_unit})`
+                : `${currentStock} ${item.unit}`
+          }
+      }) || [];
 
-  return { success: !error, data: formattedData };
+      return { success: !error, data: formattedData };
+    },
+    [`inventory-${tenantId}`],
+    { tags: [`inventory-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedInventory();
 }
 
 // --- 2. UPDATE STOCK ---
@@ -66,6 +72,7 @@ export async function updateStock(id: string, deductAmount: number, reason: stri
 
   await supabaseAdmin.from('inventory_daily_logs').upsert({ tenant_id: tenantId, date: today, logs: newLogs, total_cogs: newTotalCogs }, { onConflict: 'date, tenant_id' });
 
+  revalidateTag(`inventory-${tenantId}`, undefined as any);
   revalidatePath("/staff/manager/inventory");
   revalidatePath("/admin/inventory");
   return { success: true, newStock };
@@ -84,6 +91,7 @@ export async function manualStockAdjust(id: string, changeAmount: number) {
   
   await supabaseAdmin.from("inventory").update({ stock: newStock, quantity: newStock }).eq("id", id);
 
+  revalidateTag(`inventory-${tenantId}`, undefined as any);
   revalidatePath("/staff/manager/inventory");
   revalidatePath("/admin/inventory");
   return { success: true, newStock };
@@ -91,26 +99,33 @@ export async function manualStockAdjust(id: string, changeAmount: number) {
 
 // --- 3. FETCH MENU ITEMS ---
 export async function getMenuItemsForLinking() {
-    noStore();
     const tenantId = await getTenantId();
     if (!tenantId) return { success: false, data: [] };
 
-    const { data } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
-    const { data: globalData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", 0);
+    const getCachedMenuLinking = unstable_cache(
+        async () => {
+            const { data } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
+            const { data: globalData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", 0);
 
-    let allItems: string[] = [];
-    const extractItems = (rows: any[]) => {
-        rows?.forEach(row => {
-            if (Array.isArray(row.items)) {
-                row.items.forEach((item: any) => { if (item.name) allItems.push(item.name); });
-            }
-        });
-    };
+            let allItems: string[] = [];
+            const extractItems = (rows: any[]) => {
+                rows?.forEach(row => {
+                    if (Array.isArray(row.items)) {
+                        row.items.forEach((item: any) => { if (item.name) allItems.push(item.name); });
+                    }
+                });
+            };
 
-    extractItems(data || []);
-    extractItems(globalData || []);
+            extractItems(data || []);
+            extractItems(globalData || []);
 
-    return { success: true, data: Array.from(new Set(allItems)).sort() };
+            return { success: true, data: Array.from(new Set(allItems)).sort() };
+        },
+        [`menu-links-${tenantId}`],
+        { tags: [`menu-${tenantId}`], revalidate: 3600 }
+    );
+
+    return getCachedMenuLinking();
 }
 
 // --- 4. ADD ITEM ---
@@ -137,23 +152,34 @@ export async function addInventoryItem(data: any) {
     linked_menu_item: data.linked_menu_item || null
   });
 
+  revalidateTag(`inventory-${tenantId}`, undefined as any);
   revalidatePath("/admin/inventory");
   return { success: !error, error: error?.message };
 }
 
 export async function deleteInventoryItem(id: string) {
+  const tenantId = await getTenantId();
   await supabaseAdmin.from("inventory").delete().eq("id", id);
+  revalidateTag(`inventory-${tenantId}`, undefined as any);
   revalidatePath("/admin/inventory");
   return { success: true };
 }
 
 // --- 5. FINANCIALS (INCOME & EXPENSE) ---
 export async function getExpenses() {
-  noStore(); // Force real-time fetch
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, data: [] };
-  const { data, error } = await supabaseAdmin.from("expenses").select("*").eq("tenant_id", tenantId).order("date", { ascending: false }).order("created_at", { ascending: false });
-  return { success: !error, data: data || [] };
+
+  const getCachedExpenses = unstable_cache(
+    async () => {
+      const { data, error } = await supabaseAdmin.from("expenses").select("*").eq("tenant_id", tenantId).order("date", { ascending: false }).order("created_at", { ascending: false });
+      return { success: !error, data: data || [] };
+    },
+    [`expenses-${tenantId}`],
+    { tags: [`expenses-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedExpenses();
 }
 
 // CRITICAL FIX: Securing the custom categories with a hidden tag
@@ -181,12 +207,15 @@ export async function addExpense(data: any) {
   
   if (error) console.error("Database Save Error:", error);
 
+  revalidateTag(`expenses-${tenantId}`, undefined as any);
   revalidatePath("/admin/inventory");
   return { success: !error, error: error?.message }; 
 }
 
 export async function deleteExpense(id: string) {
+  const tenantId = await getTenantId();
   await supabaseAdmin.from("expenses").delete().eq("id", id);
+  revalidateTag(`expenses-${tenantId}`, undefined as any);
   revalidatePath("/admin/inventory");
   return { success: true };
 }

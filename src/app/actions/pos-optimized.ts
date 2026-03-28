@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 // --- CONSTANTS ---
 const FALLBACK_TENANT_UUID = "00000000-0000-0000-0000-000000000000";
@@ -87,6 +87,7 @@ export async function createOrderJSON(orderData: any) {
       return { success: false, error: "Failed to save order" };
   }
 
+  revalidateTag(`orders-${tenantId}`, undefined as any);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
   revalidatePath("/admin/inventory");

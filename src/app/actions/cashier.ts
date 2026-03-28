@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 
 // --- HELPERS ---
 function getSafeId(id: string | null | undefined): number {
@@ -41,173 +41,182 @@ async function getTenantId() {
 // --- 1. GET CASHIER DATA (MICRO-POLLING UPGRADE) ---
 export async function getCashierData(isPolling: boolean = false) {
   const tenantId = await getTenantId();
-  const today = new Date().toISOString().split('T')[0];
 
-  try {
-    const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
-    const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
-    
-    // PREMIUM FIX 1: If just polling for new orders, ONLY fetch today. Saves massive bandwidth!
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
+  const getCachedCashier = unstable_cache(
+    async () => {
+      const today = new Date().toISOString().split('T')[0];
 
-    const { data: logs } = await supabaseAdmin
-        .from("daily_order_logs")
-        .select("date, orders_data, paid_history")
-        .eq("tenant_id", tenantId)
-        .in("date", datesToFetch);
+      try {
+        const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
+        const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
+        
+        // PREMIUM FIX 1: If just polling for new orders, ONLY fetch today. Saves massive bandwidth!
+        const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
 
-    // PREMIUM FIX 2: Skip downloading the heavy Menu every 5 seconds!
-    let optimizedMenu = null;
-    if (!isPolling) {
-        const { data } = await supabaseAdmin
-            .from("menu_optimized")
-            .select("category_name, items")
-            .eq("tenant_id", tenantId);
-        optimizedMenu = data;
-    }
+        const { data: logs } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("date, orders_data, paid_history")
+            .eq("tenant_id", tenantId)
+            .in("date", datesToFetch);
 
-    const flatMenu: any[] = [];
-    const categories: any[] = [];
+        // PREMIUM FIX 2: Skip downloading the heavy Menu every 5 seconds!
+        let optimizedMenu = null;
+        if (!isPolling) {
+            const { data } = await supabaseAdmin
+                .from("menu_optimized")
+                .select("category_name, items")
+                .eq("tenant_id", tenantId);
+            optimizedMenu = data;
+        }
 
-    if (optimizedMenu) {
-        optimizedMenu.forEach((cat: any) => {
-            categories.push({ name: cat.category_name });
-            const items = Array.isArray(cat.items) ? cat.items : [];
-            items.forEach((item: any) => {
-                 if(item.is_available !== false) { 
-                     flatMenu.push({
-                         id: item.id,
-                         name: item.name,
-                         price: item.price,
-                         image_url: item.image_url,
-                         category: cat.category_name,
-                         description: item.description,
-                         is_veg: item.is_veg,
-                         variants: item.variants || [] 
-                     });
-                 }
-            });
-        });
-    }
+        const flatMenu: any[] = [];
+        const categories: any[] = [];
 
-    let totalRevenue = 0;
-    let pendingBills = 0;
-    const tableOrderMap = new Map();
-    const cancelledItemsMap = new Map(); 
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    logs?.forEach(log => {
-        const activeOrders = safeParse(log.orders_data);
-        const paidHistory = safeParse(log.paid_history);
-
-        if (log.date === today) {
-            paidHistory.forEach((bill: any) => {
-                if (bill.payment_method === 'Credit') {
-                    totalRevenue += Number(bill.tendered || 0);
-                } else {
-                    totalRevenue += Number(bill.grandTotal || 0);
-                }
+        if (optimizedMenu) {
+            optimizedMenu.forEach((cat: any) => {
+                categories.push({ name: cat.category_name });
+                const items = Array.isArray(cat.items) ? cat.items : [];
+                items.forEach((item: any) => {
+                     if(item.is_available !== false) { 
+                         flatMenu.push({
+                             id: item.id,
+                             name: item.name,
+                             price: item.price,
+                             image_url: item.image_url,
+                             category: cat.category_name,
+                             description: item.description,
+                             is_veg: item.is_veg,
+                             variants: item.variants || [] 
+                         });
+                     }
+                });
             });
         }
-        
-        const allOrdersForWaste = [...activeOrders, ...paidHistory];
-        
-        allOrdersForWaste.forEach((order: any) => {
-            (order.items || []).forEach((item: any) => {
-                if (item.status === 'cancelled' || item.status === 'void') {
-                    if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
-                        if (item.cancelled_at) {
-                            const cancelDate = new Date(item.cancelled_at);
-                            if (cancelDate >= oneDayAgo) {
-                                const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
-                                const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
-                                
-                                cancelledItemsMap.set(uniqueKey, {
-                                    ...item,
-                                    orderId: orderId,
-                                    tableName: order.tbl || order.table_no || "Unknown"
-                                });
+
+        let totalRevenue = 0;
+        let pendingBills = 0;
+        const tableOrderMap = new Map();
+        const cancelledItemsMap = new Map(); 
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        logs?.forEach(log => {
+            const activeOrders = safeParse(log.orders_data);
+            const paidHistory = safeParse(log.paid_history);
+
+            if (log.date === today) {
+                paidHistory.forEach((bill: any) => {
+                    if (bill.payment_method === 'Credit') {
+                        totalRevenue += Number(bill.tendered || 0);
+                    } else {
+                        totalRevenue += Number(bill.grandTotal || 0);
+                    }
+                });
+            }
+            
+            const allOrdersForWaste = [...activeOrders, ...paidHistory];
+            
+            allOrdersForWaste.forEach((order: any) => {
+                (order.items || []).forEach((item: any) => {
+                    if (item.status === 'cancelled' || item.status === 'void') {
+                        if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
+                            if (item.cancelled_at) {
+                                const cancelDate = new Date(item.cancelled_at);
+                                if (cancelDate >= oneDayAgo) {
+                                    const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
+                                    const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
+                                    
+                                    cancelledItemsMap.set(uniqueKey, {
+                                        ...item,
+                                        orderId: orderId,
+                                        tableName: order.tbl || order.table_no || "Unknown"
+                                    });
+                                }
                             }
                         }
+                    }
+                });
+            });
+
+            activeOrders.forEach((order: any) => {
+                if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
+                
+                pendingBills++;
+                if (order.tbl) {
+                    if (tableOrderMap.has(order.tbl)) {
+                        const existing = tableOrderMap.get(order.tbl);
+                        existing.items = [...existing.items, ...order.items];
+                        existing.total = Number(existing.total) + Number(order.total);
+                    } else {
+                        tableOrderMap.set(order.tbl, { ...order });
                     }
                 }
             });
         });
 
-        activeOrders.forEach((order: any) => {
-            if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
+        for (const [tbl, existing] of tableOrderMap.entries()) {
+            const validItems = existing.items.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0);
+            const hasReady = validItems.some((i:any) => i.status === 'ready');
+            const hasCooking = validItems.some((i:any) => ['cooking', 'pending'].includes(i.status));
             
-            pendingBills++;
-            if (order.tbl) {
-                if (tableOrderMap.has(order.tbl)) {
-                    const existing = tableOrderMap.get(order.tbl);
-                    existing.items = [...existing.items, ...order.items];
-                    existing.total = Number(existing.total) + Number(order.total);
-                } else {
-                    tableOrderMap.set(order.tbl, { ...order });
-                }
-            }
-        });
-    });
+            if (hasReady) existing.status = 'ready'; 
+            else if (hasCooking) existing.status = 'cooking';
+            else existing.status = 'payment_pending';
+        }
 
-    for (const [tbl, existing] of tableOrderMap.entries()) {
-        const validItems = existing.items.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0);
-        const hasReady = validItems.some((i:any) => i.status === 'ready');
-        const hasCooking = validItems.some((i:any) => ['cooking', 'pending'].includes(i.status));
-        
-        if (hasReady) existing.status = 'ready'; 
-        else if (hasCooking) existing.status = 'cooking';
-        else existing.status = 'payment_pending';
-    }
+        const richTables = tables?.map(t => {
+          const activeOrder = tableOrderMap.get(t.label);
+          let section = t.section || "Main Hall";
+          if(!t.section) {
+             if(t.label.includes('R')) section = "Rooftop";
+             else if(t.label.includes('G')) section = "Garden";
+          }
+          section = section.charAt(0).toUpperCase() + section.slice(1);
 
-    const richTables = tables?.map(t => {
-      const activeOrder = tableOrderMap.get(t.label);
-      let section = t.section || "Main Hall";
-      if(!t.section) {
-         if(t.label.includes('R')) section = "Rooftop";
-         else if(t.label.includes('G')) section = "Garden";
+          return {
+            ...t,
+            section,
+            status: activeOrder 
+                ? (['payment_pending'].includes(activeOrder.status) ? 'payment' 
+                : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
+                : 'occupied') 
+                : 'free',
+            currentOrder: activeOrder || null
+          };
+        }) || [];
+
+        const profile = {
+          name: tenant?.settings?.profile?.name || tenant?.name,
+          code: tenant?.code,
+          address: tenant?.settings?.profile?.address || tenant?.address,
+          phone: tenant?.settings?.profile?.phone || tenant?.phone,
+          logo_url: tenant?.logo_url,
+          bank_accounts: tenant?.settings?.bank_accounts || [] 
+        };
+
+        const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
+
+        return {
+          success: true,
+          restaurant: profile,
+          stats: { totalRevenue, pendingBills },
+          tables: richTables,
+          menu: flatMenu, 
+          categories: categories, 
+          activeOrders: Array.from(tableOrderMap.values()).reverse(),
+          cancelledItems: finalCancelledItems,
+          isPolling // <--- Tells frontend if this was a micro-poll to prevent re-rendering the menu
+        };
+      } catch (error) {
+        return { success: false, activeOrders: [], cancelledItems: [] };
       }
-      section = section.charAt(0).toUpperCase() + section.slice(1);
+    },
+    [`cashier-${tenantId}-${isPolling}`],
+    { tags: [`orders-${tenantId}`, `tables-${tenantId}`, `menu-${tenantId}`], revalidate: 3600 }
+  );
 
-      return {
-        ...t,
-        section,
-        status: activeOrder 
-            ? (['payment_pending'].includes(activeOrder.status) ? 'payment' 
-            : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
-            : 'occupied') 
-            : 'free',
-        currentOrder: activeOrder || null
-      };
-    }) || [];
-
-    const profile = {
-      name: tenant?.settings?.profile?.name || tenant?.name,
-      code: tenant?.code,
-      address: tenant?.settings?.profile?.address || tenant?.address,
-      phone: tenant?.settings?.profile?.phone || tenant?.phone,
-      logo_url: tenant?.logo_url,
-      bank_accounts: tenant?.settings?.bank_accounts || [] 
-    };
-
-    const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
-
-    return {
-      success: true,
-      restaurant: profile,
-      stats: { totalRevenue, pendingBills },
-      tables: richTables,
-      menu: flatMenu, 
-      categories: categories, 
-      activeOrders: Array.from(tableOrderMap.values()).reverse(),
-      cancelledItems: finalCancelledItems,
-      isPolling // <--- Tells frontend if this was a micro-poll to prevent re-rendering the menu
-    };
-  } catch (error) {
-    return { success: false, activeOrders: [], cancelledItems: [] };
-  }
+  return getCachedCashier();
 }
 
 // --- 2. CREATE ORDER ---
@@ -272,6 +281,8 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
 
     if (error) return { success: false, error: error.message };
 
+    revalidateTag(`orders-${tenantId}`, undefined as any);
+    revalidateTag(`tables-${tenantId}`, undefined as any);
     revalidatePath("/staff/cashier");
     return { success: true };
 }
@@ -405,6 +416,8 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
             }
         }
 
+        revalidateTag(`orders-${tenantId}`, undefined as any);
+        revalidateTag(`tables-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true };
 
@@ -511,6 +524,8 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
             return { success: false, error: error.message };
         }
 
+        revalidateTag(`orders-${tenantId}`, undefined as any);
+        revalidateTag(`tables-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true };
 
@@ -538,39 +553,26 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     }
 
     const remainingOrders: any[] = [];
-    const newHistoryItems: any[] = [];
+    const consolidatedItems: any[] = [];
     let found = false;
     let itemsToDeductFromInventory: any[] = [];
+    let servedBySet = new Set<string>();
 
     currentOrders.forEach((order: any) => {
-        // Using strict orderId match to prevent wrong table checkouts
-        if (String(order.id).trim() === String(orderId).trim() && !['cancelled', 'completed', 'paid'].includes(order.status)) {
+        // MATCH BY TABLE OR BY ORDER ID to catch ALL parts of the order separated by kitchen sends
+        const isTarget = !['cancelled', 'completed', 'paid'].includes(order.status) && 
+             (String(order.tbl).trim() === String(tableId).trim() || String(order.id).trim() === String(orderId).trim());
+
+        if (isTarget) {
             found = true;
-            const displayBillNo = order.bill_no || order.id.slice(-6).toUpperCase();
-
-            // Track non-cancelled items for inventory deduction
-            const validServedItems = order.items.filter((i: any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
-            itemsToDeductFromInventory = [...itemsToDeductFromInventory, ...validServedItems];
-
-            newHistoryItems.push({
-                invoice_no: displayBillNo,
-                bill_no: displayBillNo, 
-                date: new Date().toISOString(),
-                table_no: tableId,
-                restaurant_name: tenantInfo?.name,
-                items: order.items,
-                subTotal: paymentDetails.subTotal || 0,
-                discount: paymentDetails.discount || 0,
-                grandTotal: paymentDetails.grandTotal || 0, 
-                tendered: paymentDetails.tendered || 0,
-                change: paymentDetails.change || 0,
-                credit_due: paymentDetails.creditDue || 0, 
-                payment_method: paymentMethod,
-                served_by: order.staff || "Cashier",
-                paid_at: new Date().toISOString(),
-                original_order_id: order.id,
-                customer_name: customerDetails?.name || "",
-                customer_address: customerDetails?.address || ""
+            if (order.staff) servedBySet.add(order.staff);
+            
+            // Collect all items from every split order on this table
+            (order.items || []).forEach((item: any) => {
+                consolidatedItems.push(item);
+                if (!['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) {
+                    itemsToDeductFromInventory.push(item);
+                }
             });
         } else {
             remainingOrders.push(order);
@@ -578,6 +580,30 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     });
 
     if(!found) return { success: false, error: "Order not found or already checked out." };
+
+    const displayBillNo = String(orderId).slice(-6).toUpperCase();
+    const servedByValue = Array.from(servedBySet).join(', ') || "Cashier";
+
+    const newHistoryItems = [{
+        invoice_no: displayBillNo,
+        bill_no: displayBillNo, 
+        date: new Date().toISOString(),
+        table_no: tableId,
+        restaurant_name: tenantInfo?.name,
+        items: consolidatedItems,
+        subTotal: paymentDetails.subTotal || 0,
+        discount: paymentDetails.discount || 0,
+        grandTotal: paymentDetails.grandTotal || 0, 
+        tendered: paymentDetails.tendered || 0,
+        change: paymentDetails.change || 0,
+        credit_due: paymentDetails.creditDue || 0, 
+        payment_method: paymentMethod,
+        served_by: servedByValue,
+        paid_at: new Date().toISOString(),
+        original_order_id: orderId,
+        customer_name: customerDetails?.name || "",
+        customer_address: customerDetails?.address || ""
+    }];
 
     // --- EXACT INVENTORY SYNC (RUNS AT CHECKOUT) ---
     try {
@@ -630,6 +656,8 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         await supabaseAdmin.from("restaurant_tables").update({ status: 'free' }).eq("label", tableId).eq("tenant_id", tenantId);
     }
     
+    revalidateTag(`orders-${tenantId}`, undefined as any);
+    revalidateTag(`tables-${tenantId}`, undefined as any);
     revalidatePath("/staff/cashier");
     revalidatePath("/admin/inventory");
     return { success: true };
@@ -640,6 +668,7 @@ export async function updateStoreSettings(profile: any, accounts: any[]) {
     const tenantId = await getTenantId();
     const { data: tenant } = await supabaseAdmin.from("tenants").select("settings").eq("id", tenantId).single();
     await supabaseAdmin.from("tenants").update({ settings: { ...(tenant?.settings || {}), profile, bank_accounts: accounts } }).eq("id", tenantId);
+    revalidateTag(`orders-${tenantId}`, undefined as any);
     revalidatePath("/staff/cashier");
     return { success: true };
 }
@@ -760,6 +789,7 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
             return { success: false, error: "No outstanding balance found to clear for this customer." };
         }
 
+        revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true, amountCleared: totalUpdated };
     } catch (e: any) {

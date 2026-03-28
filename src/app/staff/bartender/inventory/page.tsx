@@ -34,9 +34,9 @@ export default function BarInventoryPage() {
     if(dashRes) setTenant(dashRes.tenant);
     
     // Bar Filter: Only show relevant bar inventory categories (Alcohol, Tobacco, Hookah, Coal, Drinks)
-    if(invRes.success && Array.isArray(invRes.data)) {
+    if(invRes.success && 'data' in invRes && Array.isArray(invRes.data)) {
         const botCategories = ['alcohol', 'drinks', 'tobacco', 'hookah', 'coal', 'bar_supplies', 'beverage', 'liquor'];
-        const barItems = invRes.data.filter(i => {
+        const barItems = invRes.data.filter((i: any) => {
             const cat = (i.category || '').toLowerCase();
             return botCategories.some(bc => cat.includes(bc));
         });

@@ -87,7 +87,7 @@ export default function ManagerInventoryPage() {
     if (!silent) setLoading(true);
     const [dashRes, invRes, expRes, menuRes] = await Promise.all([getDashboardData(), getInventory(), getExpenses(), getMenuItemsForLinking()]);
     if(dashRes) setTenant(dashRes.tenant);
-    if(invRes.success && Array.isArray(invRes.data)) setItems(invRes.data);
+    if(invRes.success && 'data' in invRes && Array.isArray(invRes.data)) setItems(invRes.data);
     if(expRes.success && Array.isArray(expRes.data)) setExpenses(expRes.data);
     if(menuRes.success) setPosMenuItems(menuRes.data);
     if (!silent) setLoading(false);

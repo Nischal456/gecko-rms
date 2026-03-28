@@ -412,43 +412,47 @@ export default function ReportsPage() {
     }, [rawTransactions, searchTerm, startDate, endDate, filterType]);
   
     // 100% ACCURATE DYNAMIC SALES ENGINE
-    const derivedData = useMemo(() => {
-        let totalRevenue = 0;
-        let totalExpense = 0;
-        let totalCreditDue = 0;
-        let orderCount = 0;
-        
-        const paymentMethods: any = {};
-        const staffPerformance: any = {};
-        const topItemsMap: any = {};
-        const chartGroup: any = {};
-  
-        filteredTransactions.forEach((tx: any) => {
-            const bsDate = toBSFull(tx.date);
-            if (!chartGroup[bsDate]) chartGroup[bsDate] = { bsDate, revenue: 0, expense: 0, rawDate: tx.date };
-  
-            const isExpense = tx.type?.toLowerCase().includes('expense') || tx.type === 'Manual Expense';
-            const amt = Number(tx.amount) || 0;
-            
-            if (isExpense) {
-                totalExpense += amt;
-                chartGroup[bsDate].expense += amt;
-            } else {
-                // Income & POS Orders
-                orderCount++;
-                const actualRev = tx.method === 'Credit' ? (Number(tx.tendered) || 0) : amt;
-                totalRevenue += actualRev;
-                chartGroup[bsDate].revenue += actualRev;
-                
-                if (tx.method === 'Credit') {
-                    totalCreditDue += (Number(tx.due) || 0);
-                }
-  
-                // Staff & Method Tracking
-                // Staff & Method Tracking
-              const method = tx.method || "Cash";
-              const staff = tx.served_by || tx.staff || "Cashier";
+    // 100% ACCURATE DYNAMIC SALES ENGINE
+  const derivedData = useMemo(() => {
+      let totalRevenue = 0;
+      let totalExpense = 0;
+      let totalCreditDue = 0;
+      let orderCount = 0;
+      
+      const paymentMethods: any = {};
+      const staffPerformance: any = {};
+      const topItemsMap: any = {};
+      const chartGroup: any = {};
+
+      filteredTransactions.forEach((tx: any) => {
+          const bsDate = toBSFull(tx.date);
+          if (!chartGroup[bsDate]) chartGroup[bsDate] = { bsDate, revenue: 0, expense: 0, rawDate: tx.date };
+
+          const isExpense = tx.type?.toLowerCase().includes('expense') || tx.type === 'Manual Expense';
+          const amt = Number(tx.amount) || 0;
+          
+          if (isExpense) {
+              totalExpense += amt;
+              chartGroup[bsDate].expense += amt;
               
+              // PREMIUM FIX: Deduct expenses directly from the Cash Drawer
+              paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - amt;
+              
+          } else {
+              // Income & POS Orders
+              orderCount++;
+              const actualRev = tx.method === 'Credit' ? (Number(tx.tendered) || 0) : amt;
+              totalRevenue += actualRev;
+              chartGroup[bsDate].revenue += actualRev;
+              
+              if (tx.method === 'Credit') {
+                  totalCreditDue += (Number(tx.due) || 0);
+              }
+
+              // PREMIUM FIX: Route "Manual Log" income straight into the Cash Drawer
+              const method = tx.method === 'Manual Log' ? 'Cash' : (tx.method || "Cash");
+              const staff = tx.served_by || tx.staff || "Cashier";
+
               if (method === 'Credit') {
                   // Track the actual deferred credit amount
                   paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + (Number(tx.due) || 0);
@@ -457,36 +461,37 @@ export default function ReportsPage() {
                       paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
                   }
               } else {
+                  // Standard Cash/QR/Card additions
                   paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
               }
-              
+
               staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRev;
-  
-                // Top Items Tracking
-                (tx.items || []).forEach((item: any) => {
-                    if (['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) return;
-                    const name = item.name;
-                    if (!topItemsMap[name]) topItemsMap[name] = { name, qty: 0, sales: 0 };
-                    topItemsMap[name].qty += (Number(item.qty) || 1);
-                    topItemsMap[name].sales += (Number(item.price) || 0) * (Number(item.qty) || 1);
-                });
-            }
-        });
-  
-        const netProfit = totalRevenue - totalExpense;
-        const margin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
-  
-        const topItems = Object.values(topItemsMap).sort((a:any, b:any) => b.qty - a.qty).slice(0, 5);
-        const chartData = Object.values(chartGroup).sort((a:any, b:any) => a.bsDate.localeCompare(b.bsDate));
-  
-        return {
-            stats: { totalRevenue, totalCreditDue, totalExpense, netProfit, margin, orderCount },
-            paymentMethods,
-            staffPerformance,
-            topItems,
-            chartData
-        };
-    }, [filteredTransactions]);
+
+              // Top Items Tracking
+              (tx.items || []).forEach((item: any) => {
+                  if (['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) return;
+                  const name = item.name;
+                  if (!topItemsMap[name]) topItemsMap[name] = { name, qty: 0, sales: 0 };
+                  topItemsMap[name].qty += (Number(item.qty) || 1);
+                  topItemsMap[name].sales += (Number(item.price) || 0) * (Number(item.qty) || 1);
+              });
+          }
+      });
+
+      const netProfit = totalRevenue - totalExpense;
+      const margin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
+
+      const topItems = Object.values(topItemsMap).sort((a:any, b:any) => b.qty - a.qty).slice(0, 5);
+      const chartData = Object.values(chartGroup).sort((a:any, b:any) => a.bsDate.localeCompare(b.bsDate));
+
+      return {
+          stats: { totalRevenue, totalCreditDue, totalExpense, netProfit, margin, orderCount },
+          paymentMethods,
+          staffPerformance,
+          topItems,
+          chartData
+      };
+  }, [filteredTransactions]);
   
     const { stats, paymentMethods, staffPerformance, topItems, chartData } = derivedData;
     const expenseTransactions = filteredTransactions.filter((t: any) => t.type?.toLowerCase().includes('expense') || t.type === 'Manual Expense');

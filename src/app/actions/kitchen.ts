@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 // --- HELPERS (Not Exported) ---
 function getSafeId(id: string | null | undefined): number {
@@ -67,65 +67,73 @@ export async function getKitchenTickets() {
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, data: [] };
   
-  const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+  const getCachedData = unstable_cache(
+    async () => {
+      const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
 
-  try {
-    const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
-    const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
+      try {
+        const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
+        const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
 
-    const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data").eq("tenant_id", tenantId).gte("date", dateStr); 
+        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data").eq("tenant_id", tenantId).gte("date", dateStr); 
 
-    if (!logs || logs.length === 0) return { success: true, data: [] };
+        if (!logs || logs.length === 0) return { success: true, data: [] };
 
-    let allOrders: any[] = [];
-    logs.forEach((log: any) => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
+        let allOrders: any[] = [];
+        logs.forEach((log: any) => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
 
-    const activeOrders = allOrders.filter((o: any) => ['pending', 'cooking', 'ready', 'preparing'].includes((o.status || '').toLowerCase().trim()));
+        const activeOrders = allOrders.filter((o: any) => ['pending', 'cooking', 'ready', 'preparing'].includes((o.status || '').toLowerCase().trim()));
 
-    const mappedOrders = activeOrders.map((order: any) => {
-        let validItems = (order.items || []).filter((item: any) => {
-            const s = (item.status || '').toLowerCase().trim();
-            if (['void', 'cancelled'].includes(s) || item.qty <= 0) return false;
+        const mappedOrders = activeOrders.map((order: any) => {
+            let validItems = (order.items || []).filter((item: any) => {
+                const s = (item.status || '').toLowerCase().trim();
+                if (['void', 'cancelled'].includes(s) || item.qty <= 0) return false;
 
-            // Strict exclusion for the kitchen IF SPLIT IS ON
-            if (isSplitActive && isItemForBar(item)) return false;
+                // Strict exclusion for the kitchen IF SPLIT IS ON
+                if (isSplitActive && isItemForBar(item)) return false;
 
-            return true; 
-        });
+                return true; 
+            });
 
-        // CALCULATE KITCHEN-SPECIFIC STATUS TO PREVENT KANBAN JUMPING
-        let kitOnlyStatus = 'pending';
-        if (validItems.length > 0) {
-            const allReady = validItems.every((i: any) => ['ready', 'served', 'cancelled', 'void'].includes((i.status || '').toLowerCase()));
-            const anyCooking = validItems.some((i: any) => ['cooking', 'ready', 'preparing'].includes((i.status || '').toLowerCase()));
-            if (allReady) kitOnlyStatus = 'ready';
-            else if (anyCooking) kitOnlyStatus = 'cooking';
-        } else {
-            kitOnlyStatus = 'served'; // Hide ticket if there are no kitchen items
-        }
+            // CALCULATE KITCHEN-SPECIFIC STATUS TO PREVENT KANBAN JUMPING
+            let kitOnlyStatus = 'pending';
+            if (validItems.length > 0) {
+                const allReady = validItems.every((i: any) => ['ready', 'served', 'cancelled', 'void'].includes((i.status || '').toLowerCase()));
+                const anyCooking = validItems.some((i: any) => ['cooking', 'ready', 'preparing'].includes((i.status || '').toLowerCase()));
+                if (allReady) kitOnlyStatus = 'ready';
+                else if (anyCooking) kitOnlyStatus = 'cooking';
+            } else {
+                kitOnlyStatus = 'served'; // Hide ticket if there are no kitchen items
+            }
 
-        return {
-            id: order.id,
-            table_name: order.tbl || order.table_name || "Unknown",
-            status: kitOnlyStatus, 
-            created_at: order.timestamp || order.created_at || new Date().toISOString(),
-            order_items: validItems.map((item: any) => ({
-                id: item.id || Math.random().toString(36),
-                unique_id: item.unique_id || item.cartId || item.id, 
-                name: item.name,
-                quantity: item.qty || item.quantity || 1,
-                notes: item.note || item.notes || "",
-                variant: item.variant || item.variantName || "",
-                status: item.status || 'pending',
-                station: item.station || item.prep_station || 'kitchen',
-                category: item.category || item.dietary || 'food'
-            }))
-        };
-    }).filter((ticket: any) => ticket.order_items.length > 0 && ticket.status !== 'served'); 
+            return {
+                id: order.id,
+                table_name: order.tbl || order.table_name || "Unknown",
+                status: kitOnlyStatus, 
+                created_at: order.timestamp || order.created_at || new Date().toISOString(),
+                order_items: validItems.map((item: any) => ({
+                    id: item.id || Math.random().toString(36),
+                    unique_id: item.unique_id || item.cartId || item.id, 
+                    name: item.name,
+                    quantity: item.qty || item.quantity || 1,
+                    notes: item.note || item.notes || "",
+                    variant: item.variant || item.variantName || "",
+                    status: item.status || 'pending',
+                    station: item.station || item.prep_station || 'kitchen',
+                    category: item.category || item.dietary || 'food'
+                }))
+            };
+        }).filter((ticket: any) => ticket.order_items.length > 0 && ticket.status !== 'served'); 
 
-    return { success: true, data: mappedOrders };
+        return { success: true, data: mappedOrders };
 
-  } catch (e) { return { success: false, data: [] }; }
+      } catch (e) { return { success: false, data: [] }; }
+    },
+    [`kitchen-tickets-${tenantId}`],
+    { tags: [`orders-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedData();
 }
 
 export async function updateTicketStatus(orderId: string, status: string) {
@@ -183,6 +191,7 @@ export async function updateTicketStatus(orderId: string, status: string) {
     if (!targetLog || !modifiedOrders) return { success: false };
 
     await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", targetLog.date);
+    revalidateTag(`orders-${tenantId}`, undefined as any);
     revalidatePath("/staff/waiter"); revalidatePath("/staff/cashier");
     return { success: true };
 }
@@ -238,6 +247,7 @@ export async function updateItemStatus(itemId: string, status: string, orderId: 
     if (!targetLog || !modifiedOrders) return { success: false };
 
     await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", targetLog.date);
+    revalidateTag(`orders-${tenantId}`, undefined as any);
     revalidatePath("/staff/waiter"); revalidatePath("/staff/cashier");
     return { success: true };
 }
@@ -248,14 +258,24 @@ export async function updateItemStatus(itemId: string, status: string, orderId: 
 
 export async function getKitchenMenu() {
     const tenantId = await getTenantId();
-    const { data, error } = await supabaseAdmin.from("menu_items").select("id, name, price, category, is_available").eq("tenant_id", tenantId).order("category", { ascending: true });
-    return { success: !error, data: data || [] };
+    
+    const getCachedMenu = unstable_cache(
+      async () => {
+        const { data, error } = await supabaseAdmin.from("menu_items").select("id, name, price, category, is_available").eq("tenant_id", tenantId).order("category", { ascending: true });
+        return { success: !error, data: data || [] };
+      },
+      [`kitchen-menu-${tenantId}`],
+      { tags: [`menu-${tenantId}`], revalidate: 3600 }
+    );
+    
+    return getCachedMenu();
 }
 
 export async function toggleMenuItem(itemId: number, isAvailable: boolean) {
     const tenantId = await getTenantId();
     const { error } = await supabaseAdmin.from("menu_items").update({ is_available: isAvailable }).eq("id", itemId).eq("tenant_id", tenantId);
     if (error) return { success: false };
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     revalidatePath("/staff/kitchen/menu"); revalidatePath("/staff/menu"); 
     return { success: true };
 }
@@ -264,6 +284,7 @@ export async function disableMenuItem(itemName: string) {
     const tenantId = await getTenantId();
     const { error } = await supabaseAdmin.from("menu_items").update({ is_available: false }).eq("tenant_id", tenantId).eq("name", itemName);
     if (error) return { success: false, error: error.message };
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     revalidatePath("/staff/menu"); return { success: true };
 }
 
@@ -271,83 +292,91 @@ export async function getKitchenStats() {
     const tenantId = await getTenantId();
     if (!tenantId) return { success: false };
     
-    const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
-    const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
+    const getCachedStats = unstable_cache(
+      async () => {
+        const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
+        const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
 
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        const today = new Date();
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const datesToCheck = [
+            yesterday.toISOString().split('T')[0],
+            today.toISOString().split('T')[0],
+            tomorrow.toISOString().split('T')[0]
+        ];
+
+        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
+
+        if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
+
+        let allOrders: any[] = [];
+        logs.forEach(log => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
+
+        const uniqueOrdersMap = new Map();
+        allOrders.forEach(o => { if (o.id) uniqueOrdersMap.set(o.id, o); });
+        let finalOrders = Array.from(uniqueOrdersMap.values());
+
+        const twentyFourHoursAgo = today.getTime() - (24 * 60 * 60 * 1000);
+        finalOrders = finalOrders.filter(o => new Date(o.timestamp || o.created_at || 0).getTime() >= twentyFourHoursAgo);
+
+        if (isSplitActive) {
+            finalOrders = finalOrders.map(o => {
+                const foodItems = (o.items || []).filter((item: any) => !isItemForBar(item));
+
+                const foodRevenue = foodItems.reduce((acc: number, curr: any) => {
+                    const price = Number(curr.price) || 0;
+                    const qty = Number(curr.qty || curr.quantity) || 1;
+                    return acc + (price * qty);
+                }, 0);
+
+                return { ...o, items: foodItems, custom_food_revenue: foodRevenue };
+            }).filter(o => o.items.length > 0); 
+        }
+        
+        const completed = finalOrders.filter((o: any) => {
+            const s = (o.status || '').toLowerCase().trim();
+            return ['ready', 'served', 'payment_pending', 'paid', 'completed'].includes(s);
+        });
+        
+        const pending = finalOrders.filter((o: any) => {
+            const s = (o.status || '').toLowerCase().trim();
+            return ['pending', 'cooking', 'preparing'].includes(s);
+        });
+        
+        const revenue = completed.reduce((acc: number, curr: any) => {
+            const amountToCount = isSplitActive && curr.custom_food_revenue !== undefined ? curr.custom_food_revenue : curr.total;
+            return acc + (Number(amountToCount) || 0);
+        }, 0);
+
+        const history = completed
+            .sort((a,b) => new Date(b.timestamp || b.created_at || 0).getTime() - new Date(a.timestamp || a.created_at || 0).getTime())
+            .slice(0, 100)
+            .map((order: any) => ({
+                id: order.id,
+                table_name: order.tbl || order.table_name || "Unknown",
+                created_at: order.timestamp || order.created_at || new Date().toISOString(),
+                status: order.status,
+                order_items: order.items || []
+            }));
+
+        return {
+            success: true,
+            stats: {
+                total: finalOrders.length,
+                completed: completed.length,
+                pending: pending.length,
+                revenue: revenue
+            },
+            history: history
+        };
+      },
+      [`kitchen-stats-${tenantId}`],
+      { tags: [`orders-${tenantId}`], revalidate: 3600 }
+    );
     
-    const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
-    ];
-
-    const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
-
-    if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
-
-    let allOrders: any[] = [];
-    logs.forEach(log => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
-
-    const uniqueOrdersMap = new Map();
-    allOrders.forEach(o => { if (o.id) uniqueOrdersMap.set(o.id, o); });
-    let finalOrders = Array.from(uniqueOrdersMap.values());
-
-    const twentyFourHoursAgo = today.getTime() - (24 * 60 * 60 * 1000);
-    finalOrders = finalOrders.filter(o => new Date(o.timestamp || o.created_at || 0).getTime() >= twentyFourHoursAgo);
-
-    if (isSplitActive) {
-        finalOrders = finalOrders.map(o => {
-            const foodItems = (o.items || []).filter((item: any) => !isItemForBar(item));
-
-            const foodRevenue = foodItems.reduce((acc: number, curr: any) => {
-                const price = Number(curr.price) || 0;
-                const qty = Number(curr.qty || curr.quantity) || 1;
-                return acc + (price * qty);
-            }, 0);
-
-            return { ...o, items: foodItems, custom_food_revenue: foodRevenue };
-        }).filter(o => o.items.length > 0); 
-    }
-    
-    const completed = finalOrders.filter((o: any) => {
-        const s = (o.status || '').toLowerCase().trim();
-        return ['ready', 'served', 'payment_pending', 'paid', 'completed'].includes(s);
-    });
-    
-    const pending = finalOrders.filter((o: any) => {
-        const s = (o.status || '').toLowerCase().trim();
-        return ['pending', 'cooking', 'preparing'].includes(s);
-    });
-    
-    const revenue = completed.reduce((acc: number, curr: any) => {
-        const amountToCount = isSplitActive && curr.custom_food_revenue !== undefined ? curr.custom_food_revenue : curr.total;
-        return acc + (Number(amountToCount) || 0);
-    }, 0);
-
-    const history = completed
-        .sort((a,b) => new Date(b.timestamp || b.created_at || 0).getTime() - new Date(a.timestamp || a.created_at || 0).getTime())
-        .slice(0, 100)
-        .map((order: any) => ({
-            id: order.id,
-            table_name: order.tbl || order.table_name || "Unknown",
-            created_at: order.timestamp || order.created_at || new Date().toISOString(),
-            status: order.status,
-            order_items: order.items || []
-        }));
-
-    return {
-        success: true,
-        stats: {
-            total: finalOrders.length,
-            completed: completed.length,
-            pending: pending.length,
-            revenue: revenue
-        },
-        history: history
-    };
+    return getCachedStats();
 }
 
 // --- LEGACY ---

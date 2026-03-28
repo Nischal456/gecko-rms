@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { v2 as cloudinary } from 'cloudinary';
 
 // CLOUDINARY CONFIG
@@ -71,107 +71,115 @@ function calculateRealRevenue(activeOrders: any[], paidHistory: any[]) {
 
 // --- MAIN DASHBOARD DATA ---
 export async function getDashboardData() {
-  try {
-    const tenantId = await getTenantId();
-    if (!tenantId) return null;
+  const tenantId = await getTenantId();
+  if (!tenantId) return null;
 
-    // Dates for Trends
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
+  const getCachedDashboardData = unstable_cache(
+    async () => {
+      try {
+        // Dates for Trends
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
 
-    // FETCH EVERYTHING IN PARALLEL
-    const [tenantRes, logsRes, notifRes] = await Promise.all([
-      supabaseAdmin.from("tenants").select("name, code, logo_url, plan, custom_price, created_at, feature_flags").eq("id", tenantId).single(),
-      supabaseAdmin.from("daily_order_logs").select("date, orders_data, paid_history").eq("tenant_id", tenantId).in("date", [today, yesterday]),
-      supabaseAdmin.from("notifications").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(10)
-    ]);
-    
-    const tenant = tenantRes.data;
-    if (!tenant) return null;
+        // FETCH EVERYTHING IN PARALLEL
+        const [tenantRes, logsRes, notifRes] = await Promise.all([
+          supabaseAdmin.from("tenants").select("name, code, logo_url, plan, custom_price, created_at, feature_flags").eq("id", tenantId).single(),
+          supabaseAdmin.from("daily_order_logs").select("date, orders_data, paid_history").eq("tenant_id", tenantId).in("date", [today, yesterday]),
+          supabaseAdmin.from("notifications").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(10)
+        ]);
+        
+        const tenant = tenantRes.data;
+        if (!tenant) return null;
 
-    // --- PROCESS LOGS ---
-    const logs = logsRes.data || [];
-    
-    // --- 1. PARSE TODAY'S DATA ---
-    const todayLog = logs.find(l => l.date === today);
-    const todayActive = safeParse(todayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
-    const todayPaid = safeParse(todayLog?.paid_history);
-    
-    // --- 2. PARSE YESTERDAY'S DATA ---
-    const yesterdayLog = logs.find(l => l.date === yesterday);
-    const yesterdayActive = safeParse(yesterdayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
-    const yesterdayPaid = safeParse(yesterdayLog?.paid_history);
+        // --- PROCESS LOGS ---
+        const logs = logsRes.data || [];
+        
+        // --- 1. PARSE TODAY'S DATA ---
+        const todayLog = logs.find(l => l.date === today);
+        const todayActive = safeParse(todayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
+        const todayPaid = safeParse(todayLog?.paid_history);
+        
+        // --- 2. PARSE YESTERDAY'S DATA ---
+        const yesterdayLog = logs.find(l => l.date === yesterday);
+        const yesterdayActive = safeParse(yesterdayLog?.orders_data).filter((o: any) => o.status !== 'cancelled');
+        const yesterdayPaid = safeParse(yesterdayLog?.paid_history);
 
-    // --- METRICS CALCULATION ---
-    const todayRevenue = calculateRealRevenue(todayActive, todayPaid);
-    const yesterdayRevenue = calculateRealRevenue(yesterdayActive, yesterdayPaid);
+        // --- METRICS CALCULATION ---
+        const todayRevenue = calculateRealRevenue(todayActive, todayPaid);
+        const yesterdayRevenue = calculateRealRevenue(yesterdayActive, yesterdayPaid);
 
-    // Total order count (Active + Paid)
-    const todayOrderCount = todayActive.length + todayPaid.length;
-    const yesterdayOrderCount = yesterdayActive.length + yesterdayPaid.length;
+        // Total order count (Active + Paid)
+        const todayOrderCount = todayActive.length + todayPaid.length;
+        const yesterdayOrderCount = yesterdayActive.length + yesterdayPaid.length;
 
-    const calcTrend = (now: number, before: number) => {
-      if (before === 0) return now > 0 ? 100 : 0;
-      return Math.round(((now - before) / before) * 100);
-    };
+        const calcTrend = (now: number, before: number) => {
+          if (before === 0) return now > 0 ? 100 : 0;
+          return Math.round(((now - before) / before) * 100);
+        };
 
-    // BILLING LOGIC
-    const createdDate = new Date(tenant.created_at || new Date());
-    const billDay = createdDate.getDate();
-    const currentDay = new Date().getDate();
-    let nextBillDate = new Date();
-    if (currentDay > billDay) nextBillDate.setMonth(nextBillDate.getMonth() + 1);
-    nextBillDate.setDate(billDay);
+        // BILLING LOGIC
+        const createdDate = new Date(tenant.created_at || new Date());
+        const billDay = createdDate.getDate();
+        const currentDay = new Date().getDate();
+        let nextBillDate = new Date();
+        if (currentDay > billDay) nextBillDate.setMonth(nextBillDate.getMonth() + 1);
+        nextBillDate.setDate(billDay);
 
-    let price = tenant.custom_price;
-    if (!price) {
-        if (tenant.plan === 'starter') price = 5000;
-        else if (tenant.plan === 'business') price = 25000;
-        else price = 12000;
-    }
+        let price = tenant.custom_price;
+        if (!price) {
+            if (tenant.plan === 'starter') price = 5000;
+            else if (tenant.plan === 'business') price = 25000;
+            else price = 12000;
+        }
 
-    const billingInfo = {
-        plan: tenant.plan || 'starter',
-        amount: price,
-        nextDate: nextBillDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        daysLeft: Math.ceil((nextBillDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-    };
+        const billingInfo = {
+            plan: tenant.plan || 'starter',
+            amount: price,
+            nextDate: nextBillDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            daysLeft: Math.ceil((nextBillDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        };
 
-    // ACTIVE ORDERS (Kitchen Status)
-    const activeOrdersCount = todayActive.filter((o: any) => !['paid', 'completed', 'cancelled'].includes(o.status)).length;
+        // ACTIVE ORDERS (Kitchen Status)
+        const activeOrdersCount = todayActive.filter((o: any) => !['paid', 'completed', 'cancelled'].includes(o.status)).length;
 
-    const stats = {
-      revenue: { value: todayRevenue, trend: calcTrend(todayRevenue, yesterdayRevenue) },
-      orders: { value: todayOrderCount, trend: calcTrend(todayOrderCount, yesterdayOrderCount) },
-      active: activeOrdersCount,
-      avgTicket: { 
-          value: todayOrderCount > 0 ? Math.round(todayRevenue / todayOrderCount) : 0,
-          trend: 0 
-      },
-      topItems: getTopItemsFromJSON([...todayActive, ...todayPaid]),
-      currentPlan: tenant.plan || 'starter',
-      billingInfo,
-      notifications: notifRes.data || [] 
-    };
+        const stats = {
+          revenue: { value: todayRevenue, trend: calcTrend(todayRevenue, yesterdayRevenue) },
+          orders: { value: todayOrderCount, trend: calcTrend(todayOrderCount, yesterdayOrderCount) },
+          active: activeOrdersCount,
+          avgTicket: { 
+              value: todayOrderCount > 0 ? Math.round(todayRevenue / todayOrderCount) : 0,
+              trend: 0 
+          },
+          topItems: getTopItemsFromJSON([...todayActive, ...todayPaid]),
+          currentPlan: tenant.plan || 'starter',
+          billingInfo,
+          notifications: notifRes.data || [] 
+        };
 
-    // Flatten recent orders for the Feed
-    const recentOrders = [...todayActive, ...todayPaid]
-        .sort((a: any, b: any) => new Date(b.created_at || b.timestamp || b.date).getTime() - new Date(a.created_at || a.timestamp || a.date).getTime())
-        .slice(0, 10)
-        .map((o: any) => ({
-            id: o.id || o.invoice_no, 
-            total_amount: o.grandTotal || o.total,
-            status: o.status || 'paid', 
-            created_at: o.timestamp || o.date || new Date().toISOString(),
-            items: o.items || []
-        }));
+        // Flatten recent orders for the Feed
+        const recentOrders = [...todayActive, ...todayPaid]
+            .sort((a: any, b: any) => new Date(b.created_at || b.timestamp || b.date).getTime() - new Date(a.created_at || a.timestamp || a.date).getTime())
+            .slice(0, 10)
+            .map((o: any) => ({
+                id: o.id || o.invoice_no, 
+                total_amount: o.grandTotal || o.total,
+                status: o.status || 'paid', 
+                created_at: o.timestamp || o.date || new Date().toISOString(),
+                items: o.items || []
+            }));
 
-    return { tenant, stats, recentOrders };
+        return { tenant, stats, recentOrders };
 
-  } catch (error) {
-    console.error("Dashboard Data Error:", error);
-    return null;
-  }
+      } catch (error) {
+        console.error("Dashboard Data Error:", error);
+        return null;
+      }
+    },
+    [`dashboard-${tenantId}`],
+    { tags: [`orders-${tenantId}`, `tables-${tenantId}`, `menu-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedDashboardData();
 }
 
 function getTopItemsFromJSON(orders: any[]) {
@@ -192,7 +200,9 @@ function getTopItemsFromJSON(orders: any[]) {
 
 // --- MARK NOTIFICATION AS READ ---
 export async function markNotificationRead(notifId: string) {
+    const tenantId = await getTenantId();
     await supabaseAdmin.from("notifications").update({ is_read: true }).eq("id", notifId);
+    revalidateTag(`orders-${tenantId}`, undefined as any);
     revalidatePath("/admin");
 }
 

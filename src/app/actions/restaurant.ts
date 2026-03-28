@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 // --- HELPER: GET CURRENT TENANT ID ---
 async function getTenantId() {
@@ -16,14 +16,22 @@ async function getTenantId() {
 export async function getFloorPlan() {
   const tenantId = await getTenantId();
   
-  const { data, error } = await supabaseAdmin
-    .from("restaurant_tables")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("table_number", { ascending: true }); // Numeric sort if possible
+  const getCachedFloorPlan = unstable_cache(
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("restaurant_tables")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("table_number", { ascending: true }); // Numeric sort if possible
 
-  if (error) return { success: false, error: error.message };
-  return { success: true, data };
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    },
+    [`floor-plan-${tenantId}`],
+    { tags: [`tables-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedFloorPlan();
 }
 
 // --- 2. CREATE NEW TABLE ---
@@ -35,30 +43,35 @@ export async function createTable(tableNumber: string, seats: number) {
     .insert([{ tenant_id: tenantId, table_number: tableNumber, seats: seats, status: 'free' }]);
 
   if (error) return { success: false, error: error.message };
+  revalidateTag(`tables-${tenantId}`, undefined as any);
   revalidatePath("/admin");
   return { success: true };
 }
 
 // --- 3. UPDATE TABLE STATUS (Simulate Seating/Billing) ---
 export async function updateTableStatus(tableId: number, status: string) {
+  const tenantId = await getTenantId();
   const { error } = await supabaseAdmin
     .from("restaurant_tables")
     .update({ status: status })
     .eq("id", tableId);
 
   if (error) return { success: false, error: error.message };
+  revalidateTag(`tables-${tenantId}`, undefined as any);
   revalidatePath("/admin");
   return { success: true };
 }
 
 // --- 4. DELETE TABLE ---
 export async function deleteTable(tableId: number) {
+  const tenantId = await getTenantId();
   const { error } = await supabaseAdmin
     .from("restaurant_tables")
     .delete()
     .eq("id", tableId);
 
   if (error) return { success: false, error: error.message };
+  revalidateTag(`tables-${tenantId}`, undefined as any);
   revalidatePath("/admin");
   return { success: true };
 }

@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 // --- HELPERS ---
 function getSafeId(id: string | null | undefined): number {
@@ -41,114 +41,132 @@ async function getTenantId() {
 // --- 1. GET LIVE STATS (SELF-HEALING + ORDERS LIST) ---
 export async function getPOSStats() {
   const tenantId = await getTenantId();
-  const today = new Date().toISOString().split('T')[0];
 
-  try {
-      const { data: tables } = await supabaseAdmin
-          .from("restaurant_tables")
-          .select("id, label, status, section, shape, seats, x, y, width, height, rotation") 
-          .eq("tenant_id", tenantId)
-          .order("label", { ascending: true });
+  const getCachedPOSStats = unstable_cache(
+    async () => {
+      const today = new Date().toISOString().split('T')[0];
 
-      const { data: logs } = await supabaseAdmin
-          .from("daily_order_logs")
-          .select("orders_data")
-          .eq("tenant_id", tenantId)
-          .eq("date", today)
-          .limit(1)
-          .maybeSingle();
-
-      const orders = logs && Array.isArray(logs.orders_data) ? logs.orders_data : [];
-      
-      const activeOrders = orders.filter((o: any) => 
-          !['cancelled', 'completed', 'paid'].includes(o.status)
-      );
-      
-      const activeTableLabels = new Set(activeOrders.map((o: any) => o.tbl));
-
-      const updates = [];
-
-      const tablesToOccupy = tables?.filter(t => activeTableLabels.has(t.label) && t.status === 'free').map(t => t.label) || [];
-      if (tablesToOccupy.length > 0) {
-          updates.push(supabaseAdmin
+      try {
+          const { data: tables } = await supabaseAdmin
               .from("restaurant_tables")
-              .update({ status: 'occupied' })
+              .select("id, label, status, section, shape, seats, x, y, width, height, rotation") 
               .eq("tenant_id", tenantId)
-              .in("label", tablesToOccupy)
-          );
-      }
+              .order("label", { ascending: true });
 
-      const tablesToFree = tables?.filter(t => !activeTableLabels.has(t.label) && t.status === 'occupied').map(t => t.label) || [];
-      if (tablesToFree.length > 0) {
-          updates.push(supabaseAdmin
-              .from("restaurant_tables")
-              .update({ status: 'free' })
+          const { data: logs } = await supabaseAdmin
+              .from("daily_order_logs")
+              .select("orders_data")
               .eq("tenant_id", tenantId)
-              .in("label", tablesToFree)
+              .eq("date", today)
+              .limit(1)
+              .maybeSingle();
+
+          const orders = logs && Array.isArray(logs.orders_data) ? logs.orders_data : [];
+          
+          const activeOrders = orders.filter((o: any) => 
+              !['cancelled', 'completed', 'paid'].includes(o.status)
           );
-      }
+          
+          const activeTableLabels = new Set(activeOrders.map((o: any) => o.tbl));
 
-      if (updates.length > 0) await Promise.all(updates);
+          const updates = [];
 
-      const finalTables = tables?.map(t => {
-          if (activeTableLabels.has(t.label)) return { ...t, status: 'occupied' };
-          if (t.status === 'occupied' && !activeTableLabels.has(t.label)) return { ...t, status: 'free' };
-          return t;
-      }) || [];
+          const tablesToOccupy = tables?.filter(t => activeTableLabels.has(t.label) && t.status === 'free').map(t => t.label) || [];
+          if (tablesToOccupy.length > 0) {
+              updates.push(supabaseAdmin
+                  .from("restaurant_tables")
+                  .update({ status: 'occupied' })
+                  .eq("tenant_id", tenantId)
+                  .in("label", tablesToOccupy)
+              );
+          }
 
-      const totalTables = finalTables.length;
-      const occupiedCount = finalTables.filter(t => t.status === 'occupied').length;
-      const vacantCount = totalTables - occupiedCount; 
-      const occupancyRate = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
+          const tablesToFree = tables?.filter(t => !activeTableLabels.has(t.label) && t.status === 'occupied').map(t => t.label) || [];
+          if (tablesToFree.length > 0) {
+              updates.push(supabaseAdmin
+                  .from("restaurant_tables")
+                  .update({ status: 'free' })
+                  .eq("tenant_id", tenantId)
+                  .in("label", tablesToFree)
+              );
+          }
 
-      const totalOrders = orders.filter((o: any) => o.status !== 'cancelled').length;
-      const totalRevenue = orders.reduce((acc: number, o: any) => o.status !== 'cancelled' ? acc + (Number(o.total) || 0) : acc, 0);
+          if (updates.length > 0) await Promise.all(updates);
 
-      return { 
-          success: true, 
-          stats: { 
-              totalTables, 
-              vacantCount, 
-              occupiedCount, 
-              occupancyRate, 
-              totalOrders, 
-              totalRevenue,
-              tables: finalTables,
-              orders_list: orders.reverse() 
-          } 
-      };
-  } catch (e) { return { success: false, stats: null }; }
+          const finalTables = tables?.map(t => {
+              if (activeTableLabels.has(t.label)) return { ...t, status: 'occupied' };
+              if (t.status === 'occupied' && !activeTableLabels.has(t.label)) return { ...t, status: 'free' };
+              return t;
+          }) || [];
+
+          const totalTables = finalTables.length;
+          const occupiedCount = finalTables.filter(t => t.status === 'occupied').length;
+          const vacantCount = totalTables - occupiedCount; 
+          const occupancyRate = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
+
+          const totalOrders = orders.filter((o: any) => o.status !== 'cancelled').length;
+          const totalRevenue = orders.reduce((acc: number, o: any) => o.status !== 'cancelled' ? acc + (Number(o.total) || 0) : acc, 0);
+
+          return { 
+              success: true, 
+              stats: { 
+                  totalTables, 
+                  vacantCount, 
+                  occupiedCount, 
+                  occupancyRate, 
+                  totalOrders, 
+                  totalRevenue,
+                  tables: finalTables,
+                  orders_list: orders.reverse() 
+              } 
+          };
+      } catch (e) { return { success: false, stats: null }; }
+    },
+    [`pos-stats-${tenantId}-v2`],
+    { tags: [`orders-${tenantId}`, `tables-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedPOSStats();
 }
 
 // --- 2. GET MENU ---
 export async function getPOSMenu() {
   const tenantId = await getTenantId();
-  let { data: menuData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", tenantId).order("sort_order", { ascending: true });
+  
+  const getCachedPOSMenu = unstable_cache(
+    async () => {
+      let { data: menuData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", tenantId).order("sort_order", { ascending: true });
 
-  if (!menuData || menuData.length === 0) {
-      const { data: fallbackData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", 0).order("sort_order", { ascending: true });
-      if (fallbackData) menuData = fallbackData;
-  }
+      if (!menuData || menuData.length === 0) {
+          const { data: fallbackData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", 0).order("sort_order", { ascending: true });
+          if (fallbackData) menuData = fallbackData;
+      }
 
-  let allItems: any[] = [];
-  let categories: any[] = [];
+      let allItems: any[] = [];
+      let categories: any[] = [];
 
-  if (menuData && menuData.length > 0) {
-      categories = menuData.map(cat => ({ id: cat.id, name: cat.category_name }));
-      menuData.forEach(cat => {
-          if (Array.isArray(cat.items)) {
-              allItems = [...allItems, ...cat.items.map((item: any) => ({
-                  ...item,
-                  category: cat.category_name,
-                  price: Number(item.price) || 0,
-                  is_available: item.is_available !== false,
-                  description: item.description || "",
-                  variants: item.variants || []
-              }))];
-          }
-      });
-  }
-  return { categories, items: allItems.filter(i => i.is_available) };
+      if (menuData && menuData.length > 0) {
+          categories = menuData.map(cat => ({ id: cat.id, name: cat.category_name }));
+          menuData.forEach(cat => {
+              if (Array.isArray(cat.items)) {
+                  allItems = [...allItems, ...cat.items.map((item: any) => ({
+                      ...item,
+                      category: cat.category_name,
+                      price: Number(item.price) || 0,
+                      is_available: item.is_available !== false,
+                      description: item.description || "",
+                      variants: item.variants || []
+                  }))];
+              }
+          });
+      }
+      return { categories, items: allItems.filter(i => i.is_available) };
+    },
+    [`pos-menu-${tenantId}-v2`],
+    { tags: [`menu-${tenantId}`], revalidate: 3600 }
+  );
+
+  return getCachedPOSMenu();
 }
 
 // --- 3. GET POS DATA ---
@@ -288,6 +306,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
 
         if (upsertError) throw upsertError;
 
+        revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidatePath("/staff/waiter");
         revalidatePath("/staff/cashier");
         return { success: true };
@@ -380,6 +399,7 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
             .eq("tenant_id", tenantId)
             .eq("date", foundDate); 
 
+        revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidatePath("/staff/waiter");
         revalidatePath("/staff/cashier");
         return { success: true };
