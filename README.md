@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <h1>🍽️ Next.js Restaurant Management System (RMS)</h1>
+  <p>A modern, full-stack web application designed to streamline restaurant operations, from table-side order management to kitchen routing and administrative analytics.</p>
 
-## Getting Started
+  <p>
+    <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
+    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
+    <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
+  </p>
+</div>
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 📖 About The Project
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Managing a busy restaurant requires a system that is fast, reliable, and easy to use. This Restaurant Management System (RMS) is built to handle the chaos of the hospitality industry. It provides a seamless interface for waitstaff to take orders, a real-time dashboard for the kitchen, and a powerful administrative panel for management to track revenue and inventory.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Key Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **🧾 Smart Billing & Invoicing:** Instantly generate receipts, calculate taxes, and process split payments.
+- **🍔 Order Management (KOT):** Real-time Kitchen Order Tickets routing directly from the POS to the kitchen display.
+- **📊 Admin Dashboard:** Comprehensive analytics detailing daily revenue, top-selling items, and peak hours.
+- **🧑‍🍳 Staff Management:** Role-based access control (RBAC) ensuring cashiers, chefs, and admins only see what they need to.
+- **📱 Responsive UI:** Fully optimized for tablets and mobile devices used by staff on the floor.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🔥 Application Previews
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> **Note to Developer:** Replace these placeholder URLs with your actual screenshots. High-quality visuals are the #1 thing that makes a repository stand out!
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Dashboard & Analytics | Order Management (POS) |
+| :---: | :---: |
+| <img src="https://placehold.co/600x400/eeeeee/2a2a2a?text=Drop+Admin+Dashboard+Screenshot+Here" alt="Admin Dashboard" width="100%"> | <img src="https://placehold.co/600x400/eeeeee/2a2a2a?text=Drop+Billing/POS+Screenshot+Here" alt="Billing Interface" width="100%"> |
 
-## Deploy on Vercel
+| Kitchen Display System | Mobile/Tablet View |
+| :---: | :---: |
+| <img src="https://placehold.co/600x400/eeeeee/2a2a2a?text=Drop+Orders/Kitchen+Screenshot+Here" alt="Kitchen Orders" width="100%"> | <img src="https://placehold.co/600x400/eeeeee/2a2a2a?text=Drop+Mobile+View+Screenshot+Here" alt="Mobile View" width="100%"> |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Tech Stack
+
+**Frontend:**
+- [Next.js 14/15](https://nextjs.org/) (App Router)
+- [React 19](https://reactjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/) (Styling)
+- Framer Motion (Animations)
+
+**Backend & Data:**
+- Node.js / Next.js Server Actions
+- [Supabase](https://supabase.com/) (PostgreSQL Database & Auth)
+
+**Hosting & Deployment:**
+- Self-Hosted VPS (Ubuntu)
+- CloudPanel & Nginx Reverse Proxy
+
+---
+
+## 🚀 Getting Started
+
+To get a local copy up and running, follow these simple steps.
+
+### Prerequisites
+Make sure you have Node.js installed (v20.x or higher recommended).
+
+### Installation
+
+1. Clone the repo:
+   ```bash
+   git clone [https://github.com/Nischal456/gecko-rms.git](https://github.com/Nischal456/gecko-rms.git)
