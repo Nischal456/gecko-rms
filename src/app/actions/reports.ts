@@ -98,6 +98,13 @@ export async function getReportData(range: ReportRange) {
           .gte("date", prevStartStr)
           .lte("date", prevEndStr);
 
+      const { data: tenantData } = await supabaseAdmin
+          .from("tenants")
+          .select("qr_codes")
+          .eq("id", tenantId)
+          .single();
+      const firstQrName = tenantData?.qr_codes?.[0]?.name || "FonePay";
+
       let financialLogs: any[] = [];
       try {
           const { data: expData } = await supabaseAdmin
@@ -237,6 +244,11 @@ export async function getReportData(range: ReportRange) {
                   if (parsed.method) paymentIntegration = parsed.method;
               }
           } catch(e) {}
+
+          // MERGE BANK TRANSFER INTO PRIMARY QR METHOD (per user request)
+          if (paymentIntegration === "Bank Transfer") {
+              paymentIntegration = firstQrName;
+          }
 
           if (isIncome) {
               totalRevenue += amount;

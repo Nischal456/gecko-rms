@@ -541,3 +541,48 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         return { success: false, error: e.message };
     }
 }
+
+// --- 5. FAST POLLING FOR NOTIFICATIONS (LOW EGRESS) ---
+export async function getWaiterBell() {
+    const tenantId = await getTenantId();
+    if (tenantId === 5) return { notifications: [] };
+    
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    try {
+        const { data: logs } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("orders_data") 
+            .eq("tenant_id", tenantId)
+            .in("date", [yesterdayStr, todayStr]);
+
+        if (!logs) return { notifications: [] };
+
+        const notifications: any[] = [];
+        logs.forEach(log => {
+            const activeOrders = safeParse(log.orders_data);
+            activeOrders.forEach((order: any) => {
+                const tableName = String(order.tbl || "").trim();
+                const validItems = (order.items || []).filter((i:any) => i.status === 'ready');
+
+                if (validItems.length > 0) {
+                    notifications.push({
+                        id: order.id,
+                        orderNo: order.invoice_no || order.id || '',
+                        table: tableName,
+                        itemsCount: validItems.length,
+                        items: validItems.map((i:any) => i.name),
+                        time: new Date().toLocaleTimeString()
+                    });
+                }
+            });
+        });
+
+        return { notifications };
+    } catch (e) {
+        return { notifications: [] };
+    }
+}

@@ -842,9 +842,20 @@ export default function CashierDashboard() {
       const res = await getCashierData(isPolling);
       
       if (res.success) {
+          let updatedOrders = false;
+          
           setData(prev => {
-              // If polling, keep the old menu/restaurant data, just update the live orders/tables!
+              // PREVENTS REACT RE-RENDER MEMORY LEAKS! 0 CPU LAG!
               if (isPolling && prev) {
+                  const currentOrdersStr = JSON.stringify(prev.activeOrders || []);
+                  const incomingOrdersStr = JSON.stringify(res.activeOrders || []);
+                  const currentTablesStr = JSON.stringify(prev.tables || []);
+                  const incomingTablesStr = JSON.stringify(res.tables || []);
+                  
+                  if (currentOrdersStr === incomingOrdersStr && currentTablesStr === incomingTablesStr) {
+                      return prev; // Break the React update cycle if nothing changed!
+                  }
+                  updatedOrders = true;
                   return {
                       ...prev,
                       stats: res.stats as any,
@@ -853,11 +864,13 @@ export default function CashierDashboard() {
                       cancelledItems: res.cancelledItems
                   };
               }
+              updatedOrders = true;
               return res as any; // Full initial load
           });
 
-          // Notification Engine
-          let newUpdate = false;
+          // Notification Engine (only run if state actually updated to save CPU)
+          if (updatedOrders) {
+              let newUpdate = false;
           res.activeOrders?.forEach((o: any) => {
               if (o.status === 'ready' && !notifiedOrders.current.has(o.id)) {
                   setNotification(`Order Ready: Table ${o.tbl}`);
@@ -866,9 +879,9 @@ export default function CashierDashboard() {
                   newUpdate = true;
                   setTimeout(() => setNotification(null), 6000);
               }
-              if (o.status === 'ready') newUpdate = true;
-          });
-          setHasUpdates(newUpdate);
+              });
+              setHasUpdates(newUpdate);
+          }
       }
       
       if (!isPolling) setLoading(false);

@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, PlusCircle, Coffee, 
-  FileBarChart, LogOut, UtensilsCrossed 
+  FileBarChart, LogOut, UtensilsCrossed, BellRing 
 } from "lucide-react";
 import { logoutStaff } from "@/app/actions/staff-auth"; 
+import { getWaiterBell } from "@/app/actions/waiter";
 import { toast } from "sonner";
 
 interface SidebarProps {
@@ -35,6 +36,37 @@ export default function WaiterSidebar({ tenantName, tenantCode, logo }: SidebarP
       if (saved) {
           try { setCachedMeta(JSON.parse(saved)); } catch (e) {}
       }
+
+      // 3. FAST BELL POLLING FOR GLOBAL NOTIFICATIONS
+      const checkBell = async () => {
+          const res = await getWaiterBell();
+          if (res?.notifications && res.notifications.length > 0) {
+              const seenStr = sessionStorage.getItem("gecko_waiter_seen_bells") || "[]";
+              let seen: string[] = [];
+              try { seen = JSON.parse(seenStr); } catch(e){}
+
+              res.notifications.forEach((n: any) => {
+                  const uid = `${n.id}-${n.itemsCount}`;
+                  if (!seen.includes(uid)) {
+                      seen.push(uid);
+                      toast.success(
+                          <div className="flex flex-col gap-1">
+                              <span className="font-black text-sm uppercase text-emerald-700">Dish Ready!</span>
+                              <span className="font-bold text-xs text-slate-700">Table {n.table}</span>
+                              <span className="text-[10px] text-slate-500 line-clamp-1">{n.items.join(", ")}</span>
+                          </div>, 
+                          { duration: 10000, icon: <BellRing className="w-5 h-5 text-emerald-600 animate-pulse" /> }
+                      );
+                  }
+              });
+              sessionStorage.setItem("gecko_waiter_seen_bells", JSON.stringify(seen.slice(-50)));
+          }
+      };
+
+      // Initial check then poll every 15 seconds
+      checkBell();
+      const interval = setInterval(checkBell, 15000);
+      return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

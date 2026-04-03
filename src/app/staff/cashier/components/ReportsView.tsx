@@ -105,12 +105,18 @@ export default function ReportsView({ data }: any) {
     const [startDate, setStartDate] = useState<string>(npToday);
     const [endDate, setEndDate] = useState<string>(npToday);
     const [searchTerm, setSearchTerm] = useState("");
+    const [paymentFilter, setPaymentFilter] = useState("All");
     
     // Popover State
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
     const [activeRangeButton, setActiveRangeButton] = useState<number | "custom">(1);
+    
     const datePickerRef = useRef<HTMLDivElement>(null);
+    const paymentDropdownRef = useRef<HTMLDivElement>(null);
+    
     useOnClickOutside(datePickerRef, () => setShowDatePicker(false));
+    useOnClickOutside(paymentDropdownRef, () => setShowPaymentDropdown(false));
     
     // Data State
     const [report, setReport] = useState<any>(null);
@@ -156,9 +162,13 @@ export default function ReportsView({ data }: any) {
             const isAfterStart = startDate ? billBS >= startDate : true;
             const isBeforeEnd = endDate ? billBS <= endDate : true;
 
-            return matchesSearch && isAfterStart && isBeforeEnd;
+            // 3. Exact Payment Filter
+            const pMethod = getDisplayMethod(b).toLowerCase();
+            const matchesFilter = paymentFilter === "All" || pMethod.includes(paymentFilter.toLowerCase());
+
+            return matchesSearch && isAfterStart && isBeforeEnd && matchesFilter;
         }) || [];
-    }, [report, searchTerm, startDate, endDate]);
+    }, [report, searchTerm, startDate, endDate, paymentFilter]);
 
     // DYNAMIC SALES ENGINE
     const derivedStats = useMemo(() => {
@@ -301,6 +311,42 @@ export default function ReportsView({ data }: any) {
                                 <Search className="w-5 h-5 text-slate-400 shrink-0" />
                                 <input placeholder="Search method, bill, table..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="bg-transparent outline-none font-bold text-sm w-full text-slate-700 placeholder:text-slate-400" />
                                 {searchTerm && <button onClick={() => setSearchTerm("")}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>}
+                            </div>
+                            
+                            {/* PREMIUM ZERO LAGGING PAYMENT FILTER DROPDOWN */}
+                            <div className="relative shrink-0 w-full sm:w-auto" ref={paymentDropdownRef}>
+                                <button 
+                                    onClick={() => setShowPaymentDropdown(!showPaymentDropdown)}
+                                    className={`w-full sm:w-auto px-5 py-3.5 bg-white border rounded-2xl flex items-center justify-between gap-3 shadow-sm transition-all active:scale-95 ${showPaymentDropdown ? 'border-emerald-400 ring-2 ring-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Banknote className="w-4 h-4 text-emerald-500" />
+                                        <span className="text-sm font-black text-slate-700">{paymentFilter === "All" ? "All Payments" : `${paymentFilter} Only`}</span>
+                                    </div>
+                                    {showPaymentDropdown ? <ChevronUp className="w-4 h-4 text-slate-400"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
+                                </button>
+
+                                <AnimatePresence>
+                                    {showPaymentDropdown && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, y: 10, scale: 0.98 }} 
+                                            animate={{ opacity: 1, y: 0, scale: 1 }} 
+                                            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                                            className="absolute top-full mt-3 left-0 w-full sm:w-[220px] bg-white rounded-2xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] border border-slate-100 p-2 z-[99999] flex flex-col gap-1 origin-top-left"
+                                        >
+                                            {["All", "Cash", "FonePay", "Credit"].map(f => (
+                                                <button 
+                                                    key={f} 
+                                                    onClick={() => { setPaymentFilter(f); setShowPaymentDropdown(false); }}
+                                                    className={`w-full text-left px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-between ${paymentFilter === f ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    {f === "All" ? "All Methods" : f}
+                                                    {paymentFilter === f && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-center justify-end gap-3 w-full xl:w-auto">

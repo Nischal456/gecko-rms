@@ -83,16 +83,19 @@ function MenuCard({ item, onAdd }: { item: MenuItem, onAdd: (variant?: Variant) 
 
 function ItemDetailModal({ item, onClose, onConfirm }: { item: MenuItem, onClose: () => void, onConfirm: (v: Variant | undefined, notes: string) => void }) {
     const [selectedVariant, setSelectedVariant] = useState<Variant | undefined>(item.variants && item.variants.length > 0 ? item.variants[0] : undefined);
-    const [notes, setNotes] = useState<string[]>([]);
+    const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
     const [customNote, setCustomNote] = useState("");
     
-    const isDrink = item.category.toLowerCase().match(/drink|beverage|bar|coffee|tea|juice|shake|smoothie/);
-    const PRESETS = isDrink 
-        ? ["Less Ice", "No Ice", "Less Sugar", "Extra Sugar", "Room Temp", "Chilled"]
-        : ["No Spicy", "Less Oil", "Extra Spicy", "Well Done", "No Sugar", "Less Salt"];
+    // SMART PRESETS BY CATEGORY
+    const c = item.category.toLowerCase();
+    let PRESETS: string[] = [];
+    if (c.match(/drink|beverage|bar|coffee|tea|juice|shake|smoothie/)) PRESETS = ["Less Ice", "No Ice", "Less Sugar", "Extra Sugar", "Hot", "Chilled"];
+    else if (c.match(/meat|grill|steak|pork|bbq/)) PRESETS = ["Well Done", "Medium Rare", "Medium", "Extra Spicy", "Less Oil"];
+    else if (c.match(/momo|asian|noodle|soup/)) PRESETS = ["Extra Spicy", "Mild", "No Coriander", "Extra Garlic", "Soup Separate"];
+    else PRESETS = ["No Spicy", "Less Oil", "Extra Spicy", "No Onion", "Less Salt", "Quick Serve"];
 
-    const toggleNote = (n: string) => { setNotes(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n]); };
-    const handleConfirm = () => { onConfirm(selectedVariant, [...notes, customNote].filter(Boolean).join(", ")); };
+    const toggleNote = (n: string) => { setSelectedPreset(prev => prev === n ? null : n); };
+    const handleConfirm = () => { onConfirm(selectedVariant, [selectedPreset, customNote].filter(Boolean).join(", ")); };
     
     const ItemIcon = getCategoryIcon(item.category);
     
@@ -125,7 +128,7 @@ function ItemDetailModal({ item, onClose, onConfirm }: { item: MenuItem, onClose
                     <label className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wide"><MessageSquare className="w-3 h-3" /> Special Instructions</label>
                     <div className="flex flex-wrap gap-2 mb-3">
                         {PRESETS.map(preset => (
-                            <button key={preset} onClick={() => toggleNote(preset)} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border ${notes.includes(preset) ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                            <button key={preset} onClick={() => toggleNote(preset)} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border outline-none active:scale-95 ${selectedPreset === preset ? 'bg-emerald-600 text-white border-emerald-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
                                 {preset}
                             </button>
                         ))}
@@ -248,7 +251,9 @@ function POSContent() {
         }).filter(i => i.qty > 0));
     };
 
-    const handleCheckout = async () => {
+    const handleCheckout = async (e?: any) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (isSubmitting) return; // Strict prevent double submit
         if(cart.length === 0) return toast.error("Cart is empty");
         if(!tableId && !isTakeaway) return toast.error("No Table Selected"); 
         
@@ -278,7 +283,7 @@ function POSContent() {
             }
         } catch (e) { 
             toast.dismiss();
-            toast.error("System Error"); 
+            toast.error("Network Unstable! Please check your connection and try again.", { duration: 6000, icon: <AlertCircle className="w-5 h-5 text-red-500" /> }); 
         } finally { 
             setIsSubmitting(false); 
         }
