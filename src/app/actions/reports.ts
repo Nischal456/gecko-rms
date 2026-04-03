@@ -137,12 +137,9 @@ export async function getReportData(range: ReportRange) {
               let currentDue = 0;
               let finalMethod = "Pending";
 
-              let rawMethod = String(order.payment_method || order.method || "Cash").toLowerCase();
-              if (rawMethod.includes("qr") || rawMethod.includes("esewa") || rawMethod.includes("fonepay")) finalMethod = "QR";
-              else if (rawMethod.includes("card") || rawMethod.includes("visa") || rawMethod.includes("pos")) finalMethod = "Card";
-              else if (rawMethod.includes("credit")) finalMethod = "Credit";
-              else if (rawMethod.includes("cash")) finalMethod = "Cash";
-              else finalMethod = order.payment_method || "Cash";
+              let rawMethod = String(order.payment_method || order.method || "Cash");
+              if (rawMethod.toLowerCase().includes("credit")) finalMethod = "Credit";
+              else finalMethod = rawMethod;
 
               // Extract exact cash received if Credit
               if (finalMethod === "Credit") {
@@ -157,8 +154,30 @@ export async function getReportData(range: ReportRange) {
               dailyMap[dateKey].revenue += actualRevenue;
               
               // SALES VOLUME FLOW (For Methods & Staff Splits)
-              // FIX: Now uses Grand Total so Credit shows generated volume!
-              paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + grandTotal;
+              // FIX: Exact Split Ledger Mapping
+              let safeSplits = order.splits;
+              if (typeof safeSplits === 'string') {
+                  try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+              }
+              
+              if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                  let totalSplitTendered = 0;
+                  safeSplits.forEach((s: any) => {
+                      const splitAmt = Number(s.amount) || 0;
+                      const splitMethod = s.method || 'Cash';
+                      paymentMethods[splitMethod] = (paymentMethods[splitMethod] || 0) + splitAmt;
+                      totalSplitTendered += splitAmt;
+                  });
+                  // EXTREME ACCURACY FIX: Subtract the returning change from Cash!
+                  const originalTendered = Number(order.tendered) || 0;
+                  const changeToReturn = Math.max(0, originalTendered - grandTotal);
+                  if (changeToReturn > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
+                  }
+              } else {
+                  // FIX: Now uses Grand Total so Credit shows generated volume!
+                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + grandTotal;
+              }
               const staff = order.served_by || order.staff || "Cashier"; 
               staffPerformance[staff] = (staffPerformance[staff] || 0) + grandTotal;
 
@@ -184,13 +203,14 @@ export async function getReportData(range: ReportRange) {
                   date: order.paid_at || order.timestamp || log.date,
                   amount: grandTotal,
                   discount: discountAmt,
-                  tendered: actualRevenue,
+                  tendered: Number(order.tendered) || actualRevenue,
                   due: currentDue,
                   type: "POS Bill",
                   method: finalMethod,
+                  splits: order.splits || [], // FORWARD SPLITS TO FRONTEND FOR EXACT BADGE PARSING
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
                   status: currentDue > 0 ? 'Partial/Credit' : 'Completed', 
-                  items: order.items || [], // <--- Pass ALL items to frontend (Frontend will strike-through waste)
+                  items: order.items || [], 
                   served_by: order.served_by || order.staff || "Cashier",
                   customer: { name: order.customer_name, address: order.customer_address }
               });
@@ -206,13 +226,23 @@ export async function getReportData(range: ReportRange) {
           if (dateKey && !dailyMap[dateKey]) dailyMap[dateKey] = { revenue: 0, expense: 0 };
           
           const isIncome = categoryStr.includes('[INC]') || categoryStr.includes('INCOME') || categoryStr.includes('DEPOSIT') || categoryStr.includes('CATERING');
-          const cleanCategory = log.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_/g, ' ').trim();
+          const cleanCategory = log.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_#[a-z0-9]+/gi, '').replace(/_/g, ' ').trim();
+
+          let cleanNote = log.description;
+          let paymentIntegration = "Cash";
+          try {
+              if (log.description && log.description.trim().startsWith('{')) {
+                  const parsed = JSON.parse(log.description);
+                  cleanNote = parsed.note || "";
+                  if (parsed.method) paymentIntegration = parsed.method;
+              }
+          } catch(e) {}
 
           if (isIncome) {
               totalRevenue += amount;
               if (dateKey) dailyMap[dateKey].revenue += amount;
               
-              paymentMethods["Manual Income"] = (paymentMethods["Manual Income"] || 0) + amount;
+              paymentMethods[paymentIntegration] = (paymentMethods[paymentIntegration] || 0) + amount;
               
               allTransactions.push({
                   id: `INC-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
@@ -222,16 +252,18 @@ export async function getReportData(range: ReportRange) {
                   tendered: amount,
                   due: 0,
                   type: "Manual Income",
-                  method: "Manual Log",
+                  method: paymentIntegration,
                   details: cleanCategory,
                   status: "Completed",
                   items: [],
-                  note: log.description 
+                  note: cleanNote 
               });
           } else {
               totalExpense += amount;
               if (dateKey) dailyMap[dateKey].expense += amount;
               
+              paymentMethods[paymentIntegration] = (paymentMethods[paymentIntegration] || 0) - amount;
+
               allTransactions.push({
                   id: `EXP-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
@@ -240,11 +272,11 @@ export async function getReportData(range: ReportRange) {
                   tendered: amount,
                   due: 0,
                   type: "Manual Expense",
-                  method: "Deduction",
+                  method: paymentIntegration,
                   details: cleanCategory,
                   status: "Completed",
                   items: [],
-                  note: log.description 
+                  note: cleanNote 
               });
           }
       });

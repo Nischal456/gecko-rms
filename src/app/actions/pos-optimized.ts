@@ -30,30 +30,50 @@ export async function createOrderJSON(orderData: any) {
       return { success: false, error: "Cart is empty" };
   }
 
-  // --- CRITICAL FIX: Preserve routing data (station/category) for KDS ---
+  // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
+  // If the client-side QR menu or mobile app fails to pass station/category payload,
+  // we look it up live from the database to guarantee the Chef/Bartender OS routes it.
+  const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
+  const liveMenu = new Map();
+  if (menuData) {
+      menuData.forEach((cat: any) => {
+          if (Array.isArray(cat.items)) {
+              cat.items.forEach((m: any) => {
+                  liveMenu.set(m.name, { ...m, category_name: cat.category_name });
+              });
+          }
+      });
+  }
+
   const newOrder = {
       id: crypto.randomUUID(),
       tbl: orderData.table_no, // Short key 'tbl' to save space
       time: new Date().toLocaleTimeString(),
       status: "pending",
       total: orderData.total,
-      items: orderData.items.map((i: any) => ({
-          id: i.id || "",
-          unique_id: i.unique_id || i.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-          n: i.name || i.n, // 'n' for optimized size
-          name: i.name || i.n, // 'name' required for Kitchen/Bar OS
-          q: Number(i.qty || i.q || 1),  
-          qty: Number(i.qty || i.q || 1), // 'qty' required for Kitchen/Bar OS
-          p: Number(i.price || i.p || 0),
-          price: Number(i.price || i.p || 0), 
-          note: i.notes || i.note || "",
-          status: "pending",
+      items: orderData.items.map((i: any) => {
+          const itemName = i.name || i.n;
+          const dbItem = liveMenu.get(itemName) || {};
           
-          // These are mandatory for the Bar/Kitchen routing engine!
-          station: i.station || i.prep_station || "",
-          category: i.category || "",
-          dietary: i.dietary || ""
-      }))
+          return {
+              id: i.id || dbItem.id || "",
+              unique_id: i.unique_id || i.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+              n: itemName, 
+              name: itemName, 
+              q: Number(i.qty || i.q || 1),  
+              qty: Number(i.qty || i.q || 1), 
+              p: Number(i.price || i.p || 0),
+              price: Number(i.price || i.p || 0), 
+              note: i.notes || i.note || "",
+              status: "pending",
+              time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              
+              // Secure routing fallback to database definition if client omits it!
+              station: dbItem.station || i.station || i.prep_station || "kitchen",
+              category: dbItem.category_name || dbItem.category || i.category || "",
+              dietary: dbItem.dietary || i.dietary || ""
+          };
+      })
   };
 
   // 2. Fetch Today's Log

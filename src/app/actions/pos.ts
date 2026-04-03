@@ -214,21 +214,36 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         if (token) staffName = JSON.parse(token).name;
     } catch (e) {}
 
-    // --- CRITICAL FIX: PRESERVE STATION AND CATEGORY DATA ---
-    const compactItems = cartItems.map((i: any) => ({
-        id: i.id,
-        unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-        name: i.name,
-        price: i.price,
-        qty: i.qty,
-        variant: i.variantName || i.variant || "",
-        note: i.note || i.notes || "",
-        status: "pending",
-        // Pass these through so the Server Actions (Kitchen/Bar) know where to route them!
-        station: i.station || i.prep_station || "",
-        category: i.category || "",
-        dietary: i.dietary || ""
-    }));
+    // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
+    // Look up live menu to guarantee station arrays even if client drops payload
+    const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
+    const liveMenu = new Map();
+    if (menuData) {
+        menuData.forEach((cat: any) => {
+            if (Array.isArray(cat.items)) {
+                cat.items.forEach((m: any) => liveMenu.set(m.name, m));
+            }
+        });
+    }
+
+    const compactItems = cartItems.map((i: any) => {
+        const dbItem = liveMenu.get(i.name) || {};
+        return {
+            id: i.id || dbItem.id || "",
+            unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+            name: i.name,
+            price: i.price,
+            qty: i.qty,
+            variant: i.variantName || i.variant || "",
+            note: i.note || i.notes || "",
+            status: "pending",
+            time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            // Pass these through securely so the Server Actions (Kitchen/Bar) know where to route them!
+            station: dbItem.station || i.station || i.prep_station || "kitchen",
+            category: dbItem.category_name || dbItem.category || i.category || "",
+            dietary: dbItem.dietary || i.dietary || ""
+        };
+    });
 
     try {
         const { data: logs } = await supabaseAdmin
@@ -340,6 +355,17 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
 
         if (!logs || logs.length === 0) return { success: false, msg: "No logs found" };
 
+        // Fetch live menu for secure metadata fallback (Bypass Cache explicitly)
+        const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
+        const liveMenu = new Map();
+        if (menuData) {
+            menuData.forEach((cat: any) => {
+                if (Array.isArray(cat.items)) {
+                    cat.items.forEach((m: any) => liveMenu.set(m.name, m));
+                }
+            });
+        }
+
         let foundDate = null;
         let modifiedOrders = null;
 
@@ -352,15 +378,19 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
                     found = true;
                     foundDate = log.date; 
                     
-                    // CRITICAL FIX: Maintain routing data (station/category) when modifying orders!
-                    const itemsWithStatus = updatedItems.map(item => ({
-                        ...item,
-                        unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-                        status: item.status || 'pending',
-                        station: item.station || item.prep_station || "",
-                        category: item.category || "",
-                        dietary: item.dietary || ""
-                    }));
+                    // CRITICAL FIX: Secure metadata mapping with DB fallback
+                    const itemsWithStatus = updatedItems.map(item => {
+                        const dbItem = liveMenu.get(item.name) || {};
+                        return {
+                            ...item,
+                            unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+                            status: item.status || 'pending',
+                            time_added: item.time_added || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            station: dbItem.station || item.station || item.prep_station || "kitchen",
+                            category: dbItem.category_name || dbItem.category || item.category || "",
+                            dietary: dbItem.dietary || item.dietary || ""
+                        };
+                    });
 
                     // Recalculate parent status dynamically
                     const hasPending = itemsWithStatus.some((i:any) => (i.status||'').toLowerCase().trim() === 'pending');

@@ -27,6 +27,28 @@ const getBSDateFromDaysAgo = (daysAgo: number) => {
 };
 
 // --- PREMIUM CSV EXPORT ---
+export function getDisplayMethod(tx: any) {
+    let parsedSplits = tx.splits;
+    if (typeof parsedSplits === 'string') {
+        try { parsedSplits = JSON.parse(parsedSplits); } catch(e) { parsedSplits = []; }
+    }
+    if (parsedSplits && Array.isArray(parsedSplits) && parsedSplits.length > 0) {
+        let totalSplitTendered = 0;
+        parsedSplits.forEach((s: any) => totalSplitTendered += (Number(s.amount) || 0));
+        let change = totalSplitTendered - Number(tx.amount || tx.grandTotal || 0);
+        if (change < 0) change = 0;
+        return parsedSplits.map((s:any) => {
+            let amt = Number(s.amount) || 0;
+            if ((s.method === 'Cash' || s.method.toLowerCase() === 'cash') && change > 0) {
+                if (change >= amt) { change -= amt; amt = 0; }
+                else { amt -= change; change = 0; }
+            }
+            return amt > 0 ? `${s.method}(${amt})` : null;
+        }).filter(Boolean).join(' + ') || 'Cash';
+    }
+    return tx.payment_method || tx.method || "Cash";
+}
+
 function exportToCSV(bills: any[], startDate: string, endDate: string) {
     if(!bills || bills.length === 0) return toast.error("No data available to export");
     
@@ -41,9 +63,14 @@ function exportToCSV(bills: any[], startDate: string, endDate: string) {
         let tendered = Number(b.tendered) || 0;
         let due = b.credit_due !== undefined ? Number(b.credit_due) : 0;
 
+        let finalMethod = b.payment_method || 'Cash';
         if (b.payment_method !== 'Credit') { tendered = grandTotal; due = 0; }
+        
+        if (b.splits && Array.isArray(b.splits) && b.splits.length > 0) {
+            finalMethod = getDisplayMethod(b);
+        }
 
-        csv += `${displayBill},${b.date.split('T')[0]},${toBS(b.date)},${b.time || ''},${b.table_no},"${items}",${grandTotal},${tendered},${due},${b.payment_method},${b.served_by || 'Cashier'},"${b.customer_name||''}","${b.customer_address||''}"\n`;
+        csv += `${displayBill},${b.date.split('T')[0]},${toBS(b.date)},${b.time || ''},${b.table_no},"${items}",${grandTotal},${tendered},${due},"${finalMethod}",${b.served_by || 'Cashier'},"${b.customer_name||''}","${b.customer_address||''}"\n`;
     });
     
     const link = document.createElement("a"); 
@@ -146,7 +173,30 @@ export default function ReportsView({ data }: any) {
             const actualRevenue = method === 'Credit' ? (Number(b.tendered) || 0) : grandTotal;
             
             total += actualRevenue; count++;
-            pSplit[method] = (pSplit[method] || 0) + actualRevenue;
+
+            // PRECISE SPLIT PARSING
+            let safeSplits = b.splits;
+            if (typeof safeSplits === 'string') {
+                try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+            }
+            
+            if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                let totalSplitTendered = 0;
+                safeSplits.forEach((s: any) => {
+                    const splitAmt = Number(s.amount) || 0;
+                    const splitMethod = s.method || 'Cash';
+                    pSplit[splitMethod] = (pSplit[splitMethod] || 0) + splitAmt;
+                    totalSplitTendered += splitAmt;
+                });
+                const changeToReturn = totalSplitTendered - actualRevenue;
+                if (changeToReturn > 0) pSplit['Cash'] = (pSplit['Cash'] || 0) - changeToReturn;
+            } else if (method === 'Credit') {
+                pSplit['Credit'] = (pSplit['Credit'] || 0) + (Number(b.due_amount) || 0);
+                if (Number(b.tendered) > 0) pSplit['Cash'] = (pSplit['Cash'] || 0) + Number(b.tendered);
+            } else {
+                pSplit[method] = (pSplit[method] || 0) + actualRevenue;
+            }
+
             sSplit[staff] = (sSplit[staff] || 0) + actualRevenue;
         });
         
@@ -362,11 +412,12 @@ export default function ReportsView({ data }: any) {
                                                     </td>
                                                     <td className="px-6 py-5">
                                                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider border ${isCredit ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                                            {b.payment_method}
+                                                            {getDisplayMethod(b)}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-5 text-right">
                                                         <span className="font-black text-slate-900 text-base block">{formatRs(grandTotal)}</span>
+                                                        {b.discount > 0 && <span className="text-[8px] bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded uppercase font-black tracking-widest mt-1 shadow-sm block w-max ml-auto">- {formatRs(b.discount)} Discount</span>}
                                                         {isCredit && (
                                                             <div className="mt-1 flex flex-col items-end gap-1">
                                                                 {isCleared ? (
@@ -394,6 +445,7 @@ export default function ReportsView({ data }: any) {
                                                                 <div className="grid grid-cols-4 gap-4 mb-4">
                                                                     {b.items?.map((item:any, idx:number) => {
                                                                         const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                                                        if (isCancelled && item.previous_status === 'pending') return null;
                                                                         return (
                                                                             <div key={idx} className={`bg-white p-4 rounded-2xl border ${isCancelled ? 'border-red-200 bg-red-50/30' : 'border-slate-200'} shadow-sm flex flex-col hover:border-emerald-200 transition-colors`}>
                                                                                 <div className="flex justify-between items-start mb-2">

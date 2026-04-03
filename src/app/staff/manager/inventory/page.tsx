@@ -48,8 +48,15 @@ export default function ManagerInventoryPage() {
   const [menuSearch, setMenuSearch] = useState("");
   const menuDropdownRef = useRef<HTMLDivElement>(null);
 
-  const EXPENSE_PRESETS = ["Supplier Purchase", "Rent", "Staff Salary", "Electricity", "Marketing", "Maintenance"];
-  const INCOME_PRESETS = ["Manual POS Entry", "Event Booking", "Advance Deposit", "Catering Service"];
+  const dynamicExpensePresets = Array.from(new Set([
+      "Supplier Purchase", "Rent", "Staff Salary", "Electricity", "Marketing", "Maintenance",
+      ...expenses.filter(e => !e.category.includes('[INC]')).map(e => (e.category || "").replace(/\[INC\]|\[EXP\]/gi, '').replace(/_#[a-z0-9]+/gi, '').replace(/_/g, ' ').trim())
+  ])).filter(Boolean);
+
+  const dynamicIncomePresets = Array.from(new Set([
+      "Manual POS Entry", "Event Booking", "Advance Deposit", "Catering Service",
+      ...expenses.filter(e => e.category.includes('[INC]')).map(e => (e.category || "").replace(/\[INC\]|\[EXP\]/gi, '').replace(/_#[a-z0-9]+/gi, '').replace(/_/g, ' ').trim())
+  ])).filter(Boolean);
 
   // SILENT BACKGROUND POLLING (Fixes the Manual Reload Bug!)
   useEffect(() => { 
@@ -158,6 +165,7 @@ export default function ManagerInventoryPage() {
           amount: Number((form.elements.namedItem('amount') as HTMLInputElement).value),
           description: (form.elements.namedItem('description') as HTMLInputElement).value,
           date: (form.elements.namedItem('date') as HTMLInputElement).value,
+          paymentMethod: (form.elements.namedItem('paymentMethod') as HTMLSelectElement)?.value || "Cash"
       };
 
       const res = await addExpense(data);
@@ -405,14 +413,14 @@ export default function ManagerInventoryPage() {
                                     {isFinCatOpen && (
                                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-[120] top-[80px] left-0 w-full bg-white border-2 border-slate-100 rounded-2xl shadow-xl overflow-hidden p-2">
                                             <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
-                                                {(financeType === 'expense' ? EXPENSE_PRESETS : INCOME_PRESETS)
+                                                {(financeType === 'expense' ? dynamicExpensePresets : dynamicIncomePresets)
                                                     .filter(c => c.toLowerCase().includes(financeCategory.toLowerCase()))
                                                     .map(c => (
                                                     <div key={c} onClick={() => { setFinanceCategory(c); setIsFinCatOpen(false); }} className={`px-4 py-3 rounded-xl cursor-pointer font-bold text-sm transition-colors ${financeCategory === c ? (financeType === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700') : 'hover:bg-slate-50 text-slate-700'}`}>
                                                         {c}
                                                     </div>
                                                 ))}
-                                                {(financeType === 'expense' ? EXPENSE_PRESETS : INCOME_PRESETS).filter(c => c.toLowerCase().includes(financeCategory.toLowerCase())).length === 0 && (
+                                                {(financeType === 'expense' ? dynamicExpensePresets : dynamicIncomePresets).filter(c => c.toLowerCase().includes(financeCategory.toLowerCase())).length === 0 && (
                                                     <div className="px-4 py-3 text-sm font-bold text-slate-400 italic flex items-center gap-2">
                                                         <Sparkles className="w-4 h-4"/> Press Save to use custom title
                                                     </div>
@@ -431,6 +439,19 @@ export default function ManagerInventoryPage() {
                                         <input name="amount" type="number" required placeholder="0" className="w-full h-full bg-transparent outline-none font-black text-xl" />
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Payment Account / Method</label>
+                                    <select name="paymentMethod" required className={`w-full h-14 px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none transition-all flex items-center justify-between cursor-pointer focus:bg-white ${financeType === 'income' ? 'border-emerald-100 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 text-emerald-900' : 'border-orange-100 focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10 text-orange-900'}`}>
+                                        <option value="Cash">Cash Account</option>
+                                        {tenant?.qr_codes?.map((qr: any, idx: number) => (
+                                            <option key={idx} value={qr.name}>{qr.name}</option>
+                                        ))}
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Date</label>
                                     <input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 transition-all" />

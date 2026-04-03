@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
   LayoutDashboard, UtensilsCrossed, Users, Store, 
-  ChefHat, FileText, Settings, LogOut, Map, BellRing
+  ChefHat, FileText, Settings, LogOut, Map, BellRing, Sparkles
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { logoutStaff } from "@/app/actions/staff-auth";
@@ -16,6 +16,7 @@ const MENU = [
   { name: "Staff Hub", icon: Users, path: "/staff/manager/staff" },
   { name: "Inventory", icon: Store, path: "/staff/manager/inventory" },
   { name: "Menu Mgmt", icon: UtensilsCrossed, path: "/staff/manager/menu" },
+  { name: "Specials", icon: Sparkles, path: "/staff/manager/specials" },
   { name: "Reports", icon: FileText, path: "/staff/manager/reports" },
 ];
 

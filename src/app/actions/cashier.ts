@@ -224,19 +224,40 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     const tenantId = await getTenantId();
     const today = new Date().toISOString().split('T')[0];
     
-    const compactItems = items.map((i: any) => ({
-        id: i.id, 
-        unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-        name: i.name, 
-        price: i.price, 
-        qty: i.qty || i.quantity || 1, 
-        variant: i.variantName || i.variant || "", 
-        note: i.note || i.notes || "", 
-        status: "pending",
-        category: i.category || "",
-        station: i.station || "",
-        dietary: i.dietary || ""
-    }));
+    // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
+    // If the Cashier frontend fails to pass station/category payload,
+    // we look it up live from the database to guarantee the Chef/Bartender OS routes it.
+    const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
+    const liveMenu = new Map();
+    if (menuData) {
+        menuData.forEach((cat: any) => {
+            if (Array.isArray(cat.items)) {
+                cat.items.forEach((m: any) => {
+                    liveMenu.set(m.name, { ...m, category_name: cat.category_name });
+                });
+            }
+        });
+    }
+
+    const compactItems = items.map((i: any) => {
+        const dbItem = liveMenu.get(i.name) || {};
+        return {
+            id: i.id || dbItem.id || "", 
+            unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+            name: i.name, 
+            price: i.price, 
+            qty: i.qty || i.quantity || 1, 
+            variant: i.variantName || i.variant || "", 
+            note: i.note || i.notes || "", 
+            status: "pending",
+            time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            
+            // Secure routing fallback to database definition if client omits it!
+            station: dbItem.station || i.station || i.prep_station || "kitchen",
+            category: dbItem.category_name || dbItem.category || i.category || "",
+            dietary: dbItem.dietary || i.dietary || ""
+        };
+    });
     
     const newTotal = compactItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
 
@@ -597,7 +618,8 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         tendered: paymentDetails.tendered || 0,
         change: paymentDetails.change || 0,
         credit_due: paymentDetails.creditDue || 0, 
-        payment_method: paymentMethod,
+        payment_method: paymentMethod, // retained for backward compatibility
+        splits: paymentDetails.splits || [], // multi-payment breakdown (Cash: 400, FonePay: 200)
         served_by: servedByValue,
         paid_at: new Date().toISOString(),
         original_order_id: orderId,
@@ -695,18 +717,50 @@ export async function getCashierReports(days: number) {
                     allBills.push(bill);
                     const amt = Number(bill.grandTotal);
                     const tendered = Number(bill.tendered) || 0;
-                    const method = bill.payment_method || "Cash";
                     
-                    const actualRevenue = method === 'Credit' ? tendered : amt;
+                    // --- MULTI-PAYMENT ENGINE SUPPORT ---
+                    let actualRevenue = 0;
                     
+                    if (bill.splits && Array.isArray(bill.splits) && bill.splits.length > 0) {
+                        // If it's a split payment, we sum the exact fractions
+                        bill.splits.forEach((split: any) => {
+                            const splitAmt = Number(split.amount) || 0;
+                            const splitMethod = split.method || "Cash";
+                            
+                            // For credit within a split, the amount received is technically 0 upfront, but 'amount' represents the split fraction.
+                            // However, actual revenue collected today for the 'Credit' part is 0. 
+                            const collectedSplit = splitMethod === 'Credit' ? 0 : splitAmt;
+                            
+                            actualRevenue += collectedSplit;
+                            
+                            if (summary.byMethod[splitMethod]) summary.byMethod[splitMethod] += collectedSplit; 
+                            else summary.byMethod[splitMethod] = collectedSplit;
+                        });
+                        
+                        // Also track advance received for Credit explicitly if provided in splits
+                        const creditSplit = bill.splits.find((s:any) => s.method === 'Credit');
+                        if (creditSplit) {
+                           // If there's an advance on the credit account specifically, we'll factor the tendered.
+                           // Actually, split validation ensures exact sum matches.
+                        }
+
+                    } else {
+                        // Legacy single-payment handling
+                        const method = bill.payment_method || "Cash";
+                        actualRevenue = method === 'Credit' ? tendered : amt;
+                        
+                        if(summary.byMethod[method]) summary.byMethod[method] += actualRevenue; 
+                        else summary.byMethod[method] = actualRevenue;
+                    }
+
                     dailyTotal += actualRevenue;
                     summary.total += actualRevenue;
                     summary.count++;
                     
-                    if(summary.byMethod[method]) summary.byMethod[method] += actualRevenue; else summary.byMethod[method] = actualRevenue;
-                    
                     const staff = bill.served_by || "Cashier";
                     if(summary.byStaff[staff]) summary.byStaff[staff] += actualRevenue; else summary.byStaff[staff] = actualRevenue;
+
+                    const method = bill.payment_method || "Cash"; // Needed below for credit tracking
 
                     if (method === 'Credit') {
                         const rawName = (bill.customer_name || "Unknown Customer").trim();

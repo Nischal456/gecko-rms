@@ -7,7 +7,8 @@ import { motion, AnimatePresence, Variants } from "framer-motion";
 import { 
     Search, X, ChefHat, Info, ChevronRight, Layers, Beef, Leaf, 
     GlassWater, Utensils, ShoppingBag, Sun, Moon, Sunrise, 
-    Clock, Wind, Cigarette, AlertCircle, ImageIcon, CheckCircle2 
+    Clock, Wind, Cigarette, AlertCircle, ImageIcon, CheckCircle2,
+    Sparkles, Star, Flame
 } from "lucide-react";
 import NepaliDate from 'nepali-date-converter';
 
@@ -167,6 +168,13 @@ export default function PublicMenuPage() {
         return items;
     }, [menu, activeCategory, deferredSearch]);
 
+    // --- EXTRACT SPECIALS ---
+    const specialItems = useMemo(() => {
+        return menu.flatMap(cat => cat.items || []).filter(item => item.is_special && item.is_available);
+    }, [menu]);
+
+    const showSpecialsCarousel = specialItems.length > 0 && activeCategory === "All" && !deferredSearch.trim();
+
     // --- LOADING STATE ---
     if (loading) return (
         <div className="min-h-[100dvh] bg-[#f8fafc] px-6 py-12 flex flex-col items-center justify-center">
@@ -275,6 +283,82 @@ export default function PublicMenuPage() {
                     </div>
                 </div>
             </header>
+
+            {/* --- PREMIUM TODAY'S SPOTLIGHT CAROUSEL --- */}
+            <AnimatePresence>
+                {showSpecialsCarousel && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0, scale: 0.95 }} 
+                        animate={{ opacity: 1, height: "auto", scale: 1 }} 
+                        exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        className="w-full transform-gpu overflow-hidden pt-2 pb-4"
+                    >
+                        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
+                            <div className="flex justify-between items-end mb-3 px-1">
+                                <div>
+                                    <h2 className="font-black text-slate-900 text-lg md:text-xl tracking-tight flex items-center gap-1.5">
+                                        <Flame className="w-5 h-5 text-orange-500 fill-orange-500/20" /> Today's Spotlight
+                                    </h2>
+                                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mt-0.5">Chef's Special Selections</p>
+                                </div>
+                            </div>
+
+                            {/* Horizontal Snap Scroll Area */}
+                            <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-4 -mx-4 px-4 md:mx-0 md:px-0">
+                                {specialItems.map((item: any, idx: number) => {
+                                    const hasVariants = item.variants && item.variants.length > 0;
+                                    const variantStr = hasVariants ? `Rs ${Math.min(...item.variants.map((v:any)=>v.price))} +` : `Rs ${item.price || 0}`;
+
+                                    return (
+                                        <motion.div 
+                                            key={`special-${item.id}`}
+                                            initial={{ opacity: 0, x: 50 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: idx * 0.05, type: "spring" }}
+                                            onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
+                                            className="relative snap-always snap-center shrink-0 w-[280px] md:w-[320px] rounded-[1.5rem] p-3 md:p-4 bg-white border border-amber-200/60 shadow-[0_4px_20px_rgba(245,158,11,0.1)] active:scale-[0.98] transition-transform cursor-pointer overflow-hidden group hover:shadow-[0_8px_30px_rgba(245,158,11,0.2)]"
+                                        >
+                                            {/* Golden Gleam Effect */}
+                                            <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-orange-50/50 opacity-50 pointer-events-none z-0" />
+                                            
+                                            <div className="relative z-10 flex gap-3">
+                                                <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl overflow-hidden shrink-0 shadow-inner relative bg-amber-100/30">
+                                                    {item.image_url ? (
+                                                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center text-amber-300"><Star className="w-8 h-8 opacity-40" /></div>
+                                                    )}
+                                                    {/* Sparkle Badge */}
+                                                    <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-orange-500 text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-bl-xl shadow-md flex items-center gap-1">
+                                                        <Sparkles className="w-2 h-2" /> Special
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex-1 flex flex-col py-1 min-w-0">
+                                                    <h3 className="font-black text-slate-900 text-sm md:text-base leading-tight line-clamp-2 pr-1">{item.name}</h3>
+                                                    <p className="text-[10px] md:text-xs text-slate-600 line-clamp-2 mt-1 leading-snug font-medium pr-1">
+                                                        {item.description || "The chef's special choice for today."}
+                                                    </p>
+                                                    <div className="mt-auto pt-2 flex items-end justify-between border-t border-amber-100/50">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest block mb-0.5">Offered at</span>
+                                                            <span className="font-black text-slate-900 text-sm md:text-base tracking-tight">{variantStr}</span>
+                                                        </div>
+                                                        <div className="w-7 h-7 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                                                            <ChevronRight className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* --- MENU GRID (2 Columns Mobile, 3 Tablet, 4 Desktop) --- */}
             <div className="p-3 md:p-8 max-w-[1400px] mx-auto min-h-[50vh]">

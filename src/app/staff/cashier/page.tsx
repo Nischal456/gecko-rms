@@ -201,6 +201,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     // --- FINANCIAL ENGINE ---
     const [discountInput, setDiscountInput] = useState<string>("");
     const [tenderedInput, setTenderedInput] = useState<string>("");
+    const [splits, setSplits] = useState<{method: string, amount: number}[]>([]);
     const [isProcessing, setIsProcessing] = useState(false); // FRONTEND DOUBLE-CLICK LOCK
     
     const dragControls = useDragControls();
@@ -239,18 +240,23 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const subTotal = activeItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const discountAmt = discountInput === "" ? 0 : Number(discountInput);
     const grandTotal = Math.max(0, subTotal - discountAmt);
+    
+    // SPLITS CALCULATION
+    const totalPaidSplits = splits.reduce((sum, s) => sum + s.amount, 0);
+    const remainingAmount = Math.max(0, grandTotal - totalPaidSplits);
     const tenderedAmt = tenderedInput === "" ? 0 : Number(tenderedInput);
     
     let changeDue = 0;
     let creditDue = 0;
     
-    if (method === "Credit") {
-        creditDue = Math.max(0, grandTotal - tenderedAmt);
+    if (splits.length === 0) {
+        if (method === "Credit") creditDue = Math.max(0, grandTotal - tenderedAmt);
+        else changeDue = tenderedAmt > grandTotal ? tenderedAmt - grandTotal : 0;
     } else {
-        changeDue = tenderedAmt > grandTotal ? tenderedAmt - grandTotal : 0;
+        changeDue = totalPaidSplits > grandTotal ? totalPaidSplits - grandTotal : 0;
     }
     
-    const paymentDetails = { subTotal, discount: discountAmt, grandTotal, tendered: tenderedAmt, change: changeDue, creditDue };
+    const paymentDetails = { subTotal, discount: discountAmt, grandTotal, tendered: splits.length > 0 ? totalPaidSplits : tenderedAmt, change: changeDue, creditDue };
 
     const bankAccounts = restaurant?.bank_accounts || []; 
     const paymentMethods = [
@@ -262,19 +268,54 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     const activeMethod = paymentMethods.find((m:any) => m.name === method);
     const handlePrint = () => { setTimeout(() => window.print(), 300); };
 
-    const handleConfirmCheckout = async () => {
-        if (isProcessing || !isPayable) return; // Immediate lock
+    const handleAddSplit = () => {
+        if (tenderedAmt <= 0) { toast.error("Enter an amount to add payment split."); return; }
+        if (totalPaidSplits >= grandTotal) { toast.error("Bill is already fully paid."); return; }
         
-        if (method === "Credit" && (!customer.name || customer.name.trim() === "")) {
-            toast.error("Customer Name is required for Credit orders!", { description: "Please enter the customer name below." });
-            return;
+        setSplits([...splits, { method, amount: tenderedAmt }]);
+        setTenderedInput(Math.max(0, remainingAmount - tenderedAmt).toString());
+    };
+
+    const removeSplit = (index: number) => {
+        setSplits(splits.filter((_, i) => i !== index));
+    };
+
+    const handleConfirmCheckout = async () => {
+        if (isProcessing || !isPayable) return; 
+        
+        let finalMethod = splits.length > 0 ? "Split" : method;
+        let finalPaymentDetails: any = { ...paymentDetails };
+
+        if (splits.length > 0) {
+            if (totalPaidSplits < grandTotal) {
+                 toast.error(`Please pay the remaining Rs ${remainingAmount} before checking out.`);
+                 return;
+            }
+            const hasCredit = splits.some(s => s.method === 'Credit');
+            if (hasCredit && (!customer.name || customer.name.trim() === "")) {
+                toast.error("Customer Name is required for Credit payments!");
+                return;
+            }
+            finalPaymentDetails.splits = splits;
+        } else {
+            if (method === "Credit" && (!customer.name || customer.name.trim() === "")) {
+                toast.error("Customer Name is required for Credit orders!");
+                return;
+            }
         }
 
-        setIsProcessing(true); // Disable the button instantly
+        setIsProcessing(true);
         try {
-            await onConfirm(table.label, order.id, method, paymentDetails, customer);
-        } catch(e) {
-            setIsProcessing(false); // Only unlock if it errors out
+            // Absolute Timeout Guard against Network Freezes (Prevents double entries)
+            const timeoutPr = new Promise((_, reject) => setTimeout(() => reject(new Error("Network is unstable or too slow. Payment halted to prevent double-entry.")), 15000));
+            
+            await Promise.race([
+                onConfirm(table.label, order.id, finalMethod, finalPaymentDetails, customer),
+                timeoutPr
+            ]);
+        } catch(e: any) {
+            toast.error(e.message || "Network Error occurred.");
+            setIsProcessing(false); 
         }
     };
 
@@ -367,6 +408,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                                 {renderSmallStatus(item.status, item.previous_status)}
                                             </div>
                                             {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
+                                            <span className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1"><Clock className="w-2.5 h-2.5 opacity-70"/> {item.time_added || order.time}</span>
                                         </div>
                                     </div>
                                     <span className={`font-black flex items-start shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
@@ -422,57 +464,95 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                             ))}
                         </div>
 
-                        <div className="w-full bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center relative overflow-hidden shrink-0 p-6 min-h-[160px]">
-                            <AnimatePresence mode="wait">
-                                {activeMethod?.qr ? (
-                                    <motion.div key="qr" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} onClick={() => setExpandedQr(true)} className="w-full h-full flex flex-col items-center justify-center cursor-pointer group py-2">
-                                        <img src={activeMethod.qr} className="w-full h-full max-w-[150px] md:max-w-[200px] max-h-[150px] md:max-h-[200px] object-contain mix-blend-multiply drop-shadow-sm rounded-2xl group-hover:scale-105 transition-transform duration-500" />
-                                        <div className="absolute bottom-3 flex items-center gap-1.5 px-4 py-2 bg-white/95 backdrop-blur-md border border-slate-200 rounded-full shadow-lg group-hover:border-emerald-300 group-hover:text-emerald-600 transition-all text-slate-500 scale-90 md:scale-100">
-                                            <ZoomIn className="w-4 h-4" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Tap to Enlarge</span>
+                        {/* Splits Array Visualizer */}
+                        {splits.length > 0 && (
+                            <div className="flex flex-col gap-2 p-4 border-2 border-emerald-100 bg-emerald-50/30 rounded-[2rem]">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1 ml-2">Payment Details</span>
+                                {splits.map((s, idx) => (
+                                    <div key={idx} className="flex justify-between items-center bg-white border border-slate-100 rounded-xl p-3 shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400"><Layers className="w-4 h-4"/></span>
+                                            <span className="font-bold text-slate-800 text-sm">{s.method}</span>
                                         </div>
-                                    </motion.div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-black text-slate-900">Rs {s.amount}</span>
+                                            <button onClick={() => removeSplit(idx)} className="p-1.5 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded-lg transition-colors"><X className="w-4 h-4"/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between items-center px-2 mt-2 pt-2 border-t border-emerald-100">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Paid</span>
+                                    <span className="text-lg font-black text-emerald-600">Rs {totalPaidSplits}</span>
+                                </div>
+                                {remainingAmount > 0 ? (
+                                    <div className="flex justify-between items-center px-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 animate-pulse">Remaining</span>
+                                        <span className="text-lg font-black text-amber-500">Rs {remainingAmount}</span>
+                                    </div>
                                 ) : (
-                                    <motion.div key="cash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-slate-400 w-full">
-                                        {method === "Credit" ? (
-                                            <div className="flex flex-col items-center">
-                                                <BookOpen className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 text-blue-500/30"/>
-                                                <div className="w-full max-w-xs bg-white border border-slate-200 p-3 md:p-4 rounded-2xl shadow-sm text-left focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Advance Received (Rs)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={tenderedInput} 
-                                                        onChange={e=>setTenderedInput(e.target.value)} 
-                                                        placeholder="0" 
-                                                        className="w-full bg-transparent font-black text-xl md:text-2xl text-slate-900 outline-none" 
-                                                    />
-                                                </div>
-                                                <p className="text-[10px] text-slate-500 font-bold max-w-xs text-center mt-3">Customer Name is strictly required below to record this Khata balance.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-center w-full">
-                                                <Banknote className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 text-emerald-500/20"/>
-                                                <div className="w-full max-w-xs bg-white border border-slate-200 p-3 md:p-4 rounded-2xl shadow-sm text-left focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cash Received (Rs)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={tenderedInput} 
-                                                        onChange={e=>setTenderedInput(e.target.value)} 
-                                                        placeholder="0" 
-                                                        className="w-full bg-transparent font-black text-xl md:text-2xl text-slate-900 outline-none" 
-                                                    />
-                                                </div>
-                                                {Number(tenderedInput) > 0 && (
-                                                    <div className="w-full max-w-xs mt-3 bg-amber-50 border border-amber-200 p-3 md:p-4 rounded-2xl flex justify-between items-center shadow-inner">
-                                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Return Change</span>
-                                                        <span className="text-xl md:text-2xl font-black text-amber-600">Rs {changeDue}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </motion.div>
+                                    <div className="flex justify-between items-center px-2 mt-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Change Due</span>
+                                        <span className="text-lg font-black text-slate-900">Rs {changeDue}</span>
+                                    </div>
                                 )}
-                            </AnimatePresence>
+                            </div>
+                        )}
+
+                        <div className="w-full bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center relative overflow-hidden shrink-0 p-6 min-h-[160px]">
+                            {remainingAmount === 0 && splits.length > 0 ? (
+                                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-6">
+                                    <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-4 drop-shadow-sm" />
+                                    <span className="font-black text-slate-800 text-lg uppercase tracking-widest">Fully Paid</span>
+                                    <p className="text-xs font-bold text-slate-400 mt-1">Ready for checkout confirmation.</p>
+                                </motion.div>
+                            ) : (
+                                <AnimatePresence mode="wait">
+                                    {activeMethod?.qr ? (
+                                        <motion.div key="qr" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="w-full flex gap-6 items-center">
+                                            <div className="flex-1 flex flex-col justify-center gap-4">
+                                                <div className="w-full bg-white border border-slate-200 p-4 rounded-2xl shadow-sm focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Enter Amount Received</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={tenderedInput} 
+                                                        onChange={e=>setTenderedInput(e.target.value)} 
+                                                        placeholder="0" 
+                                                        className="w-full bg-transparent font-black text-2xl text-slate-900 outline-none" 
+                                                    />
+                                                </div>
+                                                <button onClick={handleAddSplit} className="w-full py-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black uppercase tracking-widest border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all">Add to Bill</button>
+                                            </div>
+                                            <div onClick={() => setExpandedQr(true)} className="cursor-pointer group py-2 shrink-0 relative">
+                                                <img src={activeMethod.qr} className="w-[140px] h-[140px] object-cover mix-blend-multiply drop-shadow-sm rounded-2xl group-hover:scale-105 transition-transform duration-500 bg-white p-2 border border-slate-200" />
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-lg"><ZoomIn className="w-5 h-5 text-emerald-600"/></div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div key="cash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-slate-400 w-full">
+                                            <div className="flex flex-col md:flex-row items-center gap-6 w-full">
+                                                <div className="flex-1 flex flex-col items-center w-full">
+                                                    {method === 'Credit' ? <BookOpen className="w-12 h-12 md:w-16 md:h-16 mb-4 text-blue-500/20"/> : <Banknote className="w-12 h-12 md:w-16 md:h-16 mb-4 text-emerald-500/20"/>}
+                                                </div>
+                                                <div className="flex-[2] flex flex-col gap-3 w-full max-w-sm mx-auto">
+                                                    <div className={`w-full bg-white border border-slate-200 p-3 md:p-5 rounded-2xl shadow-sm text-left transition-all ${method === 'Credit' ? 'focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100' : 'focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100'}`}>
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{method === 'Credit' ? 'Advance Credit Received' : 'Cash Received (Rs)'}</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={tenderedInput} 
+                                                            onChange={e=>setTenderedInput(e.target.value)} 
+                                                            placeholder="0" 
+                                                            className="w-full bg-transparent font-black text-xl md:text-3xl text-slate-900 outline-none" 
+                                                        />
+                                                    </div>
+                                                    <button onClick={handleAddSplit} className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 ${method === 'Credit' ? 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'}`}>Add to Bill</button>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            )}
                         </div>
                         
                         <div className="flex flex-col sm:flex-row gap-3 shrink-0 pb-4">
@@ -481,8 +561,8 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                 list="credit-customers-list"
                                 value={customer.name} 
                                 onChange={e => setCustomer({...customer, name: e.target.value})} 
-                                placeholder={method === 'Credit' ? "* Select or Type Customer Name" : "Customer Name (Optional)"} 
-                                className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}
+                                placeholder={method === 'Credit' || splits.some(s=>s.method==='Credit') ? "* Select or Type Customer Name" : "Customer Name (Optional)"} 
+                                className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' || splits.some(s=>s.method==='Credit') ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}
                             />
                             <datalist id="credit-customers-list">
                                 {creditCustomers.map((name, i) => <option key={i} value={name} />)}
@@ -506,7 +586,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                             <button 
                                 disabled={!isPayable || isProcessing} 
                                 onClick={handleConfirmCheckout} 
-                                className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable && !isProcessing ? (method === 'Credit' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>
+                                className={`flex-[2] py-4 md:py-5 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs md:text-sm uppercase tracking-wider ${isPayable && !isProcessing ? ((method === 'Credit' || splits.some(s=>s.method==='Credit')) ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/30') : 'bg-slate-300 cursor-not-allowed shadow-none'}`}>
                                 {isProcessing ? <><Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin"/> Processing...</> : 
                                  isPayable ? <><CheckCircle2 className="w-5 h-5 md:w-6 md:h-6"/> Confirm Payment</> : 
                                  <><Clock className="w-5 h-5 md:w-6 md:h-6"/> Awaiting Service</>}

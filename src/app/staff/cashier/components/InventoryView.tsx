@@ -6,11 +6,43 @@ import {
   Plus, Minus, Search, Package, Trash2, X, Loader2, 
   Wine, Droplets, Box, Lock, Sparkles,
   ChevronDown, Receipt, Link2, Clock, 
-  TrendingUp, TrendingDown, Edit3,Layers
+  TrendingUp, TrendingDown, Edit3, Layers, Download
 } from "lucide-react";
 import { toast } from "sonner";
 import { getInventory, addInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
 import { getDashboardData } from "@/app/actions/dashboard";
+
+function exportExpensesToCSV(expenses: any[]) {
+    if (!expenses || expenses.length === 0) return toast.error("No data available to export");
+    let csv = "Date,Title/Category,Notes,Type,Payment Method,Amount\n";
+    expenses.forEach((e: any) => {
+        const amt = Number(e.amount) || 0;
+        const type = (e.type || "").toUpperCase();
+        let cat = (e.category || "").replace(/_#[a-z0-9]+/g, '').replace(/\[INC\] |\[EXP\] /gi, '');
+        let note = (e.description || "");
+        let method = "Cash";
+
+        try {
+            const parsed = JSON.parse(note);
+            if (parsed.note !== undefined && parsed.method !== undefined) {
+                note = parsed.note;
+                method = parsed.method;
+            }
+        } catch { /* old format */ }
+
+        cat = cat.replace(/"/g, '""');
+        note = note.replace(/"/g, '""');
+        method = method.replace(/"/g, '""');
+
+        csv += `${e.date},"${cat}","${note}",${type},"${method}",${amt}\n`;
+    });
+    
+    const link = document.createElement("a");
+    link.href = "data:text/csv;charset=utf-8," + encodeURI(csv);
+    link.download = `Gecko_Cashflow_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    toast.success("Cashflow Exported Successfully");
+}
 
 export default function InventoryView() {
   const [tenant, setTenant] = useState<any>(null);
@@ -132,6 +164,7 @@ export default function InventoryView() {
           amount: Number((form.elements.namedItem('amount') as HTMLInputElement).value),
           description: (form.elements.namedItem('description') as HTMLInputElement).value,
           date: (form.elements.namedItem('date') as HTMLInputElement).value,
+          paymentMethod: (form.elements.namedItem('paymentMethod') as HTMLSelectElement)?.value || "Cash"
       };
 
       const res = await addExpense(data);
@@ -209,6 +242,11 @@ export default function InventoryView() {
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={`Search ${activeTab}...`} className="w-full h-12 pl-12 pr-4 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-slate-900 transition-all shadow-sm" />
                   </div>
+                  {activeTab === 'expenses' && (
+                      <button onClick={() => exportExpensesToCSV(filteredExpenses)} className="px-6 h-12 bg-emerald-50 text-emerald-600 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 shadow-sm transition-all whitespace-nowrap active:scale-95">
+                          <Download className="w-4 h-4" /> <span className="hidden sm:inline">Export</span>
+                      </button>
+                  )}
                   <button onClick={() => { setFinanceType('expense'); setIsExpenseModalOpen(true); }} className="flex-1 xl:flex-none px-6 h-12 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm transition-all whitespace-nowrap active:scale-95">
                       <Receipt className="w-4 h-4 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
                   </button>
@@ -269,8 +307,20 @@ export default function InventoryView() {
                               </tr>
                           )) : filteredExpenses.map((exp) => {
                               const isInc = exp.category.toUpperCase().includes('[INC]') || exp.category.toLowerCase().includes('income') || exp.category.toLowerCase().includes('deposit') || exp.category.toLowerCase().includes('catering');
-                              const cleanTitle = exp.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_/g, ' ').trim();
+                              const cleanTitle = exp.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_#[a-z0-9]+/gi, '').replace(/_/g, ' ').trim();
                               const d = new Date(exp.created_at || exp.date);
+                              
+                              let displayDesc = exp.description || '--';
+                              let parsedMethod = 'Cash';
+                              
+                              try {
+                                  if (exp.description && exp.description.trim().startsWith('{')) {
+                                      const parsed = JSON.parse(exp.description);
+                                      displayDesc = parsed.note || '--';
+                                      parsedMethod = parsed.method || 'Cash';
+                                  }
+                              } catch(e) {}
+
                               return (
                                   <tr key={exp.id} className="hover:bg-slate-50/30 transition-colors group">
                                       <td className="p-6">
@@ -283,7 +333,10 @@ export default function InventoryView() {
                                               {cleanTitle}
                                           </div>
                                       </td>
-                                      <td className="p-6 font-medium text-slate-600 max-w-[200px] truncate">{exp.description || '--'}</td>
+                                      <td className="p-6">
+                                          <div className="font-medium text-slate-600 max-w-[200px] truncate">{displayDesc}</div>
+                                          <div className="mt-1 flex items-center gap-1"><Layers className={`w-3 h-3 ${isInc ? 'text-emerald-400' : 'text-orange-400'}`}/> <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">{parsedMethod}</span></div>
+                                      </td>
                                       <td className="p-6 font-black text-lg whitespace-nowrap">
                                           <span className={isInc ? 'text-emerald-600' : 'text-slate-900'}>{isInc ? '+' : '-'} Rs {Math.abs(exp.amount)}</span>
                                       </td>
@@ -337,10 +390,22 @@ export default function InventoryView() {
 
                           <div className="grid grid-cols-2 gap-4">
                               <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Amount (Rs)</label><div className={`flex items-center w-full h-14 px-4 border-2 rounded-2xl transition-all focus-within:bg-white bg-slate-50 ${financeType === 'income' ? 'border-emerald-100 focus-within:border-emerald-400 text-emerald-700' : 'border-orange-100 focus-within:border-orange-400 text-orange-700'}`}><span className="font-black opacity-50 mr-1">Rs</span><input name="amount" type="number" required placeholder="0" className="w-full h-full bg-transparent outline-none font-black text-xl" /></div></div>
-                              <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Date</label><input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 transition-all" /></div>
+                              <div>
+                                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Payment Account / Method</label>
+                                  <select name="paymentMethod" required className={`w-full h-14 px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none transition-all focus:bg-white ${financeType === 'income' ? 'border-emerald-100 focus:border-emerald-400 text-emerald-900' : 'border-orange-100 focus:border-orange-400 text-orange-900'}`}>
+                                      <option value="Cash">Cash Account</option>
+                                      {tenant?.qr_codes?.map((qr: any, idx: number) => (
+                                          <option key={idx} value={qr.name}>{qr.name}</option>
+                                      ))}
+                                      <option value="Bank Transfer">Bank Transfer</option>
+                                  </select>
+                              </div>
                           </div>
 
-                          <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Detailed Description (Optional)</label><textarea name="description" placeholder="Add invoice numbers, details, or reasons here..." className="w-full h-24 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 transition-all resize-none placeholder:text-slate-400" /></div>
+                          <div className="grid grid-cols-1 gap-4">
+                              <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Date</label><input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 transition-all" /></div>
+                              <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Detailed Description (Optional)</label><textarea name="description" placeholder="Add invoice numbers, details, or reasons here..." className="w-full h-24 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 transition-all resize-none placeholder:text-slate-400" /></div>
+                          </div>
 
                           <div className="pt-2 flex gap-3">
                               <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="w-1/3 h-14 rounded-2xl font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors">Cancel</button>

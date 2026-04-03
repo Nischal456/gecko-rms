@@ -197,11 +197,19 @@ export async function addExpense(data: any) {
       finalCategory = finalCategory + ' [EXP]';
   }
 
+  // Database Defense: Append a unique hash to prevent any UNIQUE constraint overwrite issues
+  finalCategory = finalCategory + `_#${Date.now().toString(36)}`;
+
+  const encodedDescription = JSON.stringify({
+      note: data.description || "",
+      method: data.paymentMethod || "Cash"
+  });
+
   const { error } = await supabaseAdmin.from("expenses").insert({ 
       tenant_id: tenantId, 
       category: finalCategory, 
       amount: rawAmount, 
-      description: data.description || "", 
+      description: encodedDescription, 
       date: data.date || new Date().toISOString().split('T')[0] 
   });
   

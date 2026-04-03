@@ -15,7 +15,7 @@ import { getPOSMenu, submitOrder, getPOSStats, modifyOrder } from "@/app/actions
 // --- TYPES ---
 interface Variant { name: string; price: string | number; }
 interface MenuItem {
-    id: string; name: string; price: number; category: string; description?: string; image_url?: string; is_veg?: boolean; is_available?: boolean; variants?: Variant[];
+    id: string; name: string; price: number; category: string; description?: string; image_url?: string; is_veg?: boolean; is_available?: boolean; variants?: Variant[]; station?: string;
 }
 interface CartItem extends MenuItem {
     cartId: string; variantName?: string; qty: number; note?: string; 
@@ -209,7 +209,8 @@ function POSContent() {
                                     description: originalMenuItem?.description || "",
                                     is_veg: originalMenuItem?.is_veg,
                                     variantName: orderItem.variant,
-                                    note: orderItem.note
+                                    note: orderItem.note,
+                                    station: originalMenuItem?.station || orderItem.station || orderItem.prep_station || ""
                                 };
                             });
                             

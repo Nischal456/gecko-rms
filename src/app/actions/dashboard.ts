@@ -44,25 +44,34 @@ function safeParse(data: any): any[] {
 function calculateRealRevenue(activeOrders: any[], paidHistory: any[]) {
     let revenue = 0;
 
-    // 1. Paid History (Includes completed Cash/QR and Credit)
-    paidHistory.forEach(o => {
-        const method = String(o.payment_method || o.method || "Cash").toLowerCase();
-        if (method.includes('credit')) {
-            revenue += Number(o.tendered || 0); // Only count actual cash received for credit
+    const processOrderRevenue = (o: any) => {
+        if (o.splits && Array.isArray(o.splits) && o.splits.length > 0) {
+            o.splits.forEach((split: any) => {
+                const sMethod = String(split.method || "Cash").toLowerCase();
+                const sAmt = Number(split.amount || 0);
+                if (!sMethod.includes('credit')) {
+                    revenue += sAmt;
+                }
+            });
+            // If credit advance exists, it's captured in tendered? Let's just rely on the tendered for credit parts if needed.
+            // Actually, any split mapping explicitly captures what was handed over.
         } else {
-            revenue += Number(o.grandTotal || o.total || 0); // Cash/QR is fully received
-        }
-    });
-
-    // 2. Active Orders (Rarely paid, but just in case they are marked 'paid' but not moved to history yet)
-    activeOrders.forEach(o => {
-        if (['paid', 'completed'].includes(o.status)) {
             const method = String(o.payment_method || o.method || "Cash").toLowerCase();
             if (method.includes('credit')) {
                 revenue += Number(o.tendered || 0);
             } else {
                 revenue += Number(o.grandTotal || o.total || 0);
             }
+        }
+    };
+
+    // 1. Paid History
+    paidHistory.forEach(processOrderRevenue);
+
+    // 2. Active Orders
+    activeOrders.forEach(o => {
+        if (['paid', 'completed'].includes(o.status)) {
+            processOrderRevenue(o);
         }
     });
 

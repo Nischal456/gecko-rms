@@ -50,6 +50,29 @@ const getBSDateFromDaysAgo = (daysAgo: number) => {
     return new NepaliDate(pastDate).format('YYYY-MM-DD');
 };
 
+// Exact Split Normalization Helper
+export function getDisplayMethod(tx: any) {
+    let parsedSplits = tx.splits;
+    if (typeof parsedSplits === 'string') {
+        try { parsedSplits = JSON.parse(parsedSplits); } catch(e) { parsedSplits = []; }
+    }
+    if (parsedSplits && Array.isArray(parsedSplits) && parsedSplits.length > 0) {
+        let totalSplitTendered = 0;
+        parsedSplits.forEach((s: any) => totalSplitTendered += (Number(s.amount) || 0));
+        let change = totalSplitTendered - Number(tx.amount || tx.grandTotal || 0);
+        if (change < 0) change = 0;
+        return parsedSplits.map((s:any) => {
+            let amt = Number(s.amount) || 0;
+            if ((s.method === 'Cash' || s.method.toLowerCase() === 'cash') && change > 0) {
+                if (change >= amt) { change -= amt; amt = 0; }
+                else { amt -= change; change = 0; }
+            }
+            return amt > 0 ? `${s.method}(${amt})` : null;
+        }).filter(Boolean).join(' + ') || 'Cash';
+    }
+    return tx.method || tx.payment_method || "Cash";
+}
+
 // Premium CSV Export (STRICTLY Filters out Cancelled/Void Items)
 function exportToCSV(transactions: any[], startDate: string, endDate: string) {
     if(!transactions || transactions.length === 0) return toast.error("No data available to export");
@@ -64,14 +87,21 @@ function exportToCSV(transactions: any[], startDate: string, endDate: string) {
         const itemsStr = cleanItems.map((i:any) => `${i.qty}x ${i.name.replace(/,/g, '')}`).join(" | ") || "";
         
         const grandTotal = Number(t.amount) || 0;
-        const tendered = Number(t.tendered) || 0;
-        const due = Number(t.due) || 0;
+        let tendered = Number(t.tendered) || 0;
+        let due = Number(t.due) || 0;
+
+        let finalMethod = t.method || 'Cash';
+        if (t.method !== 'Credit') { tendered = grandTotal; due = 0; }
+
+        if (t.splits && Array.isArray(t.splits) && t.splits.length > 0) {
+            finalMethod = getDisplayMethod(t);
+        }
 
         const safeDetails = (t.details || '').replace(/"/g, '""');
         const cName = (t.customer?.name || '').replace(/"/g, '""');
         const cPhone = (t.customer?.address || '').replace(/"/g, '""');
 
-        csv += `${t.id},${dateObj.toISOString().split('T')[0]},${toBSFull(t.date)},${dateObj.toLocaleTimeString()},${t.type},"${safeDetails}","${itemsStr}",${grandTotal},${tendered},${due},${t.method},${t.status},"${cName}","${cPhone}"\n`;
+        csv += `${t.id},${dateObj.toISOString().split('T')[0]},${toBSFull(t.date)},${dateObj.toLocaleTimeString()},${t.type},"${safeDetails}","${itemsStr}",${grandTotal},${tendered},${due},"${finalMethod}",${t.status},"${cName}","${cPhone}"\n`;
     });
     
     const link = document.createElement("a"); 
@@ -386,8 +416,9 @@ export default function ReportsPage() {
               totalExpense += amt;
               chartGroup[bsDate].expense += amt;
               
-              // PREMIUM FIX: Deduct expenses directly from the Cash Drawer
-              paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - amt;
+              // PREMIUM FIX: Deduct expenses directly from the exact Payment Drawer!
+              const expMethod = tx.method || 'Cash';
+              paymentMethods[expMethod] = (paymentMethods[expMethod] || 0) - amt;
               
           } else {
               // Income & POS Orders
@@ -400,19 +431,30 @@ export default function ReportsPage() {
                   totalCreditDue += (Number(tx.due) || 0);
               }
 
-              // PREMIUM FIX: Route "Manual Log" income straight into the Cash Drawer
               const method = tx.method === 'Manual Log' ? 'Cash' : (tx.method || "Cash");
               const staff = tx.served_by || tx.staff || "Cashier";
 
-              if (method === 'Credit') {
-                  // Track the actual deferred credit amount
+              let safeSplits = tx.splits;
+              if (typeof safeSplits === 'string') {
+                  try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+              }
+
+              // EXACT SPLIT HANDLING: Directly map object instead of 'Split'
+              if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                  let totalSplitTendered = 0;
+                  safeSplits.forEach((s: any) => {
+                      const splitAmt = Number(s.amount) || 0;
+                      const splitMethod = s.method || 'Cash';
+                      paymentMethods[splitMethod] = (paymentMethods[splitMethod] || 0) + splitAmt;
+                      totalSplitTendered += splitAmt;
+                  });
+                  // EXTREME ACCURACY FIX: Subtract the returning change from Cash!
+                  const changeToReturn = totalSplitTendered - actualRev;
+                  if (changeToReturn > 0) paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
+              } else if (method === 'Credit') {
                   paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + (Number(tx.due) || 0);
-                  // If they paid an advance deposit, log that portion as Cash
-                  if (Number(tx.tendered) > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
-                  }
+                  if (Number(tx.tendered) > 0) paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
               } else {
-                  // Standard Cash/QR/Card additions
                   paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
               }
 
@@ -420,7 +462,10 @@ export default function ReportsPage() {
 
               // Top Items Tracking
               (tx.items || []).forEach((item: any) => {
-                  if (['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) return;
+                  const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                  // DO NOT log waste if the item was purely pending!
+                  if (isCancelled && item.previous_status === 'pending') return;
+                  if (isCancelled) return;
                   const name = item.name;
                   if (!topItemsMap[name]) topItemsMap[name] = { name, qty: 0, sales: 0 };
                   topItemsMap[name].qty += (Number(item.qty) || 1);
@@ -798,7 +843,7 @@ export default function ReportsPage() {
                                                                 {tx.type}
                                                             </span>
                                                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200`}>
-                                                                {tx.method || "Cash"}
+                                                                {getDisplayMethod(tx)}
                                                             </span>
                                                         </div>
                                                     </td>
@@ -806,6 +851,7 @@ export default function ReportsPage() {
                                                         <span className={`font-black text-base whitespace-nowrap ${isExpense ? 'text-red-500' : 'text-emerald-600'}`}>
                                                             {isExpense ? '-' : '+'} {formatRs(tx.amount)}
                                                         </span>
+                                                        {tx.discount > 0 && <span className="text-[8px] bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded uppercase font-black tracking-widest mt-1 shadow-sm">- {formatRs(tx.discount)} Discount</span>}
                                                         {tx.method === 'Credit' && !isCleared && (
                                                             <div className="flex flex-col items-end mt-0.5">
                                                                 {tx.tendered > 0 && <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Paid: {formatRs(tx.tendered)}</span>}
@@ -950,7 +996,9 @@ export default function ReportsPage() {
                                             <div className="flex justify-between items-center border-t border-slate-100 pt-2">
                                                 <div className="flex gap-2">
                                                     <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${isIncome ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{tx.type}</span>
-                                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[9px] font-bold uppercase border border-slate-200">{tx.method || "Cash"}</span>
+                                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[9px] font-bold uppercase border border-slate-200">
+                                                        {getDisplayMethod(tx)}
+                                                    </span>
                                                 </div>
                                                 {(tx.items?.length > 0 || tx.note || tx.customer?.name) && (
                                                     isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500"/> : <ChevronDown className="w-4 h-4 text-slate-300"/>

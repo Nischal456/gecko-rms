@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 async function getTenantId() {
   const cookieStore = await cookies();
@@ -127,6 +127,7 @@ export async function saveKitchenCategory(id: string | null, name: string) {
     revalidatePath("/staff/kitchen/menu");
     revalidatePath("/staff/manager/menu");
     revalidatePath("/admin/menu"); 
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
@@ -140,6 +141,7 @@ export async function deleteKitchenCategory(id: string) {
     revalidatePath("/staff/kitchen/menu");
     revalidatePath("/staff/manager/menu");
     revalidatePath("/admin/menu");
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
@@ -171,7 +173,8 @@ export async function saveKitchenItem(categoryId: string, item: any) {
         dietary: item.dietary,
         station: item.station,
         variants: item.variants,
-        is_available: item.is_available
+        is_available: item.is_available,
+        is_special: item.is_special || false
     };
 
     // 3. Update Array
@@ -195,6 +198,7 @@ export async function saveKitchenItem(categoryId: string, item: any) {
     revalidatePath("/staff/manager/menu");
     revalidatePath("/admin/menu");
     revalidatePath("/menu/[id]"); // Update Public View
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
@@ -241,6 +245,37 @@ export async function quickToggleItem(categoryId: string, itemId: string, status
 
     const items = (cat.items || []).map((i: any) => 
         i.id === itemId ? { ...i, is_available: status } : i
+    );
+
+    await supabaseAdmin
+        .from("menu_optimized")
+        .update({ items })
+        .eq("id", categoryId);
+
+    revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidatePath("/menu/[id]");
+    revalidateTag(`menu-${tenantId}`, undefined as any);
+    return { success: true };
+}
+
+// --- TOGGLE SPECIAL (JSONB Update) ---
+export async function toggleSpecialItem(categoryId: string, itemId: string, isSpecial: boolean) {
+    const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
+
+    const { data: cat } = await supabaseAdmin
+        .from("menu_optimized")
+        .select("items")
+        .eq("id", categoryId)
+        .eq("tenant_id", tenantId)
+        .single();
+
+    if (!cat) return { success: false };
+
+    const items = (cat.items || []).map((i: any) => 
+        i.id === itemId ? { ...i, is_special: isSpecial } : i
     );
 
     await supabaseAdmin
