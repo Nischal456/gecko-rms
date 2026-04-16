@@ -475,6 +475,7 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
         
         let foundDate = null;
         let modifiedOrders = null;
+        let itemsToDeductFromInventory: any[] = []; // Tracks items newly marked as served
 
         const stringIdentifiers = (itemIdentifiers || []).map(id => String(id).trim());
 
@@ -503,10 +504,12 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
                             const isItemMatch = stringIdentifiers.includes(sig);
 
                             if (isItemMatch && safeStatus === 'ready') {
+                                itemsToDeductFromInventory.push(i);
                                 return { ...i, status: 'served' };
                             }
                         } 
                         else if (safeStatus === 'ready') {
+                            itemsToDeductFromInventory.push(i);
                             return { ...i, status: 'served' };
                         }
 
@@ -534,6 +537,48 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
         if (!foundDate || !modifiedOrders) {
             return { success: false, error: "Order not found" };
         }
+
+        // --- INVENTORY SYNC FOR STAFF/CASHIER SERVED DISHES ---
+        if (itemsToDeductFromInventory.length > 0) {
+            try {
+                const { data: inventoryItems } = await supabaseAdmin
+                    .from("inventory")
+                    .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
+                    .eq("tenant_id", tenantId);
+
+                if (inventoryItems && inventoryItems.length > 0) {
+                    const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    for (const servedItem of itemsToDeductFromInventory) {
+                        const rawName = servedItem.name || servedItem.n || "";
+                        const rawQty = Number(servedItem.qty || servedItem.q || 1);
+                        const cartClean = superClean(rawName);
+                        
+                        const stockItem = inventoryItems.find(i => {
+                            const invClean = superClean(i.name);
+                            const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
+                            return invClean === cartClean || 
+                                   (linkedClean !== "" && linkedClean === cartClean) ||
+                                   (linkedClean !== "" && cartClean.includes(linkedClean)) ||
+                                   (invClean !== "" && cartClean.includes(invClean));
+                        });
+                        
+                        if (stockItem) {
+                            const deductionAmount = rawQty * Number(stockItem.volume_per_unit || 1);
+                            const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
+                            const newStock = Math.max(0, Number(currentStock) - deductionAmount);
+                            
+                            await supabaseAdmin.from("inventory")
+                                .update({ stock: newStock, quantity: newStock })
+                                .eq("id", stockItem.id);
+                        }
+                    }
+                }
+            } catch (invError) {
+                console.error("Inventory Sync Error:", invError);
+            }
+        }
+        // --- END INVENTORY SYNC ---
 
         const { error } = await supabaseAdmin
             .from("daily_order_logs")
@@ -591,7 +636,9 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
             // Collect all items from every split order on this table
             (order.items || []).forEach((item: any) => {
                 consolidatedItems.push(item);
-                if (!['cancelled', 'void'].includes((item.status || '').toLowerCase().trim())) {
+                const iStatus = (item.status || '').toLowerCase().trim();
+                // CRITICAL FIX: Skip 'served' items because they were already deducted from inventory when marked 'served'!
+                if (!['cancelled', 'void', 'served'].includes(iStatus)) {
                     itemsToDeductFromInventory.push(item);
                 }
             });
