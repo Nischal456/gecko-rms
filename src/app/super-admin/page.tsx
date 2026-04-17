@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { 
     getAllTenants, createTenant, toggleSubscription, updateFeatureFlags, 
     deleteTenant, updateTenantPrice, updateTenantPlan, sendNotification, 
-    getSystemAlerts, markSystemRead, updateTenantValidity 
+    getSystemAlerts, markSystemRead, updateTenantValidity, logTenantPayment
 } from "@/app/actions/super-admin";
 import { impersonateTenant } from "@/app/actions/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
@@ -303,6 +303,9 @@ export default function SuperAdminDashboard() {
   const [newPrice, setNewPrice] = useState(0);
   const [newPlan, setNewPlan] = useState("");
   const [newValidityDate, setNewValidityDate] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState("Fonepay");
+  const [showHistory, setShowHistory] = useState(false);
 
   const [formData, setFormData] = useState({ name: "", code: "", email: "", password: "", plan: "standard" });
   const [stats, setStats] = useState({ mrr: 0, activeStaff: 0 });
@@ -388,6 +391,15 @@ export default function SuperAdminDashboard() {
           currentEnd = baseDate.toISOString();
       }
       setNewValidityDate(currentEnd.split('T')[0]); // Extract YYYY-MM-DD
+      
+      let price = 12000;
+      if (tenant.custom_price) price = tenant.custom_price;
+      else if (tenant.plan === 'starter') price = 5000;
+      else if (tenant.plan === 'business') price = 25000;
+      
+      setPaymentAmount(price);
+      setPaymentMethod("Fonepay");
+      
       setIsValidityEditOpen(true); 
   }
 
@@ -399,17 +411,27 @@ export default function SuperAdminDashboard() {
 
   async function saveNewPrice() { if(!selectedTenant) return; toast.loading("Updating Billing Contract..."); await updateTenantPrice(selectedTenant.id, Number(newPrice)); const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, custom_price: Number(newPrice) } : t); setTenants(updatedTenants); toast.dismiss(); toast.success("Price Updated Successfully"); setIsPriceEditOpen(false); }
   async function saveNewPlan() { if(!selectedTenant) return; toast.loading("Migrating Plan..."); await updateTenantPlan(selectedTenant.id, newPlan); const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, plan: newPlan } : t); setTenants(updatedTenants); toast.dismiss(); toast.success("Plan Upgraded Successfully"); setIsPlanEditOpen(false); }
-  async function saveNewValidity() { 
+  
+  async function handleSaveLogPayment() { 
       if(!selectedTenant || !newValidityDate) return; 
-      toast.loading("Extending Billing Cycle..."); 
-      // Save it as a full ISO string
+      toast.loading("Recording Payment & Extending Cycle..."); 
       const isoDate = new Date(newValidityDate).toISOString();
-      const res = await updateTenantValidity(selectedTenant.id, isoDate);
+      
+      const res = await logTenantPayment(selectedTenant.id, paymentAmount, paymentMethod, isoDate);
+      
       if (res.success) {
-          const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { ...t, feature_flags: { ...(t.feature_flags || {}), valid_until: isoDate } } : t); 
+          const record = { date: new Date().toISOString(), amount: paymentAmount, method: paymentMethod, new_validity: isoDate };
+          const updatedTenants = tenants.map(t => t.id === selectedTenant.id ? { 
+              ...t, 
+              feature_flags: { 
+                  ...(t.feature_flags || {}), 
+                  valid_until: isoDate,
+                  payment_history: [...(t.feature_flags?.payment_history || []), record]
+              } 
+          } : t); 
           setTenants(updatedTenants); 
           toast.dismiss(); 
-          toast.success("Billing Cycle Updated Successfully"); 
+          toast.success("Payment Logged & Cycle Extended!"); 
           setIsValidityEditOpen(false); 
       } else {
           toast.dismiss(); toast.error("Failed to update cycle");
@@ -427,12 +449,44 @@ export default function SuperAdminDashboard() {
   }
 
   const renderSheet = (t: any) => (
-    <Sheet>
-        <SheetTrigger asChild><button className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-900 transition-colors">Control <ArrowRight className="w-3 h-3" /></button></SheetTrigger>
+    <Sheet open={selectedTenant?.id === t.id ? undefined : false} onOpenChange={(open) => { if(!open) setShowHistory(false); }}>
+        <SheetTrigger asChild><button onClick={() => setSelectedTenant(t)} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-900 transition-colors">Control <ArrowRight className="w-3 h-3" /></button></SheetTrigger>
         <SheetContent className="rounded-l-[2.5rem] border-0 sm:max-w-md bg-white p-0 overflow-hidden shadow-2xl z-50">
             <div className="p-8 pb-4"><SheetTitle className="text-3xl font-black text-slate-900">{t.name}</SheetTitle><SheetDescription>Control panel for {t.code}.</SheetDescription></div>
-            <div className="p-8 pt-0 space-y-8 h-full overflow-y-auto pb-24">
-                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 mb-4"><div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-blue-700 uppercase">Current Billing</span><span className="text-xs font-bold text-blue-500">Monthly</span></div><div className="flex justify-between items-end"><span className="text-2xl font-black text-slate-900">Rs {t.custom_price ? t.custom_price.toLocaleString() : (t.plan === 'starter' ? '5,000' : t.plan === 'business' ? '25,000' : '12,000')}</span><button className="text-[10px] font-bold bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100 hover:text-blue-600 transition-colors">View History</button></div></div>
+            <div className="p-8 pt-0 space-y-8 h-full overflow-y-auto pb-24 relative">
+                
+                <AnimatePresence>
+                {showHistory && (
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute inset-0 bg-white z-20 p-8 flex flex-col">
+                        <div className="flex items-center gap-3 mb-6">
+                            <button onClick={() => setShowHistory(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-slate-100 transition-colors"><ArrowRight className="w-4 h-4 text-slate-500 rotate-180" /></button>
+                            <h3 className="font-black text-xl text-slate-900">Payment History</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-3">
+                            {t.feature_flags?.payment_history?.length > 0 ? (
+                                [...t.feature_flags.payment_history].reverse().map((p: any, i: number) => (
+                                    <div key={i} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-sm text-slate-900">Rs {Number(p.amount).toLocaleString()}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 mt-1">{new Date(p.date).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-bold px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600">{p.method}</span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="p-10 flex flex-col items-center justify-center text-center border-2 border-dashed border-slate-100 rounded-3xl">
+                                    <DollarSign className="w-8 h-8 text-slate-300 mb-2" />
+                                    <p className="text-sm font-bold text-slate-400">No Payments Recorded Yet</p>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+                </AnimatePresence>
+
+                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 mb-4"><div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-blue-700 uppercase">Current Billing</span><span className="text-xs font-bold text-blue-500">Monthly</span></div><div className="flex justify-between items-end"><span className="text-2xl font-black text-slate-900">Rs {t.custom_price ? t.custom_price.toLocaleString() : (t.plan === 'starter' ? '5,000' : t.plan === 'business' ? '25,000' : '12,000')}</span><button onClick={() => setShowHistory(true)} className="text-[10px] font-bold bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100 hover:text-blue-600 transition-colors">View Ledger</button></div></div>
                 <div className="space-y-3"><h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Access Control</h4><div className={`p-5 rounded-3xl border-2 transition-colors ${t.subscription_status === 'active' ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}><div className="flex justify-between items-center mb-4"><span className={`font-bold text-lg ${t.subscription_status === 'active' ? 'text-emerald-700' : 'text-red-700'}`}>{t.subscription_status === 'active' ? 'Subscription Active' : 'Access Suspended'}</span><div className={`w-8 h-8 rounded-full flex items-center justify-center ${t.subscription_status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`}>{t.subscription_status === 'active' ? <Check className="w-5 h-5 text-white" /> : <X className="w-5 h-5 text-white" />}</div></div><button onClick={async () => { await toggleSubscription(t.id, t.subscription_status); loadData(); }} className="w-full py-4 bg-white border border-white/50 rounded-2xl font-bold text-sm shadow-sm hover:scale-[1.02] transition-transform text-slate-900">{t.subscription_status === 'active' ? 'Suspend Restaurant' : 'Reactivate Restaurant'}</button></div></div>
                 
                 <div className="space-y-3">
@@ -460,27 +514,41 @@ export default function SuperAdminDashboard() {
       <Dialog open={isPriceEditOpen} onOpenChange={setIsPriceEditOpen}><DialogContent><DialogHeader><DialogTitle>Edit Monthly Subscription</DialogTitle><DialogDescription>Override the default plan pricing for this restaurant.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><label className="text-sm font-bold text-slate-500 uppercase">Monthly Fee (NPR)</label><div className="relative"><span className="absolute left-4 top-3.5 text-slate-400 font-bold">Rs</span><input type="number" value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="w-full h-12 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-lg" /></div><button onClick={saveNewPrice} className="w-full h-12 bg-gecko-500 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Save New Price</button></div></DialogContent></Dialog>
       <Dialog open={isPlanEditOpen} onOpenChange={setIsPlanEditOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Upgrade Subscription</DialogTitle><DialogDescription>Select a new tier for this restaurant.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="grid grid-cols-1 gap-3"><PlanOption id="starter" name="Starter" price="Rs 5K/mo" icon={Box} selected={newPlan} onClick={setNewPlan} /><PlanOption id="standard" name="Standard" price="Rs 12K/mo" icon={LayoutTemplate} selected={newPlan} onClick={setNewPlan} /><PlanOption id="business" name="Business" price="Rs 25K/mo" icon={Rocket} selected={newPlan} onClick={setNewPlan} /></div><button onClick={saveNewPlan} className="w-full h-12 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 mt-4"><Crown className="w-4 h-4" /> Confirm Upgrade</button></div></DialogContent></Dialog>
       
-      {/* ADDED: Validity Extension Dialog */}
       <Dialog open={isValidityEditOpen} onOpenChange={setIsValidityEditOpen}>
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-                <DialogTitle>Manage Billing Cycle</DialogTitle>
-                <DialogDescription>Extend the free trial or log a monthly payment.</DialogDescription>
+                <DialogTitle>Log Payment & Extend Cycle</DialogTitle>
+                <DialogDescription>Record a received payment and boost expiration.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => handleAddDays(10)} className="py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-colors">+ 10 Days (Trial)</button>
-                    <button onClick={() => handleAddDays(30)} className="py-2.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-bold text-xs hover:bg-blue-100 transition-colors">+ 1 Month Paid</button>
-                    <button onClick={() => handleAddDays(365)} className="py-2.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-xl font-bold text-xs hover:bg-purple-100 transition-colors">+ 1 Year Paid</button>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Amount (NPR)</label>
+                        <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(Number(e.target.value))} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-lg text-emerald-600 outline-none focus:ring-2 focus:ring-emerald-500" />
+                    </div>
+                    <div className="space-y-2">
+                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Method</label>
+                         <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
+                             <option value="Fonepay">Fonepay</option>
+                             <option value="Cash">Cash</option>
+                             <option value="Bank Transfer">Bank Transfer</option>
+                         </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                    <button onClick={() => handleAddDays(10)} className="py-2.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-bold text-[10px] hover:bg-emerald-100 transition-colors">+ 10 Days</button>
+                    <button onClick={() => handleAddDays(30)} className="py-2.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-bold text-[10px] hover:bg-blue-100 transition-colors">+ 1 Month Paid</button>
+                    <button onClick={() => handleAddDays(365)} className="py-2.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-xl font-bold text-[10px] hover:bg-purple-100 transition-colors">+ 1 Year Paid</button>
                 </div>
                 <div className="space-y-2 mt-4">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Custom Expiration Date</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">New Expiration Date</label>
                     <div className="relative">
                         <Calendar className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
                         <input type="date" value={newValidityDate} onChange={e => setNewValidityDate(e.target.value)} className="w-full h-12 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-lg text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                 </div>
-                <button onClick={saveNewValidity} className="w-full h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-bold flex items-center justify-center gap-2 mt-4 transition-all active:scale-95"><Save className="w-4 h-4" /> Save Expiration Date</button>
+                <button onClick={handleSaveLogPayment} className="w-full h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-bold flex items-center justify-center gap-2 mt-4 transition-all active:scale-95"><Save className="w-4 h-4" /> Save Payment & Extend</button>
             </div>
         </DialogContent>
       </Dialog>

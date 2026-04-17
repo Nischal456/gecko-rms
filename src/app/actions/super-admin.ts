@@ -188,6 +188,47 @@ export async function updateTenantValidity(id: number, validUntil: string) {
   }
 }
 
+// SaaS Payment Tracking System
+export async function logTenantPayment(id: number, amount: number, method: string, validUntil: string) {
+  try {
+    const { data: tenant, error: fetchErr } = await supabaseAdmin
+      .from("tenants")
+      .select("feature_flags")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    const flags = tenant?.feature_flags || {};
+    const history = Array.isArray(flags.payment_history) ? flags.payment_history : [];
+    
+    // Create new payment record
+    const paymentRecord = {
+        date: new Date().toISOString(),
+        amount: amount,
+        method: method,
+        new_validity: validUntil
+    };
+
+    const newFlags = { 
+        ...flags, 
+        valid_until: validUntil,
+        payment_history: [...history, paymentRecord]
+    };
+
+    const { error } = await supabaseAdmin
+      .from("tenants")
+      .update({ feature_flags: newFlags })
+      .eq("id", id);
+
+    if (error) throw error;
+    revalidatePath("/super-admin");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function deleteTenant(id: number) {
   try {
     const { error } = await supabaseAdmin.from("tenants").delete().eq("id", id);
