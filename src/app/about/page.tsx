@@ -1,18 +1,18 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from "react";
-import { 
-  motion, useScroll, useTransform, useSpring, useMotionTemplate, useMotionValue, AnimatePresence, type Variants 
+import {
+    motion, useScroll, useTransform, useSpring, useMotionTemplate, useMotionValue, AnimatePresence, type Variants
 } from "framer-motion";
 import Link from "next/link";
-import { 
-  Menu, X, Zap, Globe, ShieldCheck, MessageSquare, ArrowRight, Activity, Server, Code2 
+import {
+    Menu, X, Zap, Globe, ShieldCheck, MessageSquare, ArrowRight, ArrowLeft, Activity, Server, Code2
 } from "lucide-react";
 import AIChatWidget from "@/components/landing/AIChatWidget";
 
 // --- 1. CONFIG & UTILS ---
 function cn(...classes: (string | undefined | null | false)[]) {
-  return classes.filter(Boolean).join(" ");
+    return classes.filter(Boolean).join(" ");
 }
 
 const EASE_PREMIUM = [0.16, 1, 0.3, 1] as const;
@@ -118,22 +118,22 @@ function SpotlightCard({ title, desc, icon: Icon, delay = 0 }: { title: string, 
 }
 
 function ParallaxText({ children, baseVelocity = 100 }: { children: string, baseVelocity?: number }) {
-  const { scrollYProgress } = useScroll();
-  const x = useTransform(scrollYProgress, [0, 1], [0, baseVelocity]);
-  const smoothX = useSpring(x, { stiffness: 400, damping: 90 });
+    const { scrollYProgress } = useScroll();
+    const x = useTransform(scrollYProgress, [0, 1], [0, baseVelocity]);
+    const smoothX = useSpring(x, { stiffness: 400, damping: 90 });
 
-  return (
-    <div className="overflow-hidden whitespace-nowrap flex flex-nowrap w-full">
-      <motion.div style={{ x: smoothX }} className="flex whitespace-nowrap transform-gpu will-change-transform">
-        <span className="block text-6xl md:text-8xl lg:text-[12rem] font-black uppercase text-slate-900/5 tracking-tighter mr-6 md:mr-10 select-none shrink-0">
-          {children}
-        </span>
-        <span className="block text-6xl md:text-8xl lg:text-[12rem] font-black uppercase text-slate-900/5 tracking-tighter select-none shrink-0">
-          {children}
-        </span>
-      </motion.div>
-    </div>
-  );
+    return (
+        <div className="overflow-hidden whitespace-nowrap flex flex-nowrap w-full">
+            <motion.div style={{ x: smoothX }} className="flex whitespace-nowrap transform-gpu will-change-transform">
+                <span className="block text-6xl md:text-8xl lg:text-[12rem] font-black uppercase text-slate-900/5 tracking-tighter mr-6 md:mr-10 select-none shrink-0">
+                    {children}
+                </span>
+                <span className="block text-6xl md:text-8xl lg:text-[12rem] font-black uppercase text-slate-900/5 tracking-tighter select-none shrink-0">
+                    {children}
+                </span>
+            </motion.div>
+        </div>
+    );
 }
 
 function TextReveal({ text }: { text: string }) {
@@ -161,24 +161,23 @@ export default function AboutPage() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
-            
+
             {/* NAVBAR */}
-             <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6">
+            <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6">
                 <motion.div
                     initial={{ y: -100, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                     className="w-full max-w-6xl h-14 md:h-16 bg-white/90 backdrop-blur-xl border border-slate-200/60 shadow-lg shadow-slate-200/10 rounded-full flex items-center justify-between px-3 md:px-6 transform-gpu shrink-0"
                 >
-                    <Link href="/" className="flex items-center gap-2 md:gap-3 shrink-0">
+                    <Link href="/" className="font-black text-xl tracking-tighter text-slate-900 flex items-center gap-2">
+                        <ArrowLeft className="w-5 h-5 text-slate-400 hover:text-emerald-500 transition-colors" />
                         <img
-                            src="/paw.png"
-                            alt="Gecko"
-                            className="w-6 h-6 md:w-8 md:h-8 object-contain shrink-0"
+                            src="/rms.png"
+                            alt="Gecko RMS"
+                            // Swapped fixed width for w-auto to maintain the rectangular proportion
+                            className="h-8 md:h-8 w-auto object-contain shrink-0"
                         />
-                        <span className="font-black text-lg md:text-xl tracking-tight text-slate-900 z-50 relative shrink-0">
-                            Gecko<span className="text-emerald-500">RMS</span>
-                        </span>
                     </Link>
 
                     <div className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-500 uppercase tracking-widest shrink-0">
@@ -210,7 +209,7 @@ export default function AboutPage() {
             {/* --- HERO: THE VISION --- */}
             <section className="relative pt-32 md:pt-48 pb-16 md:pb-20 flex flex-col items-center justify-center text-center px-4 md:px-6 min-h-[70vh] md:min-h-[85vh] overflow-hidden">
                 <div className="max-w-5xl relative z-10">
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.4 }}
@@ -219,36 +218,36 @@ export default function AboutPage() {
                         <Zap className="w-3 h-3 md:w-4 md:h-4 fill-emerald-600 shrink-0" />
                         <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] shrink-0">Est. 2026 // Gecko-RMS</span>
                     </motion.div>
-                    
+
                     <h1 className="text-[3.5rem] leading-[0.9] sm:text-7xl md:text-[7rem] lg:text-[8rem] font-black text-slate-900 tracking-tighter md:leading-[0.85] mb-6 md:mb-10 transform-gpu">
-                        <TextReveal text="WE BUILD THE" /> <br className="hidden sm:block"/>
+                        <TextReveal text="WE BUILD THE" /> <br className="hidden sm:block" />
                         <span className="text-transparent bg-clip-text bg-gradient-to-b from-emerald-400 to-emerald-700">
                             <TextReveal text="FUTURE." />
                         </span>
                     </h1>
-                    
-                    <motion.p 
+
+                    <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4, duration: 0.6, ease: EASE_PREMIUM }}
                         className="text-base sm:text-lg md:text-2xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed px-4 transform-gpu"
                     >
-                        GeckoRMS was born from a simple obsession: <br className="hidden md:block" /> 
+                        GeckoRMS was born from a simple obsession: <br className="hidden md:block" />
                         making restaurant technology faster than the speed of service.
                     </motion.p>
                 </div>
 
                 {/* Floating Decorative Blobs (GPU Accelerated) */}
                 <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden transform-gpu">
-                    <motion.div 
+                    <motion.div
                         animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.4, 0.3] }}
                         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute top-[10%] md:top-[20%] left-[5%] md:left-[10%] w-48 h-48 md:w-72 md:h-72 bg-emerald-300/30 rounded-full blur-[80px] md:blur-[100px] will-change-transform" 
+                        className="absolute top-[10%] md:top-[20%] left-[5%] md:left-[10%] w-48 h-48 md:w-72 md:h-72 bg-emerald-300/30 rounded-full blur-[80px] md:blur-[100px] will-change-transform"
                     />
-                    <motion.div 
+                    <motion.div
                         animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.3, 0.2] }}
                         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-                        className="absolute bottom-[5%] md:bottom-[10%] right-[5%] md:right-[10%] w-64 h-64 md:w-96 md:h-96 bg-teal-200/30 rounded-full blur-[100px] md:blur-[120px] will-change-transform" 
+                        className="absolute bottom-[5%] md:bottom-[10%] right-[5%] md:right-[10%] w-64 h-64 md:w-96 md:h-96 bg-teal-200/30 rounded-full blur-[100px] md:blur-[120px] will-change-transform"
                     />
                 </div>
             </section>
@@ -264,9 +263,9 @@ export default function AboutPage() {
             {/* --- THE MISSION: THE LAG KILLER (3D Spec Section) --- */}
             <section className="py-20 md:py-32 px-4 md:px-6 max-w-7xl mx-auto relative z-10">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 md:gap-16 items-center">
-                    
+
                     {/* Left: The Specs */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: -30 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true, amount: 0.2 }}
@@ -277,12 +276,12 @@ export default function AboutPage() {
                             <motion.div animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="w-1.5 h-1.5 md:w-2 md:h-2 bg-red-500 rounded-full shrink-0" />
                             Live Target: Nullify Lag
                         </div>
-                        
+
                         <h2 className="text-4xl sm:text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[0.95]">
-                            Our Mission is <br className="hidden sm:block"/> 
+                            Our Mission is <br className="hidden sm:block" />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-orange-500 to-amber-500">to kill the lag.</span>
                         </h2>
-                        
+
                         <p className="text-base sm:text-lg md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl">
                             Traditional POS systems are slow, complex, and prone to theft. We built GeckoRMS to be a high-performance OS that empowers staff and protects owners.
                         </p>
@@ -304,7 +303,7 @@ export default function AboutPage() {
                     </motion.div>
 
                     {/* Right: The Virtual Hardware */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, scale: 0.9, rotateY: 10 }}
                         whileInView={{ opacity: 1, scale: 1, rotateY: 0 }}
                         viewport={{ once: true, amount: 0.3 }}
@@ -314,20 +313,22 @@ export default function AboutPage() {
                     >
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.15),transparent)] transform-gpu" />
                         <div className="absolute inset-0 flex items-center justify-center">
-                             {/* Glowing Neural Core */}
-                             <motion.div 
-                                animate={{ 
+                            {/* Glowing Neural Core */}
+                            <motion.div
+                                animate={{
                                     boxShadow: ["0 0 20px rgba(16,185,129,0.1)", "0 0 50px rgba(16,185,129,0.25)", "0 0 20px rgba(16,185,129,0.1)"],
                                     scale: [1, 1.02, 1]
                                 }}
                                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                                 className="w-48 h-48 md:w-56 md:h-56 bg-slate-900 border border-white/10 rounded-full md:rounded-[3rem] flex items-center justify-center relative z-10 transform-gpu will-change-transform"
-                             >
-                                <img src="/paw.png" className="w-20 h-20 md:w-24 md:h-24 brightness-200 grayscale contrast-200 object-contain shrink-0" alt="Core" />
-                                <div className="absolute bottom-6 font-mono text-[8px] md:text-[9px] text-emerald-500/50 font-bold uppercase tracking-[0.3em] shrink-0">
-                                    GECKO_RMS
-                                </div>
-                             </motion.div>
+                            >
+                                <img
+                                    src="/rms.png"
+                                    alt="Gecko RMS"
+                                    // Swapped fixed width for w-auto to maintain the rectangular proportion
+                                    className="h-8 md:h-8 w-auto object-contain shrink-0"
+                                />
+                            </motion.div>
                         </div>
                     </motion.div>
                 </div>
@@ -340,7 +341,7 @@ export default function AboutPage() {
                         <h2 className="text-4xl md:text-6xl lg:text-7xl font-black text-slate-900 mb-4 md:mb-6 tracking-tight">Our DNA.</h2>
                         <p className="text-slate-500 text-base md:text-xl font-medium max-w-xl mx-auto px-4">The principles that guide every single line of code we ship.</p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
                         <SpotlightCard delay={0.1} icon={Zap} title="Velocity First" desc="If it's not instant, it's not good enough. We optimize for the sub-millisecond experience." />
                         <SpotlightCard delay={0.2} icon={Globe} title="Kathmandu Roots" desc="Built locally for Nepal. We solve local challenges with world-class engineering." />
@@ -352,11 +353,11 @@ export default function AboutPage() {
             {/* --- PREMIUM TITANIUM CTA SECTION --- */}
             <section className="relative py-24 md:py-48 bg-[#020617] overflow-hidden transform-gpu">
                 <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.1] [mask-image:radial-gradient(ellipse_at_center,black,transparent)] pointer-events-none transform-gpu" />
-                
-                <motion.div 
-                    animate={{ scale: [1, 1.05, 1], opacity: [0.15, 0.25, 0.15] }} 
-                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }} 
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[1000px] h-[300px] md:h-[600px] bg-emerald-500/20 rounded-full blur-[80px] md:blur-[160px] pointer-events-none transform-gpu will-change-transform" 
+
+                <motion.div
+                    animate={{ scale: [1, 1.05, 1], opacity: [0.15, 0.25, 0.15] }}
+                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[1000px] h-[300px] md:h-[600px] bg-emerald-500/20 rounded-full blur-[80px] md:blur-[160px] pointer-events-none transform-gpu will-change-transform"
                 />
 
                 <div className="container mx-auto px-4 md:px-6 relative z-10 text-center">
@@ -368,21 +369,21 @@ export default function AboutPage() {
                         <span className="text-[9px] md:text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] shrink-0">Next-Gen Alpha Phase</span>
                     </motion.div>
 
-                    <motion.h2 
-                        initial={{ opacity: 0, y: 30 }} 
-                        whileInView={{ opacity: 1, y: 0 }} 
+                    <motion.h2
+                        initial={{ opacity: 0, y: 30 }}
+                        whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        transition={{ duration: 0.6, ease: EASE_PREMIUM }} 
+                        transition={{ duration: 0.6, ease: EASE_PREMIUM }}
                         className="text-5xl sm:text-6xl md:text-[8rem] lg:text-[10rem] font-black tracking-tighter text-white mb-6 md:mb-8 leading-[0.85] md:leading-[0.8] drop-shadow-2xl transform-gpu"
                     >
-                        Ready to <br className="hidden sm:block"/>
+                        Ready to <br className="hidden sm:block" />
                         <span className="text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/20">EVOLVE?</span>
                     </motion.h2>
 
                     <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="text-slate-400 text-base md:text-xl lg:text-2xl mb-10 md:mb-16 max-w-2xl mx-auto font-medium leading-relaxed px-2 transform-gpu">
                         Stop losing revenue to slow systems. Join the elite group of restaurants weaponizing speed with GeckoOS.
                     </motion.p>
-                    
+
                     <div className="flex flex-col items-center gap-6 md:gap-8">
                         <Link href="/login" className="group relative shrink-0">
                             <div className="absolute -inset-1 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full blur opacity-25 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 transform-gpu z-0"></div>
@@ -396,7 +397,7 @@ export default function AboutPage() {
                             Talk to an Engineer
                         </Link>
                     </div>
-                    
+
                     <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.4 }} className="mt-16 md:mt-24 pt-8 md:pt-12 border-t border-white/5 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-slate-600 font-bold uppercase tracking-[0.2em] md:tracking-[0.3em] text-[9px] md:text-[10px] transform-gpu">
                         <div className="flex items-center gap-3 shrink-0"><div className="w-4 md:w-8 h-[1px] bg-white/10 shrink-0" />KATHMANDU, NEPAL<div className="w-4 md:w-8 h-[1px] bg-white/10 shrink-0" /></div>
                         <div className="flex items-center gap-3 shrink-0"><div className="w-4 md:w-8 h-[1px] bg-white/10 shrink-0" />Gecko Resturant management System <div className="w-4 md:w-8 h-[1px] bg-white/10 shrink-0" /></div>
@@ -410,7 +411,7 @@ export default function AboutPage() {
             {/* --- MOBILE MENU (Synced with Main Page Style) --- */}
             <AnimatePresence>
                 {mobileMenuOpen && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -419,11 +420,11 @@ export default function AboutPage() {
                     >
                         <div className="flex justify-end p-4 md:p-6 shrink-0">
                             <button className="p-2 md:p-3 bg-slate-100 rounded-full text-slate-900 shrink-0" onClick={() => setMobileMenuOpen(false)}>
-                                <X className="w-5 h-5 md:w-6 md:h-6"/>
+                                <X className="w-5 h-5 md:w-6 md:h-6" />
                             </button>
                         </div>
-                        
-                        <motion.div 
+
+                        <motion.div
                             initial="hidden"
                             animate="show"
                             exit="exit"
@@ -436,13 +437,13 @@ export default function AboutPage() {
                                     </Link>
                                 </motion.div>
                             ))}
-                            
+
                             <div className="w-10 h-1 bg-slate-100 rounded-full my-2 md:my-4 shrink-0" />
-                            
+
                             <motion.div className="shrink-0">
-                                 <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-emerald-600 text-xl md:text-2xl font-bold">Login</Link>
+                                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-emerald-600 text-xl md:text-2xl font-bold">Login</Link>
                             </motion.div>
-                            
+
                             <motion.div className="shrink-0 pb-10">
                                 <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-slate-900 text-lg md:text-xl font-medium border border-slate-200 px-6 md:px-8 py-2.5 md:py-3 rounded-full mt-2 md:mt-4 block bg-white">
                                     Start Free Trial

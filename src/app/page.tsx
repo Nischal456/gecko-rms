@@ -790,7 +790,7 @@ function Hero() {
                             href="/login"
                             className="text-sm md:text-base font-semibold text-slate-600 hover:text-emerald-500 transition-colors"
                         >
-                        
+
                         </Link>
                     </div>
                 </motion.div>
@@ -827,13 +827,11 @@ export default function Home() {
                 >
                     <Link href="/" className="flex items-center gap-2 md:gap-3 shrink-0">
                         <img
-                            src="/paw.png"
-                            alt="Gecko"
-                            className="w-6 h-6 md:w-8 md:h-8 object-contain shrink-0"
+                            src="/rms.png"
+                            alt="Gecko RMS"
+                            // Swapped fixed width for w-auto to maintain the rectangular proportion
+                            className="h-8 md:h-8 w-auto object-contain shrink-0"
                         />
-                        <span className="font-black text-lg md:text-xl tracking-tight text-slate-900 z-50 relative shrink-0">
-                            Gecko<span className="text-emerald-500">RMS</span>
-                        </span>
                     </Link>
 
                     <div className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-500 uppercase tracking-widest shrink-0">
