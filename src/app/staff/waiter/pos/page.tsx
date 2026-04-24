@@ -257,6 +257,11 @@ function POSContent() {
         if(cart.length === 0) return toast.error("Cart is empty");
         if(!tableId && !isTakeaway) return toast.error("No Table Selected"); 
         
+        if (!navigator.onLine) {
+            toast.error("Network Unstable! Please check your internet connection and try again.", { duration: 6000, icon: <AlertCircle className="w-5 h-5 text-red-500" /> }); 
+            return;
+        }
+
         setIsSubmitting(true);
         toast.loading(isEditMode ? "Updating order..." : "Sending to kitchen...");
         

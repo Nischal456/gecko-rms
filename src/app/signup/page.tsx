@@ -103,7 +103,7 @@ export default function SubscriptionPage() {
                         <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:text-emerald-600 transition-colors" />
                         <span className="text-xs font-bold uppercase tracking-widest text-slate-900 group-hover:text-emerald-600 transition-colors">Back</span>
                     </Link>
-                    
+
                     <Link href="/login" className="pointer-events-auto flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-full shadow-md hover:border-emerald-200 hover:text-emerald-600 transition-all transform-gpu active:scale-95">
                         <span className="text-xs font-bold uppercase tracking-widest">Login</span>
                         <ArrowRight className="w-4 h-4" />
@@ -122,159 +122,159 @@ export default function SubscriptionPage() {
                     <div className="relative z-10 flex flex-col items-center">
 
                         <AnimatePresence mode="wait">
-                        {success ? (
-                            <motion.div 
-                                key="success"
-                                initial={{ opacity: 0, scale: 0.9 }} 
-                                animate={{ opacity: 1, scale: 1 }} 
-                                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
-                                className="text-center py-10 transform-gpu"
-                            >
-                                <div className="w-24 h-24 bg-emerald-50 rounded-[2rem] flex items-center justify-center shadow-inner mx-auto mb-8 border border-emerald-100">
-                                    <CheckCircle2 className="w-12 h-12 text-emerald-500 drop-shadow-sm" />
-                                </div>
-                                <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">Request Received</h2>
-                                <p className="text-slate-500 font-bold leading-relaxed mb-10 text-sm">
-                                    We have sent a confirmation to <b className="text-slate-800">{formData.email}</b>.<br /> Our enterprise team will contact you shortly to configure your workspace.
-                                </p>
-                                <Link href="/">
-                                    <motion.button
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
-                                        className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20 transform-gpu"
-                                    >
-                                        Return Home
-                                    </motion.button>
-                                </Link>
-                            </motion.div>
-                        ) : (
-                            <motion.div 
-                                key="form" 
-                                initial={{ opacity: 0 }} 
-                                animate={{ opacity: 1 }} 
-                                exit={{ opacity: 0, y: -20 }} 
-                                transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
-                                className="w-full transform-gpu"
-                            >
-                                {/* --- PAW LOGO --- */}
+                            {success ? (
                                 <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5, delay: 0.1 }}
-                                    className="w-20 h-20 bg-gradient-to-b from-white to-slate-50 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200/50 mx-auto mb-8 relative group border border-slate-100 transform-gpu"
+                                    key="success"
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                    className="text-center py-10 transform-gpu"
                                 >
-                                    <img src="/paw.png" alt="Gecko Paw" className="w-10 h-10 object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-500" />
-                                </motion.div>
-
-                                <div className="text-center mb-8 space-y-2">
-                                    <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
-                                        Request Access
-                                    </h1>
-                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-1.5">
-                                        <Utensils className="w-3.5 h-3.5 text-emerald-500" />  Let’s set up your restaurant
+                                    <div className="w-24 h-24 bg-emerald-50 rounded-[2rem] flex items-center justify-center shadow-inner mx-auto mb-8 border border-emerald-100">
+                                        <CheckCircle2 className="w-12 h-12 text-emerald-500 drop-shadow-sm" />
+                                    </div>
+                                    <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">Request Received</h2>
+                                    <p className="text-slate-500 font-bold leading-relaxed mb-10 text-sm">
+                                        We have sent a confirmation to <b className="text-slate-800">{formData.email}</b>.<br /> Our enterprise team will contact you shortly to configure your workspace.
                                     </p>
-                                </div>
-
-                                {/* REMOVED layout PROPS FROM FORM ELEMENTS TO FIX TYPING LAG */}
-                                <form onSubmit={handleSubmit} className="w-full space-y-4">
-
-                                    {/* RESTAURANT NAME */}
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Business Details</label>
-                                        <div className="relative group mb-3">
-                                            <input
-                                                name="restaurantName"
-                                                type="text"
-                                                required
-                                                value={formData.restaurantName}
-                                                onChange={handleChange}
-                                                placeholder="Restaurant / Cafe Name"
-                                                className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
-                                            />
-                                            <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                        </div>
-                                        <div className="relative group">
-                                            <input
-                                                name="fullName"
-                                                type="text"
-                                                required
-                                                value={formData.fullName}
-                                                onChange={handleChange}
-                                                placeholder="Your Full Name"
-                                                className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
-                                            />
-                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                        {/* EMAIL */}
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Contact</label>
-                                            <div className="relative group">
-                                                <input
-                                                    name="email"
-                                                    type="email"
-                                                    required
-                                                    value={formData.email}
-                                                    onChange={handleChange}
-                                                    placeholder="Email Address"
-                                                    className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
-                                                />
-                                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                            </div>
-                                        </div>
-
-                                        {/* PHONE */}
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 hidden sm:block">Phone</label>                                
-                                            <div className="relative group">
-                                                <input
-                                                    name="phone"
-                                                    type="tel"
-                                                    required
-                                                    value={formData.phone}
-                                                    onChange={handleChange}
-                                                    placeholder="Phone No."
-                                                    className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
-                                                />
-                                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* MESSAGE */}
-                                    <div className="pt-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Requirements (Optional)</label>
-                                        <div className="relative group">
-                                            <textarea
-                                                name="message"
-                                                value={formData.message}
-                                                onChange={handleChange}
-                                                placeholder="Tell us about your setup needs..."
-                                                className="w-full h-24 pl-11 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm resize-none custom-scrollbar transform-gpu"
-                                            />
-                                            <MessageSquare className="absolute left-4 top-4 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                        </div>
-                                    </div>
-
-                                    {/* SUBMIT BUTTON */}
-                                    <motion.button
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
-                                        disabled={loading}
-                                        className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-3 mt-6 relative overflow-hidden group transform-gpu hover:shadow-2xl hover:shadow-emerald-500/40 disabled:opacity-60"
+                                    <Link href="/">
+                                        <motion.button
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                            className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20 transform-gpu"
+                                        >
+                                            Return Home
+                                        </motion.button>
+                                    </Link>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="form"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                    className="w-full transform-gpu"
+                                >
+                                    {/* --- PAW LOGO --- */}
+                                    <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5, delay: 0.1 }}
+                                        className="w-20 h-20 bg-gradient-to-b from-white to-slate-50 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200/50 mx-auto mb-8 relative group border border-slate-100 transform-gpu"
                                     >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                                        <div className="relative flex items-center gap-2">
-                                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "TRANSMIT REQUEST"}
+                                        <img src="/paw.png" alt="Gecko Paw" className="w-10 h-10 object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-500" />
+                                    </motion.div>
+
+                                    <div className="text-center mb-8 space-y-2">
+                                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+                                            Request Access
+                                        </h1>
+                                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-1.5">
+                                            <Utensils className="w-3.5 h-3.5 text-emerald-500" />  Let’s set up your restaurant
+                                        </p>
+                                    </div>
+
+                                    {/* REMOVED layout PROPS FROM FORM ELEMENTS TO FIX TYPING LAG */}
+                                    <form onSubmit={handleSubmit} className="w-full space-y-4">
+
+                                        {/* RESTAURANT NAME */}
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Business Details</label>
+                                            <div className="relative group mb-3">
+                                                <input
+                                                    name="restaurantName"
+                                                    type="text"
+                                                    required
+                                                    value={formData.restaurantName}
+                                                    onChange={handleChange}
+                                                    placeholder="Restaurant / Cafe Name"
+                                                    className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
+                                                />
+                                                <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            </div>
+                                            <div className="relative group">
+                                                <input
+                                                    name="fullName"
+                                                    type="text"
+                                                    required
+                                                    value={formData.fullName}
+                                                    onChange={handleChange}
+                                                    placeholder="Your Full Name"
+                                                    className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
+                                                />
+                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            </div>
                                         </div>
-                                    </motion.button>
-                                </form>
-                            </motion.div>
-                        )}
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                            {/* EMAIL */}
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Contact</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        name="email"
+                                                        type="email"
+                                                        required
+                                                        value={formData.email}
+                                                        onChange={handleChange}
+                                                        placeholder="Email Address"
+                                                        className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
+                                                    />
+                                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                                </div>
+                                            </div>
+
+                                            {/* PHONE */}
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 hidden sm:block">Phone</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        name="phone"
+                                                        type="tel"
+                                                        required
+                                                        value={formData.phone}
+                                                        onChange={handleChange}
+                                                        placeholder="Phone No."
+                                                        className="w-full h-14 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm transform-gpu"
+                                                    />
+                                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* MESSAGE */}
+                                        <div className="pt-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Requirements (Optional)</label>
+                                            <div className="relative group">
+                                                <textarea
+                                                    name="message"
+                                                    value={formData.message}
+                                                    onChange={handleChange}
+                                                    placeholder="Tell us about your setup needs..."
+                                                    className="w-full h-24 pl-11 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all text-sm resize-none custom-scrollbar transform-gpu"
+                                                />
+                                                <MessageSquare className="absolute left-4 top-4 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                            </div>
+                                        </div>
+
+                                        {/* SUBMIT BUTTON */}
+                                        <motion.button
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+                                            disabled={loading}
+                                            className="w-full h-16 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-3 mt-6 relative overflow-hidden group transform-gpu hover:shadow-2xl hover:shadow-emerald-500/40 disabled:opacity-60"
+                                        >
+                                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                                            <div className="relative flex items-center gap-2">
+                                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "TRANSMIT REQUEST"}
+                                            </div>
+                                        </motion.button>
+                                    </form>
+                                </motion.div>
+                            )}
                         </AnimatePresence>
                     </div>
                 </motion.div>

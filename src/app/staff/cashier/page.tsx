@@ -910,7 +910,15 @@ export default function CashierDashboard() {
   const handleStartNewOrder = () => { setExistingOrderToEdit(null); setView('new_order_select'); };
   const handleSelectService = (type: 'dine_in' | 'takeaway') => { setPosOrderType(type); if (type === 'dine_in') setView('table_select'); else { setPosTable('TAKEAWAY'); setExistingOrderToEdit(null); setView('pos'); } };
   const handleSelectTableForOrder = (tableLabel: string) => { setPosTable(tableLabel); setExistingOrderToEdit(null); setView('pos'); };
-  const submitOrder = async (table: string, items: any[], type: 'dine_in'|'takeaway') => { const res = await createCashierOrder(table, items, type); if(res.success) { toast.success("Order Placed"); loadData(); setView('terminal'); } else { toast.error("Failed"); } };
+  const submitOrder = async (table: string, items: any[], type: 'dine_in'|'takeaway') => { 
+      if (!navigator.onLine) {
+         toast.error("Network Unstable! Please check your internet connection and try again.");
+         return;
+      }
+      const res = await createCashierOrder(table, items, type); 
+      if(res.success) { toast.success("Order Placed"); loadData(); setView('terminal'); } 
+      else { toast.error("Failed"); } 
+  };
 
   const sections = data ? ['All', ...Array.from(new Set(data.tables?.map((t:any) => t.section || "Main Hall")))] : [];
   const filteredTables = data?.tables?.filter((t: any) => filter === 'All' || (t.section || "Main Hall") === filter);
