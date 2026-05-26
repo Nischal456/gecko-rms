@@ -36,61 +36,12 @@ export default function BartenderReportsPage() {
     const [activeTab, setActiveTab] = useState<'daily'>('daily');
     const [expandedBill, setExpandedBill] = useState<string | null>(null);
     
-    const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
-    const prevTicketIds = useRef<Set<string>>(new Set());
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const isFirstLoad = useRef(true);
-
     useEffect(() => {
-        const audio = new Audio(ALERT_SOUND);
-        audio.volume = 1.0;
-        audio.loop = true; 
-        audioRef.current = audio;
-
         // Load Bar Reports
         getBartenderStats().then(res => {
             if(res.success) setData(res);
         });
-
-        pollForNewOrders();
-        const pollInterval = setInterval(pollForNewOrders, 3000);
-        return () => clearInterval(pollInterval);
     }, []);
-
-    const pollForNewOrders = async () => {
-        try {
-            const kdsRes = await getBartenderTickets();
-            if (kdsRes.success && Array.isArray(kdsRes.data)) {
-                const currentIds = new Set(kdsRes.data.map(t => t.id));
-                
-                if (!isFirstLoad.current) {
-                    const newTicket = kdsRes.data.find(t => t.status === 'pending' && !prevTicketIds.current.has(t.id));
-                    if (newTicket) triggerAlert(newTicket.table_name);
-                }
-                
-                isFirstLoad.current = false;
-                prevTicketIds.current = currentIds;
-            }
-        } catch (e) {
-            console.error("Polling error", e);
-        }
-    };
-
-    const triggerAlert = (tableName: string) => {
-        setLatestOrderTable(tableName);
-        if (audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(e => console.log("Audio play blocked", e));
-        }
-    };
-
-    const stopAlert = () => {
-        setLatestOrderTable(null);
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-    };
 
     if(!data) return (
         <div className="h-full w-full flex flex-col items-center justify-center bg-[#F8FAFC] gap-4">
@@ -104,30 +55,6 @@ export default function BartenderReportsPage() {
 
     return (
         <div className="flex-1 flex flex-col h-full bg-[#F8FAFC] relative overflow-hidden">
-            
-            {/* LIVE ALERT BANNER */}
-            <AnimatePresence>
-                {latestOrderTable && (
-                    <motion.div 
-                        initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
-                        className="absolute top-0 left-0 right-0 bg-red-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer transform-gpu"
-                        onClick={stopAlert}
-                    >
-                        <div className="flex items-center gap-4 animate-pulse">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                <Bell className="w-5 h-5 fill-current" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold opacity-90 uppercase tracking-widest">New Drink Order</p>
-                                <h3 className="text-xl md:text-2xl font-black leading-none">{latestOrderTable}</h3>
-                            </div>
-                        </div>
-                        <button className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
-                            Acknowledge
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-6 md:py-8 sticky top-0 z-20 shadow-sm shrink-0">
                 <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">

@@ -67,6 +67,13 @@ export async function getBartenderTickets() {
       const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
 
       try {
+        const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
+        const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
+
+        if (!isSplitActive) {
+          return { success: true, data: [] };
+        }
+
         const { data: logs } = await supabaseAdmin
           .from("daily_order_logs")
           .select("date, orders_data")
@@ -262,6 +269,15 @@ export async function getBartenderStats() {
 
     const getCachedStats = unstable_cache(
       async () => {
+        try {
+          const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
+          const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
+
+          if (!isSplitActive) {
+            return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
+          }
+        } catch (e) {}
+
         const now = new Date();
         const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
         const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);

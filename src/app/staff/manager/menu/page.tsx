@@ -97,9 +97,13 @@ export default function ManagerMenuPage() {
 
   async function handleDelete(itemId: string) {
       if(!confirm("Remove this dish from the menu?")) return;
-      await deleteMenuItem(activeTabId, itemId);
-      loadData();
-      toast.success("Dish Removed");
+      const res = await deleteMenuItem(activeTabId, itemId);
+      if (res.success) {
+          await loadData();
+          toast.success("Dish Removed");
+      } else {
+          toast.error("Failed to remove dish: " + (res.error || "Unknown error"));
+      }
   }
 
   async function handleSaveItem(e: React.FormEvent) {

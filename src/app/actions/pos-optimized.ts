@@ -48,7 +48,7 @@ export async function createOrderJSON(orderData: any) {
   const newOrder = {
       id: crypto.randomUUID(),
       tbl: orderData.table_no, // Short key 'tbl' to save space
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' }),
       status: "pending",
       total: orderData.total,
       items: orderData.items.map((i: any) => {
@@ -66,7 +66,7 @@ export async function createOrderJSON(orderData: any) {
               price: Number(i.price || i.p || 0), 
               note: i.notes || i.note || "",
               status: "pending",
-              time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
               
               // Secure routing fallback to database definition if client omits it!
               station: dbItem.station || i.station || i.prep_station || "kitchen",

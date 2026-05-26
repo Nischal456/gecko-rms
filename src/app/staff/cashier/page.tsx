@@ -8,11 +8,11 @@ import {
   ZoomIn, ZoomOut, Save, Trash2, Loader2, Store, FileBarChart, Download, 
   ChefHat, UserCircle, LogOut, Search, AlertTriangle, ArrowLeft, ChevronDown, 
   ChevronUp, User, MapPin, Plus, ShoppingBag, Utensils, ArrowRight, Circle, Square, Clock, Bell,
-  CreditCard, LayoutDashboard, Check, Eye, EyeOff, CalendarClock, ShieldCheck, BookOpen, Users, Layers, StickyNote
+  CreditCard, LayoutDashboard, Check, Eye, EyeOff, CalendarClock, ShieldCheck, BookOpen, Users, Layers, StickyNote, Lock
 } from "lucide-react";
 import InventoryView from "./components/InventoryView";
 import { useRouter } from "next/navigation"; 
-import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment } from "@/app/actions/cashier"; 
+import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment, verifyManagerPIN } from "@/app/actions/cashier"; 
 import { logoutStaff } from "@/app/actions/staff-auth"; 
 import { toast } from "sonner";
 import React from "react";
@@ -35,6 +35,7 @@ interface CashierData {
     menu: any[]; 
     categories: any[]; 
     cancelledItems?: any[];
+    staff?: { name: string; role: string };
 }
 
 // --- HELPER CONFIG ---
@@ -192,14 +193,24 @@ const renderSmallStatus = (status: string, previousStatus?: string) => {
 };
 
 // --- PREMIUM CHECKOUT MODAL ---
-function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any) {
+function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff }: any) {
     const [method, setMethod] = useState("Cash");
     const [customer, setCustomer] = useState({ name: "", address: "" });
     const [expandedQr, setExpandedQr] = useState(false); 
     const [creditCustomers, setCreditCustomers] = useState<string[]>([]);
     
-    // --- FINANCIAL ENGINE ---
+    // --- FINANCIAL ENGINE & ADVANCED MANUAL DISCOUNT ---
+    const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent");
     const [discountInput, setDiscountInput] = useState<string>("");
+    
+    // Override / PIN verification state
+    const [authorizedBy, setAuthorizedBy] = useState<string>("");
+    const [authorizedRole, setAuthorizedRole] = useState<string>("");
+    const [pinModalOpen, setPinModalOpen] = useState(false);
+    const [overridePIN, setOverridePIN] = useState("");
+    const [pinVerifying, setPinVerifying] = useState(false);
+    const [pinError, setPinError] = useState("");
+
     const [tenderedInput, setTenderedInput] = useState<string>("");
     const [splits, setSplits] = useState<{method: string, amount: number}[]>([]);
     const [isProcessing, setIsProcessing] = useState(false); // FRONTEND DOUBLE-CLICK LOCK
@@ -238,7 +249,17 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     
     // CALCULATIONS 
     const subTotal = activeItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    const discountAmt = discountInput === "" ? 0 : Number(discountInput);
+    
+    // Exact Discount Capping so it never exceeds total amount
+    const discountVal = discountInput === "" ? 0 : Number(discountInput);
+    let discountAmt = 0;
+    if (discountType === "percent") {
+        const cappedVal = Math.min(100, Math.max(0, discountVal));
+        discountAmt = (cappedVal / 100) * subTotal;
+    } else {
+        const cappedVal = Math.min(subTotal, Math.max(0, discountVal));
+        discountAmt = cappedVal;
+    }
     const grandTotal = Math.max(0, subTotal - discountAmt);
     
     // SPLITS CALCULATION
@@ -255,8 +276,25 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
     } else {
         changeDue = totalPaidSplits > grandTotal ? totalPaidSplits - grandTotal : 0;
     }
+
+    const effectiveDiscountPercent = subTotal > 0 ? (discountAmt / subTotal) * 100 : 0;
     
-    const paymentDetails = { subTotal, discount: discountAmt, grandTotal, tendered: splits.length > 0 ? totalPaidSplits : tenderedAmt, change: changeDue, creditDue };
+    // Requires Admin PIN for exact 100% full discount (free bill)
+    const requiresAdminPIN = discountAmt > 0 && Math.abs(discountAmt - subTotal) < 0.01;
+    const isAuthorized = !requiresAdminPIN || (authorizedRole === "admin" || authorizedRole === "super_admin");
+    
+    const paymentDetails = { 
+        subTotal, 
+        discount: discountAmt, 
+        discountType,
+        discountValue: discountVal,
+        discountReason: "", // Removed reason
+        discountAuthorizedBy: authorizedBy ? `${authorizedRole}: ${authorizedBy}` : (staff?.name && discountAmt > 0 ? `${staff.role}: ${staff.name}` : ""),
+        grandTotal, 
+        tendered: splits.length > 0 ? totalPaidSplits : tenderedAmt, 
+        change: changeDue, 
+        creditDue 
+    };
 
     const bankAccounts = restaurant?.bank_accounts || []; 
     const paymentMethods = [
@@ -280,8 +318,44 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
         setSplits(splits.filter((_, i) => i !== index));
     };
 
+    const handleVerifyPIN = async () => {
+        if (!overridePIN.trim()) {
+            setPinError("Please enter a PIN.");
+            return;
+        }
+        setPinVerifying(true);
+        setPinError("");
+        try {
+            const res = await verifyManagerPIN(overridePIN.trim());
+            if (res.success && res.role && res.name) {
+                if (res.role === "admin" || res.role === "super_admin") {
+                    setAuthorizedBy(res.name);
+                    setAuthorizedRole(res.role);
+                    setPinModalOpen(false);
+                    toast.success(`100% Discount authorized by Admin ${res.name}!`);
+                } else {
+                    setPinError("Only an Admin or Super Admin can authorize a 100% discount.");
+                }
+            } else {
+                setPinError(res.error || "Incorrect or unauthorized PIN.");
+            }
+        } catch (e: any) {
+            setPinError("Connection error.");
+        } finally {
+            setPinVerifying(false);
+        }
+    };
+
     const handleConfirmCheckout = async () => {
         if (isProcessing || !isPayable) return; 
+
+        // If a full 100% discount requires Admin PIN, check that!
+        if (requiresAdminPIN && !isAuthorized) {
+            setPinError("");
+            setOverridePIN("");
+            setPinModalOpen(true);
+            return;
+        }
         
         let finalMethod = splits.length > 0 ? "Split" : method;
         let finalPaymentDetails: any = { ...paymentDetails };
@@ -378,6 +452,81 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                 )}
             </AnimatePresence>
 
+            {/* MANAGER PIN OVERLAY MODAL */}
+            <AnimatePresence>
+                {pinModalOpen && (
+                    <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0 }} 
+                            animate={{ opacity: 1 }} 
+                            exit={{ opacity: 0 }} 
+                            onClick={() => setPinModalOpen(false)}
+                            className="absolute inset-0 bg-slate-950/75 backdrop-blur-md cursor-pointer" 
+                        />
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                            animate={{ scale: 1, opacity: 1, y: 0 }} 
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl relative z-10 overflow-hidden border border-slate-100"
+                        >
+                            <div className="flex items-start gap-4 mb-6">
+                                <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+                                    <Lock className="w-6 h-6" />
+                                </div>
+                                <div className="pt-1">
+                                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Admin PIN Authorization</h3>
+                                    <p className="text-xs font-bold text-slate-500 mt-1">
+                                        A full 100% discount (free bill) requires Admin PIN Authorization. Please enter an Admin or Super Admin PIN code to authorize.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Admin PIN *</label>
+                                <input 
+                                    type="password" 
+                                    value={overridePIN} 
+                                    onChange={e => {
+                                        if (/^\d*$/.test(e.target.value)) {
+                                            setOverridePIN(e.target.value);
+                                        }
+                                    }}
+                                    autoFocus
+                                    placeholder="••••" 
+                                    maxLength={4}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-center text-2xl font-black text-slate-800 tracking-[0.5em] outline-none focus:ring-2 focus:ring-slate-200 transition-all shadow-inner"
+                                />
+                                {pinError && (
+                                    <p className="text-[11px] font-bold text-red-500 mt-2 ml-1 flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                        {pinError}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    type="button"
+                                    onClick={() => setPinModalOpen(false)} 
+                                    className="flex-1 py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-xl transition-all border border-slate-200 active:scale-95"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleVerifyPIN} 
+                                    disabled={pinVerifying}
+                                    className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    {pinVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                                    Authorize
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
             <motion.div 
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 drag="y" dragControls={dragControls} dragListener={false} 
@@ -388,7 +537,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                 <div className="w-full h-8 absolute top-0 left-0 z-50 flex items-center justify-center md:hidden touch-none" onPointerDown={(e) => dragControls.start(e)}><div className="w-12 h-1.5 bg-slate-300 rounded-full" /></div>
 
                 {/* LEFT: BILL PREVIEW (Fully Scrollable) */}
-                <div className="w-full md:w-[45%] lg:w-[40%] bg-slate-50/80 flex flex-col border-r border-slate-200 backdrop-blur-sm h-[45%] md:h-full shrink-0">
+                <div className="w-full md:w-[45%] lg:w-[42%] bg-slate-50/80 flex flex-col border-r border-slate-200 backdrop-blur-sm h-[45%] md:h-full shrink-0">
                     <div className="p-5 md:p-6 pt-10 md:pt-6 pb-4 shrink-0 flex justify-between items-center border-b border-slate-200/60">
                         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">Table {table.label}</h2>
                         <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm ${isPayable ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>{isPayable ? 'Payable' : 'Pending'}</span>
@@ -402,7 +551,6 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                                     <div className="flex gap-3 w-full pr-2">
                                         <span className={`font-black w-7 h-7 flex items-center justify-center rounded-lg shrink-0 ${isCancelled ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-400'}`}>{item.qty}</span> 
                                         <div className="flex flex-col justify-center w-full mt-0.5 min-w-0">
-                                            {/* ANTI-OVERLAP FIX: Break-words & Flex Layout */}
                                             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-1 w-full min-w-0">
                                                 <span className={`font-bold leading-tight break-words flex-1 pr-1 ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
                                                 {renderSmallStatus(item.status, item.previous_status)}
@@ -417,22 +565,105 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant }: any)
                         })}
                     </div>
                     
-                    {/* FINANCIALS PANEL (Pinned to bottom of left column) */}
-                    <div className="p-4 md:p-6 bg-white border-t border-slate-200 shrink-0">
-                        <div className="flex justify-between items-center mb-2">
+                    {/* FINANCIALS PANEL (Advanced Discount System Pinned here) */}
+                    <div className="p-4 md:p-5 bg-white border-t border-slate-200 shrink-0">
+                        {/* Subtotal */}
+                        <div className="flex justify-between items-center mb-2.5">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Subtotal</span>
                             <span className="text-sm font-black text-slate-700">{formatRs(subTotal)}</span>
                         </div>
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Discount (Rs)</span>
-                            <input 
-                                type="number" 
-                                value={discountInput} 
-                                onChange={e => setDiscountInput(e.target.value)} 
-                                placeholder="0" 
-                                className="w-24 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-right outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-red-500" 
-                            />
+
+                        {/* Manual Discount Layout */}
+                        <div className="border border-slate-100 bg-slate-50/50 rounded-2xl p-3 mb-3.5">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Manual Discount System</span>
+                            
+                            {/* Toggle */}
+                            <div className="flex bg-slate-100/80 p-0.5 rounded-xl mb-2 border border-slate-200/50">
+                                <button 
+                                    type="button"
+                                    onClick={() => { setDiscountType("percent"); setDiscountInput(""); }}
+                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${discountType === "percent" ? "bg-white text-slate-900 shadow-sm border border-slate-200/20" : "text-slate-400 hover:text-slate-600"}`}
+                                >
+                                    % Percentage
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => { setDiscountType("fixed"); setDiscountInput(""); }}
+                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${discountType === "fixed" ? "bg-white text-slate-900 shadow-sm border border-slate-200/20" : "text-slate-400 hover:text-slate-600"}`}
+                                >
+                                    Fixed Amount
+                                </button>
+                            </div>
+
+                            {/* Discount Input Field */}
+                            <div className="relative">
+                                <input 
+                                    type="number" 
+                                    value={discountInput} 
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        if (val === "") {
+                                            setDiscountInput("");
+                                            return;
+                                        }
+                                        const num = Number(val);
+                                        if (num >= 0) {
+                                            if (discountType === "percent") {
+                                                if (num <= 100) setDiscountInput(val);
+                                            } else {
+                                                if (num <= subTotal) setDiscountInput(val);
+                                            }
+                                        }
+                                    }} 
+                                    placeholder="0" 
+                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-right outline-none focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all text-red-500 pr-7" 
+                                />
+                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">
+                                    {discountType === "percent" ? "%" : "Rs"}
+                                </span>
+                            </div>
+
+                            {discountAmt > 0 && (
+                                <div className="mt-2.5">
+                                    {requiresAdminPIN && !authorizedBy ? (
+                                        <div className="bg-red-50 border border-red-100 text-red-600 px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-1.5 shadow-sm">
+                                            <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                            <span>100% Discount requires Admin PIN to authorize.</span>
+                                        </div>
+                                    ) : authorizedBy ? (
+                                        <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-1.5 shadow-sm animate-pulse">
+                                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                            <span>Discount authorized by Admin {authorizedBy}!</span>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-slate-100 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-1.5">
+                                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                            <span>Manual discount applied.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Bill Summary Preview Breakdown */}
+                        {discountAmt > 0 && (
+                            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-3 mb-3.5 space-y-1.5">
+                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                    <span>Subtotal</span>
+                                    <span>{formatRs(subTotal)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] font-bold text-red-500">
+                                    <span>Discount ({discountType === 'percent' ? `${discountVal}%` : 'Fixed'})</span>
+                                    <span>- {formatRs(discountAmt)}</span>
+                                </div>
+                                <div className="border-t border-slate-200 my-1"></div>
+                                <div className="flex justify-between items-center text-xs font-black text-slate-800">
+                                    <span>Grand Total</span>
+                                    <span>{formatRs(grandTotal)}</span>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex justify-between items-end bg-slate-900 p-4 rounded-2xl shadow-lg">
                             <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Total Due</span>
                             <span className="text-3xl font-black text-white tracking-tighter">{formatRs(grandTotal)}</span>
@@ -815,10 +1046,19 @@ export default function CashierDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showTotalSales, setShowTotalSales] = useState(true);
   const [showCreditBook, setShowCreditBook] = useState(false); 
+  const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
       const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-      return () => clearInterval(timer);
+      const handleOnline = () => setNetworkError(false);
+      const handleOffline = () => setNetworkError(true);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      return () => {
+          clearInterval(timer);
+          window.removeEventListener("online", handleOnline);
+          window.removeEventListener("offline", handleOffline);
+      };
   }, []);
 
  useEffect(() => {
@@ -839,52 +1079,59 @@ export default function CashierDashboard() {
   async function loadData(isPolling = false) {
       if (!isPolling) setLoading(true); // Only show spinner on first load
       
-      const res = await getCashierData(isPolling);
-      
-      if (res.success) {
-          let updatedOrders = false;
+      try {
+          const res = await getCashierData(isPolling);
           
-          setData(prev => {
-              // PREVENTS REACT RE-RENDER MEMORY LEAKS! 0 CPU LAG!
-              if (isPolling && prev) {
-                  const currentOrdersStr = JSON.stringify(prev.activeOrders || []);
-                  const incomingOrdersStr = JSON.stringify(res.activeOrders || []);
-                  const currentTablesStr = JSON.stringify(prev.tables || []);
-                  const incomingTablesStr = JSON.stringify(res.tables || []);
-                  
-                  if (currentOrdersStr === incomingOrdersStr && currentTablesStr === incomingTablesStr) {
-                      return prev; // Break the React update cycle if nothing changed!
+          if (res.success) {
+              setNetworkError(false);
+              let updatedOrders = false;
+              
+              setData(prev => {
+                  // PREVENTS REACT RE-RENDER MEMORY LEAKS! 0 CPU LAG!
+                  if (isPolling && prev) {
+                      const currentOrdersStr = JSON.stringify(prev.activeOrders || []);
+                      const incomingOrdersStr = JSON.stringify(res.activeOrders || []);
+                      const currentTablesStr = JSON.stringify(prev.tables || []);
+                      const incomingTablesStr = JSON.stringify(res.tables || []);
+                      
+                      if (currentOrdersStr === incomingOrdersStr && currentTablesStr === incomingTablesStr) {
+                          return prev; // Break the React update cycle if nothing changed!
+                      }
+                      updatedOrders = true;
+                      return {
+                          ...prev,
+                          stats: res.stats as any,
+                          tables: res.tables,
+                          activeOrders: res.activeOrders,
+                          cancelledItems: res.cancelledItems
+                      };
                   }
                   updatedOrders = true;
-                  return {
-                      ...prev,
-                      stats: res.stats as any,
-                      tables: res.tables,
-                      activeOrders: res.activeOrders,
-                      cancelledItems: res.cancelledItems
-                  };
-              }
-              updatedOrders = true;
-              return res as any; // Full initial load
-          });
-
-          // Notification Engine (only run if state actually updated to save CPU)
-          if (updatedOrders) {
-              let newUpdate = false;
-          res.activeOrders?.forEach((o: any) => {
-              if (o.status === 'ready' && !notifiedOrders.current.has(o.id)) {
-                  setNotification(`Order Ready: Table ${o.tbl}`);
-                  new Audio(SOUND_NOTIFICATION).play().catch(()=>{});
-                  notifiedOrders.current.add(o.id);
-                  newUpdate = true;
-                  setTimeout(() => setNotification(null), 6000);
-              }
+                  return res as any; // Full initial load
               });
-              setHasUpdates(newUpdate);
+
+              // Notification Engine (only run if state actually updated to save CPU)
+              if (updatedOrders) {
+                  let newUpdate = false;
+                  res.activeOrders?.forEach((o: any) => {
+                      if (o.status === 'ready' && !notifiedOrders.current.has(o.id)) {
+                          setNotification(`Order Ready: Table ${o.tbl}`);
+                          new Audio(SOUND_NOTIFICATION).play().catch(()=>{});
+                          notifiedOrders.current.add(o.id);
+                          newUpdate = true;
+                          setTimeout(() => setNotification(null), 6000);
+                      }
+                  });
+                  setHasUpdates(newUpdate);
+              }
+          } else {
+              setNetworkError(true);
           }
+      } catch (err) {
+          setNetworkError(true);
+      } finally {
+          if (!isPolling) setLoading(false);
       }
-      
-      if (!isPolling) setLoading(false);
   }
 
   const handleSettleClick = (table: any) => { if (!table.currentOrder) return; setSelectedTable(table); };
@@ -927,11 +1174,40 @@ export default function CashierDashboard() {
   return (
     <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
       <AnimatePresence>{loading && <SystemLoader />}</AnimatePresence>
-      <AnimatePresence>{selectedTable && <CheckoutModal table={selectedTable} restaurant={data?.restaurant} onClose={() => setSelectedTable(null)} onConfirm={processPayment} onCancel={handleCancelOrder} />}</AnimatePresence>
+      <AnimatePresence>{selectedTable && <CheckoutModal table={selectedTable} restaurant={data?.restaurant} staff={data?.staff} onClose={() => setSelectedTable(null)} onConfirm={processPayment} onCancel={handleCancelOrder} />}</AnimatePresence>
       <AnimatePresence>{showCreditBook && <CreditBookModal onClose={() => setShowCreditBook(false)} />}</AnimatePresence>
       
       <AnimatePresence>
         {notification && (<motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="absolute top-0 left-0 right-0 z-[300] flex justify-center pointer-events-none px-4"><div className="bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold pointer-events-auto border-2 border-emerald-500"><Bell className="w-5 h-5 animate-bounce" /> {notification}</div></motion.div>)}
+      </AnimatePresence>
+
+      {/* Floating Premium Connection Alert */}
+      <AnimatePresence>
+        {networkError && (
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }} 
+            animate={{ y: 16, opacity: 1 }} 
+            exit={{ y: -50, opacity: 0 }} 
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 w-full max-w-sm pointer-events-none"
+          >
+            <div className="bg-rose-50/95 border border-rose-200 text-rose-800 px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 pointer-events-auto backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider leading-none">Connection Unstable</p>
+                  <p className="text-[10px] font-bold text-rose-500/80 mt-0.5 leading-none">Attempting to reconnect...</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => loadData(false)}
+                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+              >
+                Retry Now
+              </button>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {!loading && data && (

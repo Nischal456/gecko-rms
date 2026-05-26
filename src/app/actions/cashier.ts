@@ -42,181 +42,197 @@ async function getTenantId() {
 export async function getCashierData(isPolling: boolean = false) {
   const tenantId = await getTenantId();
 
-  const getCachedCashier = unstable_cache(
-    async () => {
-      const today = new Date().toISOString().split('T')[0];
+  let currentStaffRole = "cashier"; 
+  let currentStaffName = "Team";
+  try {
+      const cookieStore = await cookies();
+      const staffCookie = cookieStore.get("gecko_staff_token");
+      if (staffCookie?.value) {
+          const tokenData = JSON.parse(staffCookie.value);
+          currentStaffRole = tokenData.role || "cashier";
+          currentStaffName = tokenData.name || "Team";
+      }
+  } catch (e) {}
 
-      try {
-        const { data: tenant } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
-        const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
-        
-        // PREMIUM FIX 1: If just polling for new orders, ONLY fetch today. Saves massive bandwidth!
-        const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-        const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
+  const today = new Date().toISOString().split('T')[0];
 
-        const { data: logs } = await supabaseAdmin
-            .from("daily_order_logs")
-            .select("date, orders_data, paid_history")
-            .eq("tenant_id", tenantId)
-            .in("date", datesToFetch);
+  try {
+    let tenant = null;
+    if (!isPolling) {
+      const { data } = await supabaseAdmin.from("tenants").select("*").eq("id", tenantId).single();
+      tenant = data;
+    }
+    const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
+    
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
 
-        // PREMIUM FIX 2: Skip downloading the heavy Menu every 5 seconds!
-        let optimizedMenu = null;
-        if (!isPolling) {
-            const { data } = await supabaseAdmin
-                .from("menu_optimized")
-                .select("category_name, items")
-                .eq("tenant_id", tenantId);
-            optimizedMenu = data;
-        }
+    const { data: logs } = await supabaseAdmin
+        .from("daily_order_logs")
+        .select("date, orders_data, paid_history")
+        .eq("tenant_id", tenantId)
+        .in("date", datesToFetch);
 
-        const flatMenu: any[] = [];
-        const categories: any[] = [];
+    let optimizedMenu = null;
+    if (!isPolling) {
+        const { data } = await supabaseAdmin
+            .from("menu_optimized")
+            .select("category_name, items")
+            .eq("tenant_id", tenantId);
+        optimizedMenu = data;
+    }
 
-        if (optimizedMenu) {
-            optimizedMenu.forEach((cat: any) => {
-                categories.push({ name: cat.category_name });
-                const items = Array.isArray(cat.items) ? cat.items : [];
-                items.forEach((item: any) => {
-                     if(item.is_available !== false) { 
-                         flatMenu.push({
-                             id: item.id,
-                             name: item.name,
-                             price: item.price,
-                             image_url: item.image_url,
-                             category: cat.category_name,
-                             description: item.description,
-                             is_veg: item.is_veg,
-                             variants: item.variants || [] 
-                         });
-                     }
-                });
+    const flatMenu: any[] = [];
+    const categories: any[] = [];
+
+    if (optimizedMenu) {
+        optimizedMenu.forEach((cat: any) => {
+            categories.push({ name: cat.category_name });
+            const items = Array.isArray(cat.items) ? cat.items : [];
+            items.forEach((item: any) => {
+                 if(item.is_available !== false) { 
+                     flatMenu.push({
+                         id: item.id,
+                         name: item.name,
+                         price: item.price,
+                         image_url: item.image_url,
+                         category: cat.category_name,
+                         description: item.description,
+                         is_veg: item.is_veg,
+                         variants: item.variants || [] 
+                     });
+                 }
+            });
+        });
+    }
+
+    let totalRevenue = 0;
+    let pendingBills = 0;
+    const tableOrderMap = new Map();
+    const cancelledItemsMap = new Map(); 
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    logs?.forEach(log => {
+        const activeOrders = safeParse(log.orders_data);
+        const paidHistory = safeParse(log.paid_history);
+
+        if (log.date === today) {
+            paidHistory.forEach((bill: any) => {
+                if (bill.payment_method === 'Credit') {
+                    totalRevenue += Number(bill.tendered || 0);
+                } else {
+                    totalRevenue += Number(bill.grandTotal || 0);
+                }
             });
         }
-
-        let totalRevenue = 0;
-        let pendingBills = 0;
-        const tableOrderMap = new Map();
-        const cancelledItemsMap = new Map(); 
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-        logs?.forEach(log => {
-            const activeOrders = safeParse(log.orders_data);
-            const paidHistory = safeParse(log.paid_history);
-
-            if (log.date === today) {
-                paidHistory.forEach((bill: any) => {
-                    if (bill.payment_method === 'Credit') {
-                        totalRevenue += Number(bill.tendered || 0);
-                    } else {
-                        totalRevenue += Number(bill.grandTotal || 0);
-                    }
-                });
-            }
-            
-            const allOrdersForWaste = [...activeOrders, ...paidHistory];
-            
-            allOrdersForWaste.forEach((order: any) => {
-                (order.items || []).forEach((item: any) => {
-                    if (item.status === 'cancelled' || item.status === 'void') {
-                        if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
-                            if (item.cancelled_at) {
-                                const cancelDate = new Date(item.cancelled_at);
-                                if (cancelDate >= oneDayAgo) {
-                                    const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
-                                    const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
-                                    
-                                    cancelledItemsMap.set(uniqueKey, {
-                                        ...item,
-                                        orderId: orderId,
-                                        tableName: order.tbl || order.table_no || "Unknown"
-                                    });
-                                }
+        
+        const allOrdersForWaste = [...activeOrders, ...paidHistory];
+        
+        allOrdersForWaste.forEach((order: any) => {
+            (order.items || []).forEach((item: any) => {
+                if (item.status === 'cancelled' || item.status === 'void') {
+                    if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
+                        if (item.cancelled_at) {
+                            const cancelDate = new Date(item.cancelled_at);
+                            if (cancelDate >= oneDayAgo) {
+                                const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
+                                const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
+                                
+                                cancelledItemsMap.set(uniqueKey, {
+                                    ...item,
+                                    orderId: orderId,
+                                    tableName: order.tbl || order.table_no || "Unknown"
+                                });
                             }
                         }
-                    }
-                });
-            });
-
-            activeOrders.forEach((order: any) => {
-                if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
-                
-                pendingBills++;
-                if (order.tbl) {
-                    if (tableOrderMap.has(order.tbl)) {
-                        const existing = tableOrderMap.get(order.tbl);
-                        existing.items = [...existing.items, ...order.items];
-                        existing.total = Number(existing.total) + Number(order.total);
-                    } else {
-                        tableOrderMap.set(order.tbl, { ...order });
                     }
                 }
             });
         });
 
-        for (const [tbl, existing] of tableOrderMap.entries()) {
-            const validItems = existing.items.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0);
-            const hasReady = validItems.some((i:any) => i.status === 'ready');
-            const hasCooking = validItems.some((i:any) => ['cooking', 'pending'].includes(i.status));
+        activeOrders.forEach((order: any) => {
+            if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
             
-            if (hasReady) existing.status = 'ready'; 
-            else if (hasCooking) existing.status = 'cooking';
-            else existing.status = 'payment_pending';
-        }
+            pendingBills++;
+            if (order.tbl) {
+                if (tableOrderMap.has(order.tbl)) {
+                    const existing = tableOrderMap.get(order.tbl);
+                    existing.items = [...existing.items, ...order.items];
+                    existing.total = Number(existing.total) + Number(order.total);
+                } else {
+                    tableOrderMap.set(order.tbl, { ...order });
+                }
+            }
+        });
+    });
 
-        const richTables = tables?.map(t => {
-          const activeOrder = tableOrderMap.get(t.label);
-          let section = t.section || "Main Hall";
-          if(!t.section) {
-             if(t.label.includes('R')) section = "Rooftop";
-             else if(t.label.includes('G')) section = "Garden";
-          }
-          section = section.charAt(0).toUpperCase() + section.slice(1);
+    for (const [tbl, existing] of tableOrderMap.entries()) {
+        const validItems = existing.items.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0);
+        const hasReady = validItems.some((i:any) => i.status === 'ready');
+        const hasCooking = validItems.some((i:any) => ['cooking', 'preparing'].includes(i.status));
+        const hasPending = validItems.some((i:any) => i.status === 'pending');
+        const allServed = validItems.length > 0 && validItems.every((i:any) => i.status === 'served');
+        
+        if (allServed) existing.status = 'payment_pending';
+        else if (hasReady) existing.status = 'ready'; 
+        else if (hasCooking) existing.status = 'cooking';
+        else if (hasPending) existing.status = 'pending';
+        else existing.status = 'payment_pending';
+    }
 
-          return {
-            ...t,
-            section,
-            status: activeOrder 
-                ? (['payment_pending'].includes(activeOrder.status) ? 'payment' 
-                : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
-                : 'occupied') 
-                : 'free',
-            currentOrder: activeOrder || null
-          };
-        }) || [];
-
-        const profile = {
-          name: tenant?.settings?.profile?.name || tenant?.name,
-          code: tenant?.code,
-          address: tenant?.settings?.profile?.address || tenant?.address,
-          phone: tenant?.settings?.profile?.phone || tenant?.phone,
-          logo_url: tenant?.logo_url,
-          bank_accounts: tenant?.settings?.bank_accounts || [] 
-        };
-
-        const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
-
-        return {
-          success: true,
-          restaurant: profile,
-          stats: { totalRevenue, pendingBills },
-          tables: richTables,
-          menu: flatMenu, 
-          categories: categories, 
-          activeOrders: Array.from(tableOrderMap.values()).reverse(),
-          cancelledItems: finalCancelledItems,
-          isPolling // <--- Tells frontend if this was a micro-poll to prevent re-rendering the menu
-        };
-      } catch (error) {
-        return { success: false, activeOrders: [], cancelledItems: [] };
+    const richTables = tables?.map(t => {
+      const activeOrder = tableOrderMap.get(t.label);
+      let section = t.section || "Main Hall";
+      if(!t.section) {
+         if(t.label.includes('R')) section = "Rooftop";
+         else if(t.label.includes('G')) section = "Garden";
       }
-    },
-    [`cashier-${tenantId}-${isPolling}`],
-    { tags: [`orders-${tenantId}`, `tables-${tenantId}`, `menu-${tenantId}`], revalidate: 3600 }
-  );
+      section = section.charAt(0).toUpperCase() + section.slice(1);
 
-  return getCachedCashier();
+      return {
+        ...t,
+        section,
+        status: activeOrder 
+            ? (['payment_pending'].includes(activeOrder.status) ? 'payment' 
+            : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
+            : 'occupied') 
+            : 'free',
+        currentOrder: activeOrder || null
+      };
+    }) || [];
+
+    const profile = tenant ? {
+      name: tenant?.settings?.profile?.name || tenant?.name,
+      code: tenant?.code,
+      address: tenant?.settings?.profile?.address || tenant?.address,
+      phone: tenant?.settings?.profile?.phone || tenant?.phone,
+      logo_url: tenant?.logo_url,
+      bank_accounts: tenant?.settings?.bank_accounts || [] 
+    } : null;
+
+    const finalCancelledItems = Array.from(cancelledItemsMap.values()).sort((a, b) => new Date(b.cancelled_at).getTime() - new Date(a.cancelled_at).getTime());
+
+    return {
+      success: true,
+      restaurant: profile,
+      stats: { totalRevenue, pendingBills },
+      tables: richTables,
+      menu: flatMenu, 
+      categories: categories, 
+      activeOrders: Array.from(tableOrderMap.values()).reverse(),
+      cancelledItems: finalCancelledItems,
+      isPolling,
+      staff: { name: currentStaffName, role: currentStaffRole } 
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      activeOrders: [], 
+      cancelledItems: [], 
+      staff: { name: currentStaffName, role: currentStaffRole } 
+    };
+  }
 }
 
 // --- 2. CREATE ORDER ---
@@ -250,7 +266,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
             variant: i.variantName || i.variant || "", 
             note: i.note || i.notes || "", 
             status: "pending",
-            time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
             
             // Secure routing fallback to database definition if client omits it!
             station: dbItem.station || i.station || i.prep_station || "kitchen",
@@ -286,7 +302,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
 
         const newOrder = {
             id: orderId, tbl: finalTableId, items: compactItems, total: newTotal, status: 'pending',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
             staff: "Cashier", type, timestamp: new Date().toISOString()
         };
         finalOrders = [...existingOrders, newOrder];
@@ -600,6 +616,29 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
     }
 }
 
+// --- 4.5 VERIFY MANAGER PIN (DISCOUNT OVERRIDE) ---
+export async function verifyManagerPIN(pin: string) {
+    const tenantId = await getTenantId();
+    try {
+        const { data: staff } = await supabaseAdmin
+            .from("staff")
+            .select("role, full_name")
+            .eq("tenant_id", tenantId)
+            .eq("pin_code", pin)
+            .in("role", ["manager", "admin", "super_admin"])
+            .eq("status", "active")
+            .maybeSingle();
+            
+        if (!staff) {
+            return { success: false, error: "Incorrect or unauthorized PIN." };
+        }
+        
+        return { success: true, role: staff.role, name: staff.full_name };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 // --- 5. FINALIZE (Checkout) WITH DOUBLE ENTRY LOCK ---
 export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, paymentDetails: any, tenantInfo: any, customerDetails?: any) {
     const tenantId = await getTenantId();
@@ -661,6 +700,10 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         items: consolidatedItems,
         subTotal: paymentDetails.subTotal || 0,
         discount: paymentDetails.discount || 0,
+        discount_type: paymentDetails.discountType || "",
+        discount_value: paymentDetails.discountValue || 0,
+        discount_reason: paymentDetails.discountReason || "",
+        discount_authorized_by: paymentDetails.discountAuthorizedBy || "",
         grandTotal: paymentDetails.grandTotal || 0, 
         tendered: paymentDetails.tendered || 0,
         change: paymentDetails.change || 0,

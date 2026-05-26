@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -83,7 +83,7 @@ function MenuCard({ item, onAdd }: { item: MenuItem, onAdd: (variant?: Variant) 
 
 function ItemDetailModal({ item, onClose, onConfirm }: { item: MenuItem, onClose: () => void, onConfirm: (v: Variant | undefined, notes: string) => void }) {
     const [selectedVariant, setSelectedVariant] = useState<Variant | undefined>(item.variants && item.variants.length > 0 ? item.variants[0] : undefined);
-    const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+    const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
     const [customNote, setCustomNote] = useState("");
     
     // SMART PRESETS BY CATEGORY
@@ -94,8 +94,18 @@ function ItemDetailModal({ item, onClose, onConfirm }: { item: MenuItem, onClose
     else if (c.match(/momo|asian|noodle|soup/)) PRESETS = ["Extra Spicy", "Mild", "No Coriander", "Extra Garlic", "Soup Separate"];
     else PRESETS = ["No Spicy", "Less Oil", "Extra Spicy", "No Onion", "Less Salt", "Quick Serve"];
 
-    const toggleNote = (n: string) => { setSelectedPreset(prev => prev === n ? null : n); };
-    const handleConfirm = () => { onConfirm(selectedVariant, [selectedPreset, customNote].filter(Boolean).join(", ")); };
+    const togglePreset = (preset: string) => {
+        setSelectedPresets(prev =>
+            prev.includes(preset)
+                ? prev.filter(p => p !== preset)
+                : [...prev, preset]
+        );
+    };
+    
+    const handleConfirm = () => {
+        const presetsStr = selectedPresets.join(", ");
+        onConfirm(selectedVariant, [presetsStr, customNote].filter(Boolean).join(", "));
+    };
     
     const ItemIcon = getCategoryIcon(item.category);
     
@@ -128,7 +138,7 @@ function ItemDetailModal({ item, onClose, onConfirm }: { item: MenuItem, onClose
                     <label className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1 tracking-wide"><MessageSquare className="w-3 h-3" /> Special Instructions</label>
                     <div className="flex flex-wrap gap-2 mb-3">
                         {PRESETS.map(preset => (
-                            <button key={preset} onClick={() => toggleNote(preset)} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border outline-none active:scale-95 ${selectedPreset === preset ? 'bg-emerald-600 text-white border-emerald-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
+                            <button key={preset} onClick={() => togglePreset(preset)} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border outline-none active:scale-95 ${selectedPresets.includes(preset) ? 'bg-emerald-600 text-white border-emerald-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
                                 {preset}
                             </button>
                         ))}
@@ -229,6 +239,67 @@ function POSContent() {
         }
         load();
     }, [orderId]); 
+
+    // Track cart and menu via refs to avoid stale closures in polling
+    const cartRef = useRef(cart);
+    const menuRefState = useRef(menu);
+
+    useEffect(() => {
+        cartRef.current = cart;
+    }, [cart]);
+
+    useEffect(() => {
+        menuRefState.current = menu;
+    }, [menu]);
+
+    // REAL-TIME MENU POLLING & SYNC
+    useEffect(() => {
+        if (loading) return;
+        
+        const pollMenu = async () => {
+            try {
+                const menuRes = await getPOSMenu();
+                if (menuRes && menuRes.items) {
+                    const newItems = menuRes.items;
+                    const newIds = new Set(newItems.map(i => i.id));
+                    
+                    // 1. Detect deleted/disabled items from the menu
+                    const prevMenu = menuRefState.current;
+                    const deletedMenuItems = prevMenu.filter(item => !newIds.has(item.id));
+                    
+                    if (deletedMenuItems.length > 0) {
+                        deletedMenuItems.forEach(item => {
+                            toast.error(`"${item.name}" is no longer available.`, { 
+                                description: "It has been removed from the menu by the chef.",
+                                duration: 6000 
+                            });
+                        });
+                        setMenu(newItems);
+                    }
+                    
+                    // 2. Check if any item currently in the cart is no longer in the new menu
+                    const currentCart = cartRef.current;
+                    const invalidCartItems = currentCart.filter(cartItem => !newIds.has(cartItem.id));
+                    
+                    if (invalidCartItems.length > 0) {
+                        invalidCartItems.forEach(item => {
+                            toast.error(`Removed from cart: "${item.name}"`, {
+                                description: "This dish is no longer available in the menu.",
+                                duration: 6000
+                            });
+                        });
+                        // Remove invalid items from the cart
+                        setCart(prevCart => prevCart.filter(cartItem => newIds.has(cartItem.id)));
+                    }
+                }
+            } catch (e) {
+                console.error("Menu polling error:", e);
+            }
+        };
+
+        const interval = setInterval(pollMenu, 8000);
+        return () => clearInterval(interval);
+    }, [loading]);
 
     const addToCart = (item: MenuItem, variant: Variant | undefined, note: string) => {
         setCart(prev => {

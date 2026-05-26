@@ -218,9 +218,45 @@ export default function ActiveOrdersView({ data, onSelectOrder, onServeOrder, on
                                                     <p className="text-[10px] font-bold text-slate-400">{order.time}</p>
                                                 </div>
                                             </div>
-                                            <span className={`px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border whitespace-nowrap ${hasReadyItems ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : allItemsServed ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                                {hasReadyItems ? "Action Required" : (hasCookingItems && !hasReadyItems) ? "Cooking" : order.status}
-                                            </span>
+                                            {(() => {
+                                                const s = order.status || 'pending';
+                                                if (s === 'ready') {
+                                                    return (
+                                                        <span className="px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border border-emerald-200 bg-emerald-50 text-emerald-700 animate-pulse flex items-center gap-1.5 shrink-0">
+                                                            <span className="relative flex h-2 w-2">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                            </span>
+                                                            Ready to Serve
+                                                        </span>
+                                                    );
+                                                }
+                                                if (s === 'cooking') {
+                                                    return (
+                                                        <span className="px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border border-orange-200 bg-orange-50 text-orange-700 flex items-center gap-1.5 shrink-0">
+                                                            <span className="relative flex h-2 w-2">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                                            </span>
+                                                            Cooking
+                                                        </span>
+                                                    );
+                                                }
+                                                if (s === 'payment_pending' || s === 'served') {
+                                                    return (
+                                                        <span className="px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center gap-1 shrink-0">
+                                                            <Check className="w-3 h-3 text-indigo-500 stroke-[3]" />
+                                                            Payment Pending
+                                                        </span>
+                                                    );
+                                                }
+                                                return (
+                                                    <span className="px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border border-blue-200 bg-blue-50 text-blue-700 flex items-center gap-1.5 shrink-0">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                                        Pending
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         
                                         <div className="flex-1 space-y-2 mb-6 max-h-48 overflow-y-auto custom-scrollbar pr-2 bg-slate-50/50 rounded-[1.5rem] p-3 border border-slate-100/50">

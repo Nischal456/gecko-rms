@@ -214,18 +214,25 @@ export async function deleteKitchenItem(categoryId: string, itemId: string) {
         .eq("tenant_id", tenantId)
         .single();
 
-    if (!cat) return { success: false };
+    if (!cat) return { success: false, error: "Category not found" };
 
     const items = (cat.items || []).filter((i: any) => i.id !== itemId);
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
         .from("menu_optimized")
         .update({ items })
         .eq("id", categoryId);
 
+    if (error) {
+        console.error("Delete menu item error:", error);
+        return { success: false, error: error.message };
+    }
+
     revalidatePath("/staff/kitchen/menu");
     revalidatePath("/staff/manager/menu");
     revalidatePath("/admin/menu");
+    revalidatePath("/menu/[id]"); // Update Public View
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 

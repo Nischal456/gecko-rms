@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 async function getTenantId() {
   const cookieStore = await cookies();
@@ -41,6 +41,7 @@ export async function getKitchenMenuData() {
 // --- 2. SAVE CATEGORY ---
 export async function saveKitchenCategory(id: string | null, name: string) {
     const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
     
     if (id) {
         await supabaseAdmin.from("menu_optimized").update({ category_name: name }).eq("id", id).eq("tenant_id", tenantId);
@@ -54,20 +55,28 @@ export async function saveKitchenCategory(id: string | null, name: string) {
     }
     
     revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
 // --- 3. DELETE CATEGORY ---
 export async function deleteKitchenCategory(id: string) {
     const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
     await supabaseAdmin.from("menu_optimized").delete().eq("id", id).eq("tenant_id", tenantId);
     revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
 // --- 4. SAVE ITEM (Push to JSONB Array) ---
 export async function saveKitchenItem(categoryId: string, item: any) {
     const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
     
     // Get current category data
     const { data: cat } = await supabaseAdmin
@@ -110,6 +119,10 @@ export async function saveKitchenItem(categoryId: string, item: any) {
     if (error) return { success: false, error: error.message };
 
     revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidatePath("/menu/[id]"); // Update Public View
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
@@ -117,6 +130,7 @@ export async function saveKitchenItem(categoryId: string, item: any) {
 // FIXED: Now accepts (categoryId, itemId) to match Frontend
 export async function deleteKitchenItem(categoryId: string, itemId: string) {
     const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
 
     const { data: cat } = await supabaseAdmin
         .from("menu_optimized")
@@ -125,16 +139,25 @@ export async function deleteKitchenItem(categoryId: string, itemId: string) {
         .eq("tenant_id", tenantId)
         .single();
 
-    if (!cat) return { success: false };
+    if (!cat) return { success: false, error: "Category not found" };
 
     const updatedItems = (cat.items || []).filter((i: any) => i.id !== itemId);
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
         .from("menu_optimized")
         .update({ items: updatedItems })
         .eq("id", categoryId);
 
+    if (error) {
+        console.error("Delete menu item error:", error);
+        return { success: false, error: error.message };
+    }
+
     revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidatePath("/menu/[id]"); // Update Public View
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }
 
@@ -142,6 +165,7 @@ export async function deleteKitchenItem(categoryId: string, itemId: string) {
 // FIXED: Now accepts (categoryId, itemId, status) to match Frontend
 export async function quickToggleItem(categoryId: string, itemId: string, status: boolean) {
     const tenantId = await getTenantId();
+    if (tenantId === 0) return { success: false, error: "Unauthorized" };
 
     const { data: cat } = await supabaseAdmin
         .from("menu_optimized")
@@ -150,17 +174,23 @@ export async function quickToggleItem(categoryId: string, itemId: string, status
         .eq("tenant_id", tenantId)
         .single();
 
-    if (!cat) return { success: false };
+    if (!cat) return { success: false, error: "Category not found" };
 
     const updatedItems = (cat.items || []).map((i: any) => 
         i.id === itemId ? { ...i, is_available: status } : i
     );
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
         .from("menu_optimized")
         .update({ items: updatedItems })
         .eq("id", categoryId);
 
+    if (error) return { success: false, error: error.message };
+
     revalidatePath("/staff/kitchen/menu");
+    revalidatePath("/staff/manager/menu");
+    revalidatePath("/admin/menu");
+    revalidatePath("/menu/[id]");
+    revalidateTag(`menu-${tenantId}`, undefined as any);
     return { success: true };
 }

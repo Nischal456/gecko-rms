@@ -58,10 +58,7 @@ const LiveHeaderBadge = () => {
     else if (hour < 17) { greeting = "Good Afternoon"; GreetingIcon = Sun; }
 
     return (
-        <motion.div 
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-            className="flex flex-wrap items-center gap-1.5 mt-1 overflow-hidden"
-        >
+        <div className="flex flex-wrap items-center gap-1.5 mt-1 overflow-hidden animate-fade-in">
             <div className="sm:hidden flex items-center gap-1 bg-emerald-50/80 backdrop-blur-md px-1.5 py-0.5 rounded border border-emerald-100 shadow-sm mr-0.5">
                 <span className="relative flex h-1 w-1">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -76,7 +73,7 @@ const LiveHeaderBadge = () => {
             <span className="flex items-center gap-1 text-[8px] md:text-[9px] font-bold text-slate-600 bg-white/70 backdrop-blur-md px-1.5 py-0.5 rounded-md uppercase tracking-widest border border-slate-200/60 shadow-sm tabular-nums">
                 <Clock className="w-2 h-2 md:w-2.5 md:h-2.5" /> {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
-        </motion.div>
+        </div>
     );
 };
 
@@ -97,12 +94,10 @@ export default function PublicMenuPage() {
 
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [selectedVariant, setSelectedVariant] = useState<any>(null);
-    const [isScrolled, setIsScrolled] = useState(false);
 
     // Spotlight Auto-Scroll Refs
     const carouselRef = useRef<HTMLDivElement>(null);
     const [isCarouselHovered, setIsCarouselHovered] = useState(false);
-    const [progressKey, setProgressKey] = useState(0); 
 
     // --- DATA FETCHING ---
     useEffect(() => {
@@ -125,23 +120,6 @@ export default function PublicMenuPage() {
         }
     }, [params.id]);
 
-    // --- OPTIMIZED SCROLL LISTENER ---
-    useEffect(() => {
-        let ticking = false;
-        const handleScroll = () => {
-            if (!ticking) {
-                window.requestAnimationFrame(() => {
-                    const scrolled = window.scrollY > 10;
-                    setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev));
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        };
-        window.addEventListener("scroll", handleScroll, { passive: true });
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
-
     // --- SMOOTH AUTO-SHIFTING SPOTLIGHT ---
     useEffect(() => {
         if (!carouselRef.current || isCarouselHovered) return;
@@ -155,7 +133,6 @@ export default function PublicMenuPage() {
                 } else {
                     carouselRef.current.scrollBy({ left: 280, behavior: 'smooth' }); 
                 }
-                setProgressKey(prev => prev + 1); 
             }
         }, intervalTime); 
         
@@ -214,49 +191,33 @@ export default function PublicMenuPage() {
     return (
         <div className="min-h-[100dvh] bg-[#f4f7f6] font-sans text-slate-900 pb-32 relative selection:bg-emerald-200">
             
-            {/* --- ULTRA-SLEEK GLASS HEADER --- */}
-            <header className="sticky top-0 z-40 w-full transform-gpu">
-                <div className={`absolute inset-0 bg-white/85 backdrop-blur-2xl border-b border-slate-200/50 shadow-[0_4px_30px_rgba(0,0,0,0.03)] transition-opacity duration-500 ease-out pointer-events-none ${isScrolled ? "opacity-100" : "opacity-0"}`} />
-                
-                <div className={`relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 lg:px-12 transition-all duration-300 ease-out ${isScrolled ? "pt-2 pb-2" : "pt-5 md:pt-8 pb-2"}`}>
-                    
-                    <div className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? "mb-2" : "mb-6"}`}>
-                        <div className="flex items-center gap-2.5 md:gap-3 group cursor-default">
-                            <motion.div layout className={`relative shrink-0 flex items-center justify-center transition-all duration-300 ${isScrolled ? "w-8 h-8" : "w-12 h-12 md:w-16 md:h-16"}`}>
-                                {!isScrolled && <div className="absolute inset-0 bg-emerald-500 rounded-full blur-xl opacity-15 group-hover:opacity-30 transition-opacity duration-700" />}
+            {/* --- GLASS HEADER --- */}
+            <header className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-[0_4px_30px_rgba(0,0,0,0.02)]">
+                <div className="max-w-[1400px] mx-auto px-4 md:px-8 lg:px-12 py-3.5 md:py-4">
+                    <div className="flex items-center justify-between gap-4 mb-3.5">
+                        <div className="flex items-center gap-3">
+                            <div className="relative shrink-0 w-10 h-10 md:w-12 md:h-12">
                                 {restaurantLogo ? (
-                                    <img src={restaurantLogo} alt="Logo" className="w-full h-full object-contain drop-shadow-sm relative z-10" />
+                                    <img src={restaurantLogo} alt="Logo" className="w-full h-full object-contain drop-shadow-sm" />
                                 ) : (
-                                    <div className="w-full h-full bg-white rounded-full shadow-sm border border-slate-100 flex items-center justify-center relative z-10">
-                                        <ChefHat className={`${isScrolled ? "w-4 h-4" : "w-6 h-6"} text-emerald-600`} />
+                                    <div className="w-full h-full bg-emerald-50 rounded-full shadow-inner flex items-center justify-center border border-emerald-100">
+                                        <ChefHat className="w-5 h-5 text-emerald-600" />
                                     </div>
                                 )}
-                            </motion.div>
-
-                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                <motion.div layout className="flex items-center gap-2">
-                                    <h1 className={`font-black text-slate-900 leading-none truncate tracking-tight transition-all duration-300 ${isScrolled ? "text-lg" : "text-xl md:text-3xl"}`}>
-                                        {restaurantName}
-                                    </h1>
-                                    {!isScrolled && (
-                                        <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 shadow-sm">
-                                            <span className="relative flex h-1.5 w-1.5">
-                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                                            </span>
-                                            <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest">Live Menu</span>
-                                        </div>
-                                    )}
-                                </motion.div>
-                                <AnimatePresence>{!isScrolled && <LiveHeaderBadge />}</AnimatePresence>
+                            </div>
+                            <div>
+                                <h1 className="font-black text-slate-900 text-base md:text-xl tracking-tight leading-tight">
+                                    {restaurantName}
+                                </h1>
+                                <LiveHeaderBadge />
                             </div>
                         </div>
                     </div>
 
                     {/* Interactive Search Bar */}
-                    <div className="relative w-full max-w-2xl mb-4 transform transition-all group mx-auto md:mx-0">
+                    <div className="relative w-full max-w-2xl mb-3.5 group mx-auto md:mx-0">
                         <div className="absolute inset-0 bg-emerald-500/10 rounded-xl blur-md transition-opacity duration-300 opacity-0 group-focus-within:opacity-100" />
-                        <div className="relative bg-white/80 backdrop-blur-xl rounded-xl shadow-sm border border-slate-200/80 flex items-center overflow-hidden transition-all group-focus-within:bg-white group-focus-within:border-emerald-300 group-focus-within:shadow-[0_8px_25px_rgb(16,185,129,0.15)] group-focus-within:scale-[1.01]">
+                        <div className="relative bg-slate-50 border border-slate-200/80 rounded-xl flex items-center overflow-hidden transition-all group-focus-within:bg-white group-focus-within:border-emerald-300 group-focus-within:shadow-[0_8px_25px_rgb(16,185,129,0.1)]">
                             <div className="pl-3 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
                                 <Search className="w-4 h-4" />
                             </div>
@@ -264,43 +225,36 @@ export default function PublicMenuPage() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search dishes, ingredients..."
-                                className="w-full h-11 pl-2.5 pr-4 bg-transparent text-[13px] md:text-[14px] font-bold placeholder:text-slate-400 focus:outline-none text-slate-800"
+                                className="w-full h-11 pl-2 pr-4 bg-transparent text-[13px] md:text-[14px] font-medium placeholder:text-slate-400 focus:outline-none text-slate-800"
                             />
-                            <AnimatePresence>
-                                {search && (
-                                    <motion.button 
-                                        initial={{ opacity: 0, scale: 0.5, rotate: -90 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
-                                        onClick={() => setSearch("")} 
-                                        className="pr-3 text-slate-400 hover:text-red-500 transition-colors active:scale-90"
-                                    >
-                                        <div className="bg-slate-100 group-focus-within:bg-red-50 p-1.5 rounded-full"><X className="w-3.5 h-3.5" /></div>
-                                    </motion.button>
-                                )}
-                            </AnimatePresence>
+                            {search && (
+                                <button 
+                                    onClick={() => setSearch("")} 
+                                    className="pr-3 text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
                         </div>
                     </div>
                     
                     {/* Magnetic Category Pills */}
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 md:mx-0 md:px-0 scroll-smooth transform-gpu">
-                        <motion.button 
-                            whileTap={{ scale: 0.92 }}
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4 md:mx-0 md:px-0 scroll-smooth">
+                        <button 
                             onClick={() => { setActiveCategory("All"); setSearch(""); }} 
-                            className={`relative flex-shrink-0 px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${activeCategory === "All" ? 'text-white shadow-lg shadow-slate-900/20' : 'text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
+                            className={`flex-shrink-0 px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${activeCategory === "All" ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
                         >
-                            {activeCategory === "All" && <motion.div layoutId="activePill" className="absolute inset-0 bg-slate-900 rounded-lg" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-                            <span className="relative z-10">All Items</span>
-                        </motion.button>
+                            All Items
+                        </button>
 
                         {menu.map((cat) => (
-                            <motion.button 
+                            <button 
                                 key={cat.id} 
-                                whileTap={{ scale: 0.92 }}
                                 onClick={() => { setActiveCategory(cat.category_name); setSearch(""); }} 
-                                className={`relative flex-shrink-0 px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${activeCategory === cat.category_name ? 'text-white shadow-lg shadow-slate-900/20' : 'text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
+                                className={`flex-shrink-0 px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${activeCategory === cat.category_name ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
                             >
-                                {activeCategory === cat.category_name && <motion.div layoutId="activePill" className="absolute inset-0 bg-slate-900 rounded-lg" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-                                <span className="relative z-10">{cat.category_name}</span>
-                            </motion.button>
+                                {cat.category_name}
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -327,13 +281,7 @@ export default function PublicMenuPage() {
                                         {/* Animated Progress Bar indicating auto-scroll */}
                                         {!isCarouselHovered && specialItems.length > 1 && (
                                             <span className="w-16 h-1 bg-slate-200 rounded-full overflow-hidden inline-block">
-                                                <motion.span 
-                                                    key={progressKey}
-                                                    initial={{ width: "0%" }}
-                                                    animate={{ width: "100%" }}
-                                                    transition={{ duration: 3.5, ease: "linear" }}
-                                                    className="h-full bg-orange-400 block rounded-full"
-                                                />
+                                                <span className="h-full bg-orange-400 block rounded-full progress-bar-fill" />
                                             </span>
                                         )}
                                     </p>
@@ -353,14 +301,11 @@ export default function PublicMenuPage() {
                                     const variantStr = hasVariants ? `Rs ${Math.min(...item.variants.map((v:any)=>v.price))} +` : `Rs ${item.price || 0}`;
 
                                     return (
-                                        <motion.div 
+                                        <div 
                                             key={`special-${item.id}`}
-                                            initial={{ opacity: 0, scale: 0.9 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            transition={{ delay: idx * 0.05, type: "spring", stiffness: 400 }}
-                                            whileTap={{ scale: 0.96 }}
                                             onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
-                                            className="relative snap-always snap-center shrink-0 w-[270px] md:w-[320px] rounded-2xl p-2.5 md:p-3.5 bg-white border border-amber-200/50 shadow-[0_4px_15px_rgba(245,158,11,0.08)] cursor-pointer overflow-hidden group hover:shadow-[0_12px_30px_rgba(245,158,11,0.2)] transform-gpu"
+                                            style={{ animationDelay: `${idx * 50}ms` }}
+                                            className="relative snap-always snap-center shrink-0 w-[270px] md:w-[320px] rounded-2xl p-2.5 md:p-3.5 bg-white border border-amber-200/50 shadow-[0_4px_15px_rgba(245,158,11,0.08)] cursor-pointer overflow-hidden group hover:shadow-[0_12px_30px_rgba(245,158,11,0.2)] active:scale-[0.97] transition-all duration-300 transform-gpu will-change-transform spotlight-card-item"
                                         >
                                             {/* Glowing Background pulse */}
                                             <div className="absolute -inset-10 bg-gradient-to-br from-amber-200/20 via-orange-100/10 to-transparent opacity-50 pointer-events-none z-0 rounded-full blur-2xl group-hover:opacity-100 transition-opacity duration-700" />
@@ -368,7 +313,7 @@ export default function PublicMenuPage() {
                                             <div className="relative z-10 flex gap-3">
                                                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shrink-0 shadow-inner relative bg-amber-50">
                                                     {item.image_url ? (
-                                                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                                                        <img loading="lazy" decoding="async" src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
                                                     ) : (
                                                         <div className="w-full h-full flex flex-col items-center justify-center text-amber-300"><Star className="w-6 h-6 opacity-40" /></div>
                                                     )}
@@ -392,7 +337,7 @@ export default function PublicMenuPage() {
                                                     </div>
                                                 </div>
                                             </div>
-                                        </motion.div>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -437,78 +382,73 @@ export default function PublicMenuPage() {
                             animate="show"
                             className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 lg:gap-5"
                         >
-                            <AnimatePresence>
-                                {filteredItems.map((item: any) => {
-                                    const dietaryType = item.dietary || 'non-veg';
-                                    let BadgeIcon = Beef; let badgeColor = 'text-red-600';
-                                    if(dietaryType === 'veg') { BadgeIcon = Leaf; badgeColor = 'text-green-600'; }
-                                    else if(dietaryType === 'drinks') { BadgeIcon = GlassWater; badgeColor = 'text-blue-600'; }
-                                    else if(dietaryType === 'hookah') { BadgeIcon = Wind; badgeColor = 'text-orange-600'; }
-                                    else if(dietaryType === 'tobacco') { BadgeIcon = Cigarette; badgeColor = 'text-slate-600'; }
+                            {filteredItems.map((item: any) => {
+                                const dietaryType = item.dietary || 'non-veg';
+                                let BadgeIcon = Beef; let badgeColor = 'text-red-600';
+                                if(dietaryType === 'veg') { BadgeIcon = Leaf; badgeColor = 'text-green-600'; }
+                                else if(dietaryType === 'drinks') { BadgeIcon = GlassWater; badgeColor = 'text-blue-600'; }
+                                else if(dietaryType === 'hookah') { BadgeIcon = Wind; badgeColor = 'text-orange-600'; }
+                                else if(dietaryType === 'tobacco') { BadgeIcon = Cigarette; badgeColor = 'text-slate-600'; }
 
-                                    const hasVariants = item.variants && item.variants.length > 0;
-                                    const displayVariants = hasVariants ? item.variants.slice(0, 3) : [];
+                                const hasVariants = item.variants && item.variants.length > 0;
+                                const displayVariants = hasVariants ? item.variants.slice(0, 3) : [];
 
-                                    return (
-                                        <motion.div 
-                                            key={item.id} 
-                                            variants={itemVar}
-                                            layout="position"
-                                            whileTap={{ scale: 0.95 }}
-                                            onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
-                                            className="bg-white p-3 md:p-4 rounded-2xl border border-slate-100 shadow-[0_4px_15px_rgba(0,0,0,0.02)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group hover:border-emerald-200 hover:shadow-[0_20px_40px_-15px_rgba(16,185,129,0.2)] flex flex-col h-full relative transform-gpu will-change-transform"
-                                        >
-                                            <div className="flex gap-2.5 md:gap-3 mb-2">
-                                                <div className="w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-xl overflow-hidden relative shadow-inner border border-slate-100/50 bg-slate-50">
-                                                    {item.image_url ? (
-                                                        <img loading="lazy" src={item.image_url} alt={item.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out`} />
-                                                    ) : (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageIcon className="w-6 h-6 opacity-30" /></div>
-                                                    )}
-                                                    
-                                                    <div className="absolute top-1 left-1 bg-white/95 backdrop-blur-md p-1 rounded-md border border-slate-100 shadow-sm flex items-center justify-center z-20">
-                                                        <BadgeIcon className={`w-3 h-3 md:w-3.5 md:h-3.5 ${badgeColor}`} />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex-1 min-w-0 flex flex-col pt-0.5">
-                                                    <h3 className="font-black text-slate-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-emerald-600 transition-colors">{item.name}</h3>
-                                                    <p className="text-[9px] md:text-[11px] text-slate-500 line-clamp-2 mt-1 leading-snug font-medium pr-1">
-                                                        {item.description || "Freshly prepared for you."}
-                                                    </p>
+                                return (
+                                    <div 
+                                        key={item.id} 
+                                        onClick={() => { setSelectedItem(item); setSelectedVariant(hasVariants ? item.variants[0] : null); }}
+                                        className="bg-white p-3 md:p-4 rounded-2xl border border-slate-100 shadow-[0_4px_15px_rgba(0,0,0,0.02)] hover:-translate-y-1.5 active:scale-[0.97] transition-all duration-300 cursor-pointer group hover:border-emerald-200 hover:shadow-[0_20px_40px_-15px_rgba(16,185,129,0.2)] flex flex-col h-full relative transform-gpu will-change-transform menu-card-item"
+                                    >
+                                        <div className="flex gap-2.5 md:gap-3 mb-2">
+                                            <div className="w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-xl overflow-hidden relative shadow-inner border border-slate-100/50 bg-slate-50">
+                                                {item.image_url ? (
+                                                    <img loading="lazy" decoding="async" src={item.image_url} alt={item.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out" />
+                                                ) : (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageIcon className="w-6 h-6 opacity-30" /></div>
+                                                )}
+                                                
+                                                <div className="absolute top-1 left-1 bg-white/95 backdrop-blur-md p-1 rounded-md border border-slate-100 shadow-sm flex items-center justify-center z-20">
+                                                    <BadgeIcon className={`w-3 h-3 md:w-3.5 md:h-3.5 ${badgeColor}`} />
                                                 </div>
                                             </div>
 
-                                            {hasVariants ? (
-                                                <div className="mt-auto pt-3 border-t border-slate-50">
-                                                    <div className="flex items-center gap-1 mb-1.5">
-                                                        <Layers className="w-3 h-3 text-emerald-500" />
-                                                        <span className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Options</span>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        {displayVariants.map((v: any, idx: number) => (
-                                                            <div key={idx} className="flex justify-between items-center bg-slate-50/60 group-hover:bg-emerald-50/40 px-2.5 py-1.5 rounded-lg transition-colors border border-slate-100/50 group-hover:border-emerald-100/50">
-                                                                <span className="text-[10px] md:text-xs font-bold text-slate-700 truncate mr-2">{v.name}</span>
-                                                                <span className="text-[10px] md:text-xs font-black text-emerald-600 shrink-0">Rs {v.price}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    {item.variants.length > 3 && (
-                                                        <div className="text-center mt-1.5">
-                                                            <span className="text-[9px] font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">+{item.variants.length - 3} more</span>
+                                            <div className="flex-1 min-w-0 flex flex-col pt-0.5">
+                                                <h3 className="font-black text-slate-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-emerald-600 transition-colors">{item.name}</h3>
+                                                <p className="text-[9px] md:text-[11px] text-slate-500 line-clamp-2 mt-1 leading-snug font-medium pr-1">
+                                                    {item.description || "Freshly prepared for you."}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {hasVariants ? (
+                                            <div className="mt-auto pt-3 border-t border-slate-50">
+                                                <div className="flex items-center gap-1 mb-1.5">
+                                                    <Layers className="w-3 h-3 text-emerald-500" />
+                                                    <span className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Options</span>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {displayVariants.map((v: any, idx: number) => (
+                                                        <div key={idx} className="flex justify-between items-center bg-slate-50/60 group-hover:bg-emerald-50/40 px-2.5 py-1.5 rounded-lg transition-colors border border-slate-100/50 group-hover:border-emerald-100/50">
+                                                            <span className="text-[10px] md:text-xs font-bold text-slate-700 truncate mr-2">{v.name}</span>
+                                                            <span className="text-[10px] md:text-xs font-black text-emerald-600 shrink-0">Rs {v.price}</span>
                                                         </div>
-                                                    )}
+                                                    ))}
                                                 </div>
-                                            ) : (
-                                                <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
-                                                    <span className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest"> Price</span>
-                                                    <span className="text-sm md:text-base font-black text-emerald-600 tracking-tight">Rs {item.price || 0}</span>
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    );
-                                })}
-                            </AnimatePresence>
+                                                {item.variants.length > 3 && (
+                                                    <div className="text-center mt-1.5">
+                                                        <span className="text-[9px] font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">+{item.variants.length - 3} more</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
+                                                <span className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest"> Price</span>
+                                                <span className="text-sm md:text-base font-black text-emerald-600 tracking-tight">Rs {item.price || 0}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -518,16 +458,11 @@ export default function PublicMenuPage() {
             {!isViewOnly && (
                 <div className="fixed bottom-5 left-0 right-0 px-4 md:px-5 z-30 pointer-events-none">
                     <div className="max-w-md mx-auto pointer-events-auto">
-                        <motion.button 
-                            initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} whileTap={{ scale: 0.95 }}
-                            className="w-full bg-slate-900/95 backdrop-blur-xl text-white p-2.5 md:p-3 pr-4 rounded-full shadow-[0_20px_40px_rgb(0,0,0,0.3)] flex items-center justify-between border border-slate-700/50 group overflow-hidden relative transform-gpu"
+                        <div 
+                            className="w-full bg-slate-900/95 backdrop-blur-xl text-white p-2.5 md:p-3 pr-4 rounded-full shadow-[0_20px_40px_rgb(0,0,0,0.3)] flex items-center justify-between border border-slate-700/50 group overflow-hidden relative transform-gpu active:scale-[0.97] transition-all duration-300 cursor-pointer floating-action-btn"
                         >
-                            {/* Continuous Glass Shimmer Animation */}
-                            <motion.div 
-                                animate={{ x: ['-200%', '300%'] }} 
-                                transition={{ repeat: Infinity, duration: 3, ease: "linear", repeatDelay: 1 }} 
-                                className="absolute inset-0 z-0 w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12" 
-                            />
+                            {/* Continuous Glass Shimmer Animation (Pure GPU-CSS) */}
+                            <div className="absolute inset-0 z-0 w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 shimmer-effect" />
                             
                             <div className="flex items-center gap-3 relative z-10">
                                 <div className="w-10 h-10 md:w-11 md:h-11 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] group-hover:scale-110 transition-all">
@@ -541,7 +476,7 @@ export default function PublicMenuPage() {
                             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors relative z-10">
                                 <ChevronRight className="w-4 h-4 text-white" />
                             </div>
-                        </motion.button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -582,7 +517,7 @@ export default function PublicMenuPage() {
                             <div className="flex-1 overflow-y-auto no-scrollbar pb-safe">
                                 <div className="w-full aspect-[16/11] bg-slate-200 relative shrink-0">
                                     {selectedItem.image_url ? (
-                                        <img src={selectedItem.image_url} alt={selectedItem.name} className="w-full h-full object-cover pointer-events-none" />
+                                        <img decoding="async" src={selectedItem.image_url} alt={selectedItem.name} className="w-full h-full object-cover pointer-events-none" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-100"><ImageIcon className="w-12 h-12 opacity-30" /></div>
                                     )}
@@ -674,12 +609,60 @@ export default function PublicMenuPage() {
                 )}
             </AnimatePresence>
 
-            <style jsx global>{`
+            <style dangerouslySetInnerHTML={{ __html: `
                 .no-scrollbar::-webkit-scrollbar { display: none; }
                 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
                 /* Ensure touch dragging works perfectly on mobile */
                 .touch-pan-y { touch-action: pan-y; }
-            `}</style>
+                
+                /* Pure GPU Fade In Animations */
+                @keyframes fadeInBrief {
+                    from { opacity: 0; transform: translateY(-2px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in {
+                    animation: fadeInBrief 0.3s ease-out forwards;
+                }
+
+                @keyframes cardFadeIn {
+                    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                .menu-card-item {
+                    content-visibility: auto;
+                    contain-intrinsic-size: auto 160px;
+                    animation: cardFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+
+                .spotlight-card-item {
+                    animation: cardFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+
+                @keyframes progressAnim {
+                    0% { width: 0%; }
+                    100% { width: 100%; }
+                }
+                .progress-bar-fill {
+                    animation: progressAnim 3.5s linear infinite;
+                }
+
+                @keyframes shimmer {
+                    0% { transform: translateX(-150%); }
+                    50% { transform: translateX(250%); }
+                    100% { transform: translateX(250%); }
+                }
+                .shimmer-effect {
+                    animation: shimmer 4s infinite linear;
+                }
+
+                @keyframes slideUpFloating {
+                    from { transform: translateY(100px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .floating-action-btn {
+                    animation: slideUpFloating 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+            `}} />
         </div>
     );
 }

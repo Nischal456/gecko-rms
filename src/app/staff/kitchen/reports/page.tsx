@@ -5,10 +5,12 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ChefHat, History, FileText, Calendar, DollarSign, 
-  LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ChevronDown, ChevronUp, Check, AlertTriangle, Utensils
+  LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ChevronDown, ChevronUp, Check, AlertTriangle, Utensils,
+  Plus, Send, X, Loader2, XCircle
 } from "lucide-react";
 import { getKitchenStats, getKitchenTickets } from "@/app/actions/kitchen";
 import { logoutStaff } from "@/app/actions/staff-auth";
+import { submitLeaveRequest } from "@/app/actions/waiter-reports";
 import { toast } from "sonner";
 import React from "react";
 import NepaliDate from 'nepali-date-converter';
@@ -113,72 +115,85 @@ function DockLink({ href, icon, label }: any) {
     )
 }
 
+function LeaveModal({ isOpen, onClose }: any) {
+    const [formData, setFormData] = useState({ type: 'Sick Leave', from: '', to: '', reason: '' });
+    const [submitting, setSubmitting] = useState(false);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = async () => {
+        if(!formData.from || !formData.to || !formData.reason) return toast.error("Please fill all fields");
+        setSubmitting(true);
+        const res = await submitLeaveRequest(formData);
+        setSubmitting(false);
+        if(res.success) {
+            toast.success("Request Sent!");
+            onClose();
+        } else {
+            toast.error(res.msg);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-white w-full max-w-md p-6 rounded-[2rem] shadow-2xl">
+                <h2 className="text-xl font-black text-slate-900 mb-6">Request Leave</h2>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Leave Type</label>
+                        <div className="flex gap-2">
+                            {['Sick Leave', 'Casual', 'Urgent'].map(t => (
+                                <button key={t} type="button" onClick={() => setFormData({...formData, type: t})} className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${formData.type === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}>
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">From</label>
+                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">To</label>
+                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Reason</label>
+                        <textarea rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 resize-none" placeholder="Why do you need leave?" onChange={(e) => setFormData({...formData, reason: e.target.value})} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-8">
+                    <button type="button" onClick={onClose} className="py-3.5 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
+                    <button type="button" onClick={handleSubmit} disabled={submitting} className="py-3.5 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">
+                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Submit Request</>}
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
 // --- MAIN PAGE ---
 export default function KitchenReportsPage() {
     const [data, setData] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'daily' | 'leaves' | 'payroll'>('daily');
     const [expandedBill, setExpandedBill] = useState<string | null>(null);
+    const [isLeaveModalOpen, setLeaveModalOpen] = useState(false);
     
-    // Notification State (Persistent loop)
-    const [latestOrderTable, setLatestOrderTable] = useState<string | null>(null);
-    const prevTicketIds = useRef<Set<string>>(new Set());
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const isFirstLoad = useRef(true);
+    const loadData = async () => {
+        const res = await getKitchenStats();
+        if(res.success) setData(res);
+    };
 
     useEffect(() => {
-        // Init Audio
-        const audio = new Audio(ALERT_SOUND);
-        audio.volume = 1.0;
-        audio.loop = true; 
-        audioRef.current = audio;
-
-        // Load Reports
-        getKitchenStats().then(res => {
-            if(res.success) setData(res);
-        });
-
-        // Start Live Order Polling
-        pollForNewOrders();
-        const pollInterval = setInterval(pollForNewOrders, 3000);
-        return () => clearInterval(pollInterval);
+        loadData();
     }, []);
-
-    const pollForNewOrders = async () => {
-        try {
-            const kdsRes = await getKitchenTickets();
-            if (kdsRes.success && Array.isArray(kdsRes.data)) {
-                const currentIds = new Set(kdsRes.data.map(t => t.id));
-                
-                if (!isFirstLoad.current) {
-                    const newTicket = kdsRes.data.find(t => 
-                        t.status === 'pending' && !prevTicketIds.current.has(t.id)
-                    );
-                    if (newTicket) triggerAlert(newTicket.table_name);
-                }
-                
-                isFirstLoad.current = false;
-                prevTicketIds.current = currentIds;
-            }
-        } catch (e) {
-            console.error("Polling error", e);
-        }
-    };
-
-    const triggerAlert = (tableName: string) => {
-        setLatestOrderTable(tableName);
-        if (audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(e => console.log("Audio play blocked", e));
-        }
-    };
-
-    const stopAlert = () => {
-        setLatestOrderTable(null);
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-    };
 
     if(!data) return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-4">
@@ -192,30 +207,7 @@ export default function KitchenReportsPage() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 pb-[120px] relative overflow-x-hidden custom-scrollbar">
-            
-            {/* LIVE ALERT BANNER */}
-            <AnimatePresence>
-                {latestOrderTable && (
-                    <motion.div 
-                        initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
-                        className="fixed top-0 left-0 right-0 bg-red-500 flex items-center justify-between px-6 py-4 z-[100] text-white shadow-2xl cursor-pointer"
-                        onClick={stopAlert}
-                    >
-                        <div className="flex items-center gap-4 animate-pulse">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                <Bell className="w-5 h-5 fill-current" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold opacity-90 uppercase tracking-widest">New Order Received</p>
-                                <h3 className="text-xl md:text-2xl font-black leading-none">{latestOrderTable}</h3>
-                            </div>
-                        </div>
-                        <button className="bg-white text-red-600 px-5 py-2.5 rounded-full font-black text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform">
-                            Acknowledge
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <LeaveModal isOpen={isLeaveModalOpen} onClose={() => { setLeaveModalOpen(false); loadData(); }} />
 
             {/* HEADER */}
             <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 py-8 sticky top-0 z-20 shadow-sm">
@@ -362,23 +354,51 @@ export default function KitchenReportsPage() {
 
                 {/* LEAVES VIEW */}
                 {activeTab === 'leaves' && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                        <div className="flex justify-between items-center bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/10">
+                            <div>
+                                <h3 className="font-black text-xl">Need a break?</h3>
+                                <p className="text-slate-400 text-sm mt-1">Submit your leave request for approval.</p>
+                            </div>
+                            <button onClick={() => setLeaveModalOpen(true)} className="bg-white text-slate-900 px-5 py-3 rounded-xl text-xs font-black hover:bg-emerald-400 transition-colors flex items-center gap-2">
+                                <Plus className="w-4 h-4" /> Apply Now
+                            </button>
+                        </div>
+
                         <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
                             <div className="px-8 py-6 border-b border-slate-50">
                                 <h2 className="font-black text-xl text-slate-900">Recent Leave Requests</h2>
                             </div>
                             <div className="divide-y divide-slate-50">
-                                {data?.leaves && data.leaves.length > 0 ? data.leaves.map((leave: any) => (
-                                    <div key={leave.id} className="px-8 py-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                                        <div>
-                                            <p className="font-black text-lg text-slate-900">{leave.staff_name || "Staff Member"}</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase mt-1 tracking-wider">{leave.type} • {leave.days} Days</p>
+                                {data?.leaves && data.leaves.length > 0 ? data.leaves.map((leave: any) => {
+                                    const statusColor = 
+                                        leave.status === 'approved' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                        leave.status === 'rejected' ? 'text-red-600 bg-red-50 border-red-100' :
+                                        'text-orange-600 bg-orange-50 border-orange-100';
+                                    
+                                    const Icon = leave.status === 'approved' ? CheckCircle2 : leave.status === 'rejected' ? XCircle : Clock;
+
+                                    return (
+                                        <div key={leave.id} className="px-8 py-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide flex items-center gap-1 ${statusColor}`}>
+                                                        <Icon className="w-3 h-3" /> {leave.status}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-slate-900">{leave.type}</span>
+                                                </div>
+                                                <p className="text-xs text-slate-400 font-medium">
+                                                    {leave.from} <span className="mx-1">→</span> {leave.to}
+                                                </p>
+                                                {leave.reason && <p className="text-xs text-slate-500 mt-1 italic">Reason: {leave.reason}</p>}
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-[10px] font-bold text-slate-300">Applied on</span>
+                                                <p className="text-xs font-bold text-slate-500">{leave.date_applied}</p>
+                                            </div>
                                         </div>
-                                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${leave.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
-                                            {leave.status}
-                                        </span>
-                                    </div>
-                                )) : (
+                                    );
+                                }) : (
                                     <div className="p-16 flex flex-col items-center justify-center text-slate-300">
                                         <Calendar className="w-16 h-16 mb-4 opacity-20" />
                                         <p className="font-bold uppercase tracking-widest text-xs">No leave records found.</p>

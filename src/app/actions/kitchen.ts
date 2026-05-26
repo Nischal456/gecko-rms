@@ -118,18 +118,68 @@ export async function getKitchenTickets() {
                     quantity: item.qty || item.quantity || 1,
                     notes: item.note || item.notes || "",
                     variant: item.variant || item.variantName || "",
-                    status: item.status || 'pending',
-                    station: item.station || item.prep_station || 'kitchen',
-                    category: item.category || item.dietary || 'food'
+                    status: item.status || "pending",
+                    station: item.station || "kitchen",
+                    prep_station: item.prep_station || "kitchen"
                 }))
             };
         }).filter((ticket: any) => ticket.order_items.length > 0 && ticket.status !== 'served'); 
 
-        return { success: true, data: mappedOrders };
+        // Gather cancellations from the last 2 hours
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).getTime();
+        const cancellations: any[] = [];
 
-      } catch (e) { return { success: false, data: [] }; }
+        allOrders.forEach((order: any) => {
+            const orderStatus = (order.status || '').toLowerCase().trim();
+            const items = order.items || [];
+            
+            // Check if entire order was cancelled
+            if (orderStatus === 'cancelled') {
+                const cancelledTime = order.timestamp || order.created_at || new Date().toISOString();
+                if (new Date(cancelledTime).getTime() > twoHoursAgo) {
+                    cancellations.push({
+                        type: 'order',
+                        orderId: order.id,
+                        tableName: order.tbl || order.table_name || "Unknown",
+                        cancelledAt: cancelledTime,
+                        reason: order.cancel_reason || 'Round Cancelled',
+                        by: order.cancelled_by || 'Waiter',
+                        itemsCount: items.length
+                    });
+                }
+            } else {
+                // Check for individual cancelled items
+                items.forEach((item: any) => {
+                    const itemStatus = (item.status || '').toLowerCase().trim();
+                    if (itemStatus === 'cancelled' && item.cancelled_at) {
+                        if (new Date(item.cancelled_at).getTime() > twoHoursAgo) {
+                            cancellations.push({
+                                type: 'item',
+                                orderId: order.id,
+                                itemId: item.unique_id || item.cartId || item.id,
+                                tableName: order.tbl || order.table_name || "Unknown",
+                                name: item.name,
+                                quantity: item.qty || 1,
+                                variant: item.variant || item.variantName || "",
+                                notes: item.note || item.notes || "",
+                                cancelledAt: item.cancelled_at,
+                                reason: item.cancel_reason || 'No reason provided',
+                                by: item.cancelled_by || 'Waiter'
+                            });
+                        }
+                    }
+                });
+            }
+        });
+
+        return { 
+            success: true, 
+            data: mappedOrders, 
+            cancellations: cancellations.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime()) 
+        };
+      } catch (e) { return { success: false, data: [], cancellations: [] }; }
     },
-    [`kitchen-tickets-${tenantId}`],
+    [`kitchen-tickets-${tenantId}-v2`],
     { tags: [`orders-${tenantId}`], revalidate: 3600 }
   );
 
@@ -376,7 +426,37 @@ export async function getKitchenStats() {
       { tags: [`orders-${tenantId}`], revalidate: 3600 }
     );
     
-    return getCachedStats();
+    const cachedData = await getCachedStats();
+
+    // DYNAMIC STAFF DATA FETCH (OUTSIDE CACHE)
+    let payroll: any[] = [];
+    let leaves: any[] = [];
+    try {
+        const cookieStore = await cookies();
+        const staffCookie = cookieStore.get("gecko_staff_token")?.value;
+        if (staffCookie) {
+            const staff = JSON.parse(staffCookie);
+            const { data: profile } = await supabaseAdmin
+                .from("staff_members")
+                .select("payroll_history, leave_requests")
+                .eq("tenant_id", tenantId)
+                .eq("name", staff.name)
+                .single();
+
+            if (profile) {
+                payroll = profile.payroll_history || [];
+                leaves = profile.leave_requests || [];
+            }
+        }
+    } catch (e) {
+        console.error("Error fetching kitchen staff reports context:", e);
+    }
+
+    return {
+        ...cachedData,
+        payroll,
+        leaves
+    };
 }
 
 // --- LEGACY ---

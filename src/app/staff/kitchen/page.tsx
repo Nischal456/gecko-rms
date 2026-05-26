@@ -74,7 +74,7 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
     )
 }
 
-function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: any) {
+function KDSHeader({ count, alertingTable, onAcknowledge, alertingCancellation, onAcknowledgeCancellation, muted, toggleMute }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
@@ -109,6 +109,34 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: a
                         </div>
                         <button onClick={(e) => { e.stopPropagation(); onAcknowledge(); }} className="bg-white text-red-600 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-black text-[10px] md:text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform transform-gpu">
                             Acknowledge
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {alertingCancellation && (
+                    <motion.div 
+                        initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }}
+                        className="absolute inset-0 bg-gradient-to-r from-red-600 to-rose-700 flex items-center justify-between px-4 md:px-6 z-[60] text-white shadow-xl cursor-pointer border-b border-red-500"
+                        onClick={onAcknowledgeCancellation}
+                    >
+                        <div className="flex items-center gap-3 md:gap-4 animate-pulse">
+                            <div className="w-8 h-8 md:w-10 md:h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-white animate-bounce" />
+                            </div>
+                            <div>
+                                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-red-100">⚠️ FOOD CANCELLED BY WAITER</p>
+                                <h3 className="text-sm md:text-xl font-black leading-none truncate max-w-[200px] md:max-w-none">
+                                    {alertingCancellation.type === 'order' 
+                                        ? `Table ${alertingCancellation.tableName} - ALL ITEMS CANCELLED` 
+                                        : `Table ${alertingCancellation.tableName} - ${alertingCancellation.quantity}x ${alertingCancellation.name}`}
+                                </h3>
+                                <p className="text-[8px] md:text-[10px] font-bold text-red-100 mt-1 italic leading-tight">Reason: {alertingCancellation.reason}</p>
+                            </div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); onAcknowledgeCancellation(); }} className="bg-white text-red-700 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-black text-[10px] md:text-xs shadow-lg uppercase tracking-wider active:scale-95 transition-transform transform-gpu">
+                            Stop Alarm
                         </button>
                     </motion.div>
                 )}
@@ -217,6 +245,7 @@ function DockLink({ href, icon, label }: any) {
 
 export default function KitchenPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
+  const [cancellations, setCancellations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
   
@@ -226,8 +255,10 @@ export default function KitchenPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const acknowledgedIds = useRef<Set<string>>(new Set());
+  const acknowledgedCancellations = useRef<Set<string>>(new Set());
   const currentlyAlertingId = useRef<string | null>(null);
   const [alertingTable, setAlertingTable] = useState<string | null>(null);
+  const [alertingCancellation, setAlertingCancellation] = useState<any>(null);
 
   useEffect(() => {
       const isInit = sessionStorage.getItem("gecko_kitchen_init");
@@ -251,13 +282,22 @@ export default function KitchenPage() {
   useEffect(() => {
       if (!systemReady) return;
 
-      const pending = tickets.filter(t => t.status === 'pending');
-      const unacknowledged = pending.find(t => !acknowledgedIds.current.has(t.id));
+      const unacknowledgedCancel = cancellations.find(c => {
+          const sig = c.type === 'order' 
+              ? `cancel-order-${c.orderId}` 
+              : `cancel-item-${c.orderId}-${c.itemId}`;
+          return !acknowledgedCancellations.current.has(sig);
+      });
 
-      if (unacknowledged) {
-          if (currentlyAlertingId.current !== unacknowledged.id) {
-              currentlyAlertingId.current = unacknowledged.id;
-              setAlertingTable(unacknowledged.table_name);
+      if (unacknowledgedCancel) {
+          const sig = unacknowledgedCancel.type === 'order' 
+              ? `cancel-order-${unacknowledgedCancel.orderId}` 
+              : `cancel-item-${unacknowledgedCancel.orderId}-${unacknowledgedCancel.itemId}`;
+          
+          if (currentlyAlertingId.current !== sig) {
+              currentlyAlertingId.current = sig;
+              setAlertingCancellation(unacknowledgedCancel);
+              setAlertingTable(null); // Override new order alert
               
               if (!muted && audioRef.current) {
                   audioRef.current.play().catch(e => {
@@ -268,16 +308,38 @@ export default function KitchenPage() {
               }
           }
       } else {
-          if (currentlyAlertingId.current) {
-              currentlyAlertingId.current = null;
-              setAlertingTable(null);
-              if (audioRef.current) {
-                  audioRef.current.pause();
-                  audioRef.current.currentTime = 0;
+          if (alertingCancellation) {
+              setAlertingCancellation(null);
+          }
+
+          const pending = tickets.filter(t => t.status === 'pending');
+          const unacknowledged = pending.find(t => !acknowledgedIds.current.has(t.id));
+
+          if (unacknowledged) {
+              if (currentlyAlertingId.current !== unacknowledged.id) {
+                  currentlyAlertingId.current = unacknowledged.id;
+                  setAlertingTable(unacknowledged.table_name);
+                  
+                  if (!muted && audioRef.current) {
+                      audioRef.current.play().catch(e => {
+                          console.warn("Audio blocked by browser, requiring user interaction.");
+                          setSystemReady(false); 
+                          sessionStorage.removeItem("gecko_kitchen_init");
+                      });
+                  }
+              }
+          } else {
+              if (currentlyAlertingId.current) {
+                  currentlyAlertingId.current = null;
+                  setAlertingTable(null);
+                  if (audioRef.current) {
+                      audioRef.current.pause();
+                      audioRef.current.currentTime = 0;
+                  }
               }
           }
       }
-  }, [tickets, systemReady, muted]);
+  }, [tickets, cancellations, systemReady, muted]);
 
   const initializeSystem = () => {
       const audio = new Audio(ALERT_SOUND); 
@@ -307,9 +369,29 @@ export default function KitchenPage() {
       }
   };
 
+  const handleAcknowledgeCancellation = () => {
+      if (alertingCancellation) {
+          const sig = alertingCancellation.type === 'order' 
+              ? `cancel-order-${alertingCancellation.orderId}` 
+              : `cancel-item-${alertingCancellation.orderId}-${alertingCancellation.itemId}`;
+          
+          acknowledgedCancellations.current.add(sig);
+          setAlertingCancellation(null);
+          currentlyAlertingId.current = null;
+          
+          if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+          }
+      }
+  };
+
   async function loadData() {
     const kdsRes = await getKitchenTickets();
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
+        const rawCancellations = (kdsRes as any).cancellations || [];
+        setCancellations(rawCancellations);
+
         const rawData = kdsRes.data as any[]; 
 
         // --- STRICT STATION FILTERING ENGINE (KITCHENOS) ---
@@ -433,7 +515,7 @@ export default function KitchenPage() {
 
   return (
     <div className="flex h-[100dvh] w-full bg-[#F1F5F9] font-sans text-slate-900 overflow-hidden flex-col relative">
-      <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} />
+      <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} alertingCancellation={alertingCancellation} onAcknowledgeCancellation={handleAcknowledgeCancellation} muted={muted} toggleMute={() => setMuted(!muted)} />
 
       {/* --- KANBAN BOARD --- */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">

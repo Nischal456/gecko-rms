@@ -175,6 +175,8 @@ export default function ReportsView({ data }: any) {
         const pSplit: any = {};
         const sSplit: any = {};
         let total = 0; let count = 0;
+        let totalDiscounts = 0;
+        let discountCount = 0;
         
         filteredBills.forEach((b: any) => {
             const method = b.payment_method || "Cash";
@@ -183,6 +185,12 @@ export default function ReportsView({ data }: any) {
             const actualRevenue = method === 'Credit' ? (Number(b.tendered) || 0) : grandTotal;
             
             total += actualRevenue; count++;
+
+            const discount = Number(b.discount) || 0;
+            if (discount > 0) {
+                totalDiscounts += discount;
+                discountCount++;
+            }
 
             // PRECISE SPLIT PARSING
             let safeSplits = b.splits;
@@ -210,7 +218,7 @@ export default function ReportsView({ data }: any) {
             sSplit[staff] = (sSplit[staff] || 0) + actualRevenue;
         });
         
-        return { paymentSplit: pSplit, staffSplit: sSplit, total, count };
+        return { paymentSplit: pSplit, staffSplit: sSplit, total, count, totalDiscounts, discountCount };
     }, [filteredBills]);
 
     const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
@@ -260,7 +268,7 @@ export default function ReportsView({ data }: any) {
                 <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 md:space-y-8">
                     
                     {/* TOP STAT CARDS */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
                         <motion.div variants={itemVariants} className="bg-gradient-to-br from-emerald-600 to-teal-800 p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-white shadow-2xl shadow-emerald-600/20 relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
                             <div className="relative z-10">
@@ -270,13 +278,32 @@ export default function ReportsView({ data }: any) {
                             </div>
                         </motion.div>
 
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
+                            <div className="relative z-10 flex flex-col h-full justify-between">
+                                <div>
+                                    <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                        Total Discounts
+                                    </p>
+                                    <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 truncate mt-1">
+                                        {formatRs(derivedStats.totalDiscounts)}
+                                    </h2>
+                                </div>
+                                <p className="mt-6 text-slate-400 text-xs font-bold flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-slate-300" />
+                                    Across {derivedStats.discountCount} discounted bills
+                                </p>
+                            </div>
+                        </motion.div>
+
                         <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col">
                             <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><QrCode className="w-4 h-4 text-indigo-500"/> Payment Split</p>
-                            <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
+                            <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 max-h-[120px]">
                                 {Object.entries(derivedStats.paymentSplit).sort((a:any, b:any) => b[1] - a[1]).map(([k,v]:any) => (
-                                    <div key={k} className="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                                        <span className="font-bold text-slate-700 capitalize text-sm">{k}</span>
-                                        <span className="font-black text-slate-900">{formatRs(v)}</span>
+                                    <div key={k} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+                                        <span className="font-bold text-slate-700 capitalize text-xs">{k}</span>
+                                        <span className="font-black text-slate-950 text-xs">{formatRs(v)}</span>
                                     </div>
                                 ))}
                                 {Object.keys(derivedStats.paymentSplit).length === 0 && <span className="text-xs text-slate-400 font-bold block mt-2">No payments found.</span>}
@@ -285,14 +312,14 @@ export default function ReportsView({ data }: any) {
 
                         <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col">
                             <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><UserCircle className="w-4 h-4 text-orange-500"/> Top Staff</p>
-                            <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
+                            <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 max-h-[120px]">
                                 {Object.entries(derivedStats.staffSplit).sort((a:any, b:any) => b[1] - a[1]).map(([k,v]:any) => (
-                                    <div key={k} className="flex justify-between items-center p-2.5 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                                        <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
-                                            <div className="w-7 h-7 rounded-full bg-slate-100 text-[10px] flex items-center justify-center text-slate-500 font-black uppercase">{k.charAt(0)}</div>
+                                    <div key={k} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+                                        <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                                            <div className="w-5 h-5 rounded-full bg-slate-100 text-[9px] flex items-center justify-center text-slate-500 font-black uppercase">{k.charAt(0)}</div>
                                             {k}
                                         </span>
-                                        <span className="font-black text-slate-900 text-sm">{formatRs(v)}</span>
+                                        <span className="font-black text-slate-950 text-xs">{formatRs(v)}</span>
                                     </div>
                                 ))}
                                 {Object.keys(derivedStats.staffSplit).length === 0 && <span className="text-xs text-slate-400 font-bold block mt-2">No staff activity found.</span>}
@@ -527,6 +554,20 @@ export default function ReportsView({ data }: any) {
                                                                                 </div>
                                                                             </>
                                                                         )}
+                                                                        {b.discount > 0 && (
+                                                                            <>
+                                                                                <div className="w-px bg-slate-100" />
+                                                                                <div className="flex flex-col gap-1 text-red-600">
+                                                                                    <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">Discount Info</span>
+                                                                                    <span className="font-black text-xs">
+                                                                                        Rs {b.discount} ({b.discount_type === 'percent' ? `${b.discount_value}%` : 'Fixed'})
+                                                                                    </span>
+                                                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                                                                        Auth: {b.discount_authorized_by || 'Cashier'}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                     
                                                                     <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center gap-6 shadow-lg ml-auto">
@@ -643,6 +684,14 @@ export default function ReportsView({ data }: any) {
                                                         <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest">Table</strong> <span className="font-bold text-slate-700">{b.table_no}</span></span>
                                                         {b.customer_name && <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest">Customer</strong> <span className="font-bold text-slate-700">{b.customer_name}</span></span>}
                                                         
+                                                        {b.discount > 0 && (
+                                                            <div className="bg-red-50/50 border border-red-100 rounded-lg p-2.5 flex flex-col gap-1.5 mt-1 text-red-700">
+                                                                <span className="font-black text-[9px] uppercase tracking-widest text-red-500">Discount Audit Details</span>
+                                                                <span className="font-bold text-slate-800">Rs {b.discount} ({b.discount_type === 'percent' ? `${b.discount_value}%` : 'Fixed'})</span>
+                                                                <span>Authorized By: {b.discount_authorized_by || 'Cashier'}</span>
+                                                            </div>
+                                                        )}
+
                                                         <div className="border-t border-slate-100 mt-2 pt-2 flex flex-col gap-2">
                                                             <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[10px]">Grand Total</strong> <span className="font-bold text-slate-900 text-sm">{formatRs(grandTotal)}</span></span>
                                                             {b.discount > 0 && <span className="flex justify-between"><strong className="text-amber-500 uppercase tracking-widest text-[10px]">Discount</strong> <span className="font-black text-amber-500 text-sm">-{formatRs(b.discount)}</span></span>}

@@ -51,174 +51,162 @@ export async function getWaiterDashboardData() {
       }
   } catch (e) {}
 
-  const getCachedWaiterData = unstable_cache(
-    async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-      try {
-        const { data: tables, error: tableError } = await supabaseAdmin
-            .from("restaurant_tables")
-            .select("*")
-            .eq("tenant_id", tenantId)
-            .order("label", { ascending: true });
+  try {
+    const { data: tables, error: tableError } = await supabaseAdmin
+        .from("restaurant_tables")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("label", { ascending: true });
 
-        if (tableError) console.error("Table Fetch Error:", tableError);
+    if (tableError) console.error("Table Fetch Error:", tableError);
 
-        const { data: logs } = await supabaseAdmin
-            .from("daily_order_logs")
-            .select("date, orders_data, paid_history")
-            .eq("tenant_id", tenantId)
-            .in("date", [yesterdayStr, today])
-            .order("date", { ascending: false });
+    const { data: logs } = await supabaseAdmin
+        .from("daily_order_logs")
+        .select("date, orders_data, paid_history")
+        .eq("tenant_id", tenantId)
+        .in("date", [yesterdayStr, today])
+        .order("date", { ascending: false });
 
-        const todayLog = logs?.find((l:any) => l.date === today);
-        const activeOrders = safeParse(todayLog?.orders_data);
-        
-        const { data: menuData } = await supabaseAdmin
-            .from("menu_optimized")
-            .select("items")
-            .eq("tenant_id", tenantId);
+    const todayLog = logs?.find((l:any) => l.date === today);
+    const activeOrders = safeParse(todayLog?.orders_data);
+    
+    const { data: menuData } = await supabaseAdmin
+        .from("menu_optimized")
+        .select("items")
+        .eq("tenant_id", tenantId);
 
-        let disabledItems: any[] = [];
-        if (menuData) {
-            menuData.forEach((cat: any) => {
-                const items = Array.isArray(cat.items) ? cat.items : [];
-                items.forEach((item: any) => {
-                    if (item.is_available === false) {
-                        disabledItems.push({
-                            id: item.id,
-                            title: item.name,
-                            price: item.price,
-                            category: cat.category_name
-                        });
-                    }
-                });
+    let disabledItems: any[] = [];
+    if (menuData) {
+        menuData.forEach((cat: any) => {
+            const items = Array.isArray(cat.items) ? cat.items : [];
+            items.forEach((item: any) => {
+                if (item.is_available === false) {
+                    disabledItems.push({
+                        id: item.id,
+                        title: item.name,
+                        price: item.price,
+                        category: cat.category_name
+                    });
+                }
             });
-        }
+        });
+    }
 
-        const notifications: any[] = [];
-        const cancelledItemsMap = new Map(); 
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000); 
+    const notifications: any[] = [];
+    const cancelledItemsMap = new Map(); 
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000); 
 
-        let mySales = 0;
-        let tablesServed = 0;
-        let hasReady = false;
-        let hasCooking = false;
-        const activeTableStatus = new Map<string, string>();
+    let mySales = 0;
+    let tablesServed = 0;
+    let hasReady = false;
+    let hasCooking = false;
+    const activeTableStatus = new Map<string, string>();
 
-        logs?.forEach(log => {
-            const logActive = safeParse(log.orders_data);
-            const logPaid = safeParse(log.paid_history);
-            const allOrdersForWaste = [...logActive, ...logPaid];
+    logs?.forEach(log => {
+        const logActive = safeParse(log.orders_data);
+        const logPaid = safeParse(log.paid_history);
+        const allOrdersForWaste = [...logActive, ...logPaid];
 
-            allOrdersForWaste.forEach((order: any) => {
-                (order.items || []).forEach((item: any) => {
-                    if (item.status === 'cancelled' || item.status === 'void') {
-                        if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
-                            if (item.cancelled_at) {
-                                const cancelDate = new Date(item.cancelled_at);
-                                if (cancelDate >= oneDayAgo) {
-                                    const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
-                                    const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
-                                    
-                                    cancelledItemsMap.set(uniqueKey, {
-                                        ...item,
-                                        orderId: orderId,
-                                        tableName: order.tbl || order.table_no || "Unknown"
-                                    });
-                                }
+        allOrdersForWaste.forEach((order: any) => {
+            (order.items || []).forEach((item: any) => {
+                if (item.status === 'cancelled' || item.status === 'void') {
+                    if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
+                        if (item.cancelled_at) {
+                            const cancelDate = new Date(item.cancelled_at);
+                            if (cancelDate >= oneDayAgo) {
+                                const orderId = order.id || order.original_order_id || order.invoice_no || "Unknown";
+                                const uniqueKey = `${orderId}-${item.unique_id || item.id || item.name}-${item.cancelled_at}`;
+                                
+                                cancelledItemsMap.set(uniqueKey, {
+                                    ...item,
+                                    orderId: orderId,
+                                    tableName: order.tbl || order.table_no || "Unknown"
+                                });
                             }
                         }
                     }
-                });
+                }
             });
         });
+    });
 
-        activeOrders.forEach((order: any) => {
-            const tableName = String(order.tbl || "").trim();
-            const grandTotal = Number(order.total) || 0;
-            const validItems = (order.items || []).filter((i:any) => i.status !== 'cancelled' && i.status !== 'void');
+    activeOrders.forEach((order: any) => {
+        const tableName = String(order.tbl || "").trim();
+        const grandTotal = Number(order.total) || 0;
+        const validItems = (order.items || []).filter((i:any) => i.status !== 'cancelled' && i.status !== 'void');
 
-            if (validItems.length > 0) {
-                mySales += grandTotal;
-                tablesServed += 1;
-                
-                validItems.forEach((item: any) => {
-                    if (item.status === 'ready') {
-                        hasReady = true;
-                        notifications.push({
-                            id: order.id,
-                            type: 'kitchen',
-                            title: 'Order Ready',
-                            desc: `Table ${tableName} - ${validItems.length} items`,
-                            time: new Date().toLocaleTimeString(),
-                            items: validItems
-                        });
-                    } else if (item.status === 'cooking' || item.status === 'pending') {
-                        hasCooking = true;
-                    }
-                });
+        if (validItems.length > 0) {
+            mySales += grandTotal;
+            tablesServed += 1;
+            
+            validItems.forEach((item: any) => {
+                if (item.status === 'ready') {
+                    hasReady = true;
+                    notifications.push({
+                        id: order.id,
+                        type: 'kitchen',
+                        title: 'Order Ready',
+                        desc: `Table ${tableName} - ${validItems.length} items`,
+                        time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' }),
+                        items: validItems
+                    });
+                } else if (item.status === 'cooking' || item.status === 'pending') {
+                    hasCooking = true;
+                }
+            });
 
-                const current = activeTableStatus.get(tableName);
-                const displayStatus = order.status;
-                if (!current) activeTableStatus.set(tableName, displayStatus === 'payment_pending' ? 'payment' : 'occupied');
-            }
-        });
+            const current = activeTableStatus.get(tableName);
+            const displayStatus = order.status;
+            if (!current) activeTableStatus.set(tableName, displayStatus === 'payment_pending' ? 'payment' : 'occupied');
+        }
+    });
 
-        const processedTables = tables?.map(t => {
-            const status = activeTableStatus.get(t.label.trim()) || 'available';
-            return {
-                ...t,
-                section: t.section || "Main Hall", 
-                status: status
-            };
-        }) || [];
-
-        const sections = Array.from(new Set(processedTables.map(t => t.section))).filter(Boolean);
-        const finalSections = sections.length > 0 ? sections : ["Main Hall"];
-
-        const finalCancelledItems = Array.from(cancelledItemsMap.values());
-
+    const processedTables = tables?.map(t => {
+        const status = activeTableStatus.get(t.label.trim()) || 'available';
         return {
-            success: true,
-            stats: { mySales, tablesServed },
-            dockStatus: { hasReady, hasCooking },
-            sections: finalSections,
-            tables: processedTables,
-            notifications: notifications,
-            disabledItems: disabledItems,
-            cancelledItems: finalCancelledItems,
-            orders_list: activeOrders 
+            ...t,
+            section: t.section || "Main Hall", 
+            status: status
         };
+    }) || [];
 
-      } catch (error) {
-          console.error("Waiter Dashboard Error:", error);
-          return { 
-              success: false, 
-              stats: { mySales: 0, tablesServed: 0 }, 
-              dockStatus: { hasReady: false, hasCooking: false },
-              sections: ["Main Hall"], 
-              tables: [], 
-              notifications: [], 
-              disabledItems: [],
-              cancelledItems: [],
-              orders_list: []
-          };
-      }
-    },
-    [`waiter-dashboard-${tenantId}-v2`],
-    { tags: [`orders-${tenantId}`, `tables-${tenantId}`, `menu-${tenantId}`], revalidate: 3600 }
-  );
+    const sections = Array.from(new Set(processedTables.map(t => t.section))).filter(Boolean);
+    const finalSections = sections.length > 0 ? sections : ["Main Hall"];
 
-  const cachedData = await getCachedWaiterData();
-  
-  // Inject the dynamic staff context into the cached payload
-  return { 
-      ...cachedData, 
-      staff: { name: currentStaffName } 
-  };
+    const finalCancelledItems = Array.from(cancelledItemsMap.values());
+
+    return {
+        success: true,
+        stats: { mySales, tablesServed },
+        dockStatus: { hasReady, hasCooking },
+        sections: finalSections,
+        tables: processedTables,
+        notifications: notifications,
+        disabledItems: disabledItems,
+        cancelledItems: finalCancelledItems,
+        orders_list: activeOrders,
+        staff: { name: currentStaffName } 
+    };
+
+  } catch (error) {
+      console.error("Waiter Dashboard Error:", error);
+      return { 
+          success: false, 
+          stats: { mySales: 0, tablesServed: 0 }, 
+          dockStatus: { hasReady: false, hasCooking: false },
+          sections: ["Main Hall"], 
+          tables: [], 
+          notifications: [], 
+          disabledItems: [],
+          cancelledItems: [],
+          orders_list: [],
+          staff: { name: currentStaffName } 
+      };
+  }
 }
 
 // --- 2. CLEAN TABLE ---
@@ -575,7 +563,7 @@ export async function getWaiterBell() {
                         table: tableName,
                         itemsCount: validItems.length,
                         items: validItems.map((i:any) => i.name),
-                        time: new Date().toLocaleTimeString()
+                        time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' })
                     });
                 }
             });

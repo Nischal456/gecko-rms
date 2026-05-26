@@ -308,10 +308,14 @@ export default function KitchenMenuPage() {
   }
 
   async function handleDeleteItem(itemId: string) {
-      if(!window.confirm("Delete dish?")) return;
-      await deleteKitchenItem(activeTabId, itemId); 
-      loadData();
-      toast.success("Deleted");
+      if(!confirm("Delete dish?")) return;
+      const res = await deleteKitchenItem(activeTabId, itemId); 
+      if (res.success) {
+          await loadData();
+          toast.success("Deleted");
+      } else {
+          toast.error("Failed to delete dish: " + (res.error || "Unknown error"));
+      }
   }
 
   async function handleQuickToggle(item: MenuItem) {

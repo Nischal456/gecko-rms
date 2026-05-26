@@ -133,40 +133,32 @@ export async function getPOSStats() {
 export async function getPOSMenu() {
   const tenantId = await getTenantId();
   
-  const getCachedPOSMenu = unstable_cache(
-    async () => {
-      let { data: menuData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", tenantId).order("sort_order", { ascending: true });
+  let { data: menuData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", tenantId).order("sort_order", { ascending: true });
 
-      if (!menuData || menuData.length === 0) {
-          const { data: fallbackData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", 0).order("sort_order", { ascending: true });
-          if (fallbackData) menuData = fallbackData;
-      }
+  if (!menuData || menuData.length === 0) {
+      const { data: fallbackData } = await supabaseAdmin.from("menu_optimized").select("*").eq("tenant_id", 0).order("sort_order", { ascending: true });
+      if (fallbackData) menuData = fallbackData;
+  }
 
-      let allItems: any[] = [];
-      let categories: any[] = [];
+  let allItems: any[] = [];
+  let categories: any[] = [];
 
-      if (menuData && menuData.length > 0) {
-          categories = menuData.map(cat => ({ id: cat.id, name: cat.category_name }));
-          menuData.forEach(cat => {
-              if (Array.isArray(cat.items)) {
-                  allItems = [...allItems, ...cat.items.map((item: any) => ({
-                      ...item,
-                      category: cat.category_name,
-                      price: Number(item.price) || 0,
-                      is_available: item.is_available !== false,
-                      description: item.description || "",
-                      variants: item.variants || []
-                  }))];
-              }
-          });
-      }
-      return { categories, items: allItems.filter(i => i.is_available) };
-    },
-    [`pos-menu-${tenantId}-v2`],
-    { tags: [`menu-${tenantId}`], revalidate: 3600 }
-  );
-
-  return getCachedPOSMenu();
+  if (menuData && menuData.length > 0) {
+      categories = menuData.map(cat => ({ id: cat.id, name: cat.category_name }));
+      menuData.forEach(cat => {
+          if (Array.isArray(cat.items)) {
+              allItems = [...allItems, ...cat.items.map((item: any) => ({
+                  ...item,
+                  category: cat.category_name,
+                  price: Number(item.price) || 0,
+                  is_available: item.is_available !== false,
+                  description: item.description || "",
+                  variants: item.variants || []
+              }))];
+          }
+      });
+  }
+  return { categories, items: allItems.filter(i => i.is_available) };
 }
 
 // --- 3. GET POS DATA ---
@@ -226,6 +218,18 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         });
     }
 
+    // Validate each cart item against the live menu
+    for (const item of cartItems) {
+        const baseName = item.name.split(" (")[0]; 
+        const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
+        if (!dbItem) {
+            return { success: false, msg: `"${item.name}" has been deleted from the menu.` };
+        }
+        if (dbItem.is_available === false) {
+            return { success: false, msg: `"${item.name}" is sold out.` };
+        }
+    }
+
     const compactItems = cartItems.map((i: any) => {
         const dbItem = liveMenu.get(i.name) || {};
         return {
@@ -237,7 +241,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
             variant: i.variantName || i.variant || "",
             note: i.note || i.notes || "",
             status: "pending",
-            time_added: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
             // Pass these through securely so the Server Actions (Kitchen/Bar) know where to route them!
             station: dbItem.station || i.station || i.prep_station || "kitchen",
             category: dbItem.category_name || dbItem.category || i.category || "",
@@ -296,7 +300,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
                 items: compactItems,
                 total: total,
                 status: 'pending',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
                 staff: staffName,
                 type,
                 timestamp: new Date().toISOString()
@@ -366,6 +370,20 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
             });
         }
 
+        // Validate updated items (only for newly added/pending items)
+        for (const item of updatedItems) {
+            if (['pending'].includes((item.status || '').toLowerCase().trim())) {
+                const baseName = item.name.split(" (")[0];
+                const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
+                if (!dbItem) {
+                    return { success: false, msg: `"${item.name}" has been deleted from the menu.` };
+                }
+                if (dbItem.is_available === false) {
+                    return { success: false, msg: `"${item.name}" is sold out.` };
+                }
+            }
+        }
+
         let foundDate = null;
         let modifiedOrders = null;
 
@@ -385,7 +403,7 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
                             ...item,
                             unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
                             status: item.status || 'pending',
-                            time_added: item.time_added || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            time_added: item.time_added || new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
                             station: dbItem.station || item.station || item.prep_station || "kitchen",
                             category: dbItem.category_name || dbItem.category || item.category || "",
                             dietary: dbItem.dietary || item.dietary || ""
