@@ -119,7 +119,15 @@ export async function getCashierData(isPolling: boolean = false) {
 
         if (log.date === today) {
             paidHistory.forEach((bill: any) => {
-                if (bill.payment_method === 'Credit') {
+                if (bill.splits && Array.isArray(bill.splits) && bill.splits.length > 0) {
+                    let collected = 0;
+                    bill.splits.forEach((s: any) => {
+                        if (s.method !== 'Credit') {
+                            collected += Number(s.amount || 0);
+                        }
+                    });
+                    totalRevenue += collected;
+                } else if (bill.payment_method === 'Credit') {
                     totalRevenue += Number(bill.tendered || 0);
                 } else {
                     totalRevenue += Number(bill.grandTotal || 0);
@@ -851,12 +859,11 @@ export async function getCashierReports(days: number) {
                     if(summary.byStaff[staff]) summary.byStaff[staff] += actualRevenue; else summary.byStaff[staff] = actualRevenue;
 
                     const method = bill.payment_method || "Cash"; // Needed below for credit tracking
+                    const amountOwedOnThisBill = bill.credit_due !== undefined ? Number(bill.credit_due) : (method === 'Credit' ? Math.max(0, amt - tendered) : 0);
 
-                    if (method === 'Credit') {
+                    if (method === 'Credit' || amountOwedOnThisBill > 0) {
                         const rawName = (bill.customer_name || "Unknown Customer").trim();
                         const cName = rawName.toUpperCase(); 
-                        
-                        const amountOwedOnThisBill = bill.credit_due !== undefined ? Number(bill.credit_due) : Math.max(0, amt - tendered);
                         
                         if (!summary.creditAccounts[cName]) {
                             summary.creditAccounts[cName] = { displayName: rawName, total: 0, bills: [], phone: bill.customer_address || "" };
@@ -900,13 +907,12 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
                 if (remainingPayment <= 0) return bill;
                 
                 const method = bill.payment_method || "";
+                const grandTotal = Number(bill.grandTotal) || 0;
+                const previouslyTendered = Number(bill.tendered) || 0;
+                const currentDue = bill.credit_due !== undefined ? Number(bill.credit_due) : (method === 'Credit' ? Math.max(0, grandTotal - previouslyTendered) : 0);
                 const cName = (bill.customer_name || "").trim().toUpperCase();
                 
-                if (method === 'Credit' && cName === targetName) {
-                    const grandTotal = Number(bill.grandTotal) || 0;
-                    const previouslyTendered = Number(bill.tendered) || 0;
-                    const currentDue = bill.credit_due !== undefined ? Number(bill.credit_due) : Math.max(0, grandTotal - previouslyTendered);
-                    
+                if ((method === 'Credit' || currentDue > 0) && cName === targetName) {
                     if (currentDue > 0) {
                         const deductAmt = Math.min(currentDue, remainingPayment);
                         remainingPayment -= deductAmt;

@@ -221,14 +221,12 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
     
     // FETCH CREDIT LEDGER FOR AUTOCOMPLETE
     useEffect(() => {
-        if (method === 'Credit') {
-            getCashierReports(60).then(res => {
-                if (res.success && res.summary?.creditAccounts) {
-                    setCreditCustomers(Object.values(res.summary.creditAccounts).map((c:any) => c.displayName));
-                }
-            });
-        }
-    }, [method]);
+        getCashierReports(60).then(res => {
+            if (res.success && res.summary?.creditAccounts) {
+                setCreditCustomers(Object.values(res.summary.creditAccounts).map((c:any) => c.displayName));
+            }
+        });
+    }, []);
 
     if(!order) return null;
     
@@ -274,6 +272,8 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
         if (method === "Credit") creditDue = Math.max(0, grandTotal - tenderedAmt);
         else changeDue = tenderedAmt > grandTotal ? tenderedAmt - grandTotal : 0;
     } else {
+        const creditSplitSum = splits.filter(s => s.method === "Credit").reduce((sum, s) => sum + s.amount, 0);
+        creditDue = creditSplitSum;
         changeDue = totalPaidSplits > grandTotal ? totalPaidSplits - grandTotal : 0;
     }
 
