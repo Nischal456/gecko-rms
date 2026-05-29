@@ -209,7 +209,7 @@ function KitchenDock({ onRefresh }: any) {
     };
 
     return (
-        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
+        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none hidden md:block">
             <motion.div 
                 initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10 transform-gpu"
@@ -275,7 +275,7 @@ export default function KitchenPage() {
   useEffect(() => {
     if (!systemReady) return;
     loadData();
-    const interval = setInterval(loadData, 2500); 
+    const interval = setInterval(loadData, 1000); 
     return () => clearInterval(interval);
   }, [systemReady]);
 

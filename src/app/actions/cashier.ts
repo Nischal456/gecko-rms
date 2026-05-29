@@ -527,12 +527,12 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
                             const sig = String(i.unique_id || i.id || `${i.name}||${i.variant || ''}`).trim();
                             const isItemMatch = stringIdentifiers.includes(sig);
 
-                            if (isItemMatch && safeStatus === 'ready') {
+                            if (isItemMatch && ['pending', 'cooking', 'preparing', 'ready'].includes(safeStatus)) {
                                 itemsToDeductFromInventory.push(i);
                                 return { ...i, status: 'served' };
                             }
                         } 
-                        else if (safeStatus === 'ready') {
+                        else if (['pending', 'cooking', 'preparing', 'ready'].includes(safeStatus)) {
                             itemsToDeductFromInventory.push(i);
                             return { ...i, status: 'served' };
                         }
@@ -616,6 +616,7 @@ export async function serveOrder(orderId: string | number, tableLabel?: string, 
 
         revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidateTag(`tables-${tenantId}`, undefined as any);
+        revalidateTag(`inventory-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true };
 
@@ -778,6 +779,7 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     
     revalidateTag(`orders-${tenantId}`, undefined as any);
     revalidateTag(`tables-${tenantId}`, undefined as any);
+    revalidateTag(`inventory-${tenantId}`, undefined as any);
     revalidatePath("/staff/cashier");
     revalidatePath("/admin/inventory");
     return { success: true };
@@ -804,61 +806,130 @@ export async function getCashierReports(days: number) {
         if (!logs) return { success: true, bills: [], summary: {}, chartData: [] };
 
         const allBills: any[] = [];
-        const summary: any = { total: 0, count: 0, byMethod: {}, byStaff: {}, creditAccounts: {} };
-        const chartData: any[] = [];
+        const summary: any = { 
+            total: 0, 
+            count: 0, 
+            byMethod: {}, 
+            byStaff: {}, 
+            creditAccounts: {},
+            creditReceived: 0,
+            creditReceivedByMethod: {}
+        };
+        const dailyTotalsMap: { [dateStr: string]: number } = {};
 
         logs.forEach((log: any) => {
+            if (!dailyTotalsMap[log.date]) dailyTotalsMap[log.date] = 0;
+            
             const history = safeParse(log.paid_history);
-            let dailyTotal = 0;
             history.forEach((bill: any) => {
                 if(bill && bill.grandTotal !== undefined) {
                     allBills.push(bill);
                     const amt = Number(bill.grandTotal);
                     const tendered = Number(bill.tendered) || 0;
+                    const method = bill.payment_method || "Cash";
                     
                     // --- MULTI-PAYMENT ENGINE SUPPORT ---
-                    let actualRevenue = 0;
+                    let upfrontRevenue = 0;
                     
-                    if (bill.splits && Array.isArray(bill.splits) && bill.splits.length > 0) {
-                        // If it's a split payment, we sum the exact fractions
-                        bill.splits.forEach((split: any) => {
-                            const splitAmt = Number(split.amount) || 0;
-                            const splitMethod = split.method || "Cash";
-                            
-                            // For credit within a split, the amount received is technically 0 upfront, but 'amount' represents the split fraction.
-                            // However, actual revenue collected today for the 'Credit' part is 0. 
-                            const collectedSplit = splitMethod === 'Credit' ? 0 : splitAmt;
-                            
-                            actualRevenue += collectedSplit;
-                            
-                            if (summary.byMethod[splitMethod]) summary.byMethod[splitMethod] += collectedSplit; 
-                            else summary.byMethod[splitMethod] = collectedSplit;
-                        });
+                    let safeSplits = bill.splits;
+                    if (typeof safeSplits === 'string') {
+                        try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+                    }
+                    
+                    if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                        const creditAmt = bill.credit_due !== undefined ? Number(bill.credit_due) : 0;
+                        const paidAmt = Math.max(0, amt - creditAmt);
                         
-                        // Also track advance received for Credit explicitly if provided in splits
-                        const creditSplit = bill.splits.find((s:any) => s.method === 'Credit');
-                        if (creditSplit) {
-                           // If there's an advance on the credit account specifically, we'll factor the tendered.
-                           // Actually, split validation ensures exact sum matches.
+                        const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
+                        const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                        
+                        if (creditAmt > 0) {
+                            summary.byMethod['Credit'] = (summary.byMethod['Credit'] || 0) + creditAmt;
                         }
-
-                    } else {
-                        // Legacy single-payment handling
-                        const method = bill.payment_method || "Cash";
-                        actualRevenue = method === 'Credit' ? tendered : amt;
                         
-                        if(summary.byMethod[method]) summary.byMethod[method] += actualRevenue; 
-                        else summary.byMethod[method] = actualRevenue;
+                        if (nonCreditSplits.length > 0) {
+                            nonCreditSplits.forEach((s: any) => {
+                                const sAmt = Number(s.amount) || 0;
+                                const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
+                                const allocated = paidAmt * share;
+                                summary.byMethod[s.method] = (summary.byMethod[s.method] || 0) + allocated;
+                            });
+                        } else if (paidAmt > 0) {
+                            summary.byMethod['Cash'] = (summary.byMethod['Cash'] || 0) + paidAmt;
+                        }
+                        
+                        // upfrontRevenue is only the non-credit upfront portion
+                        let upfrontSplitsAmt = 0;
+                        safeSplits.forEach((s: any) => {
+                            if (s.method !== 'Credit') {
+                                upfrontSplitsAmt += (Number(s.amount) || 0);
+                            }
+                        });
+                        if (bill.credit_payments && Array.isArray(bill.credit_payments)) {
+                            const totalPaidLater = bill.credit_payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+                            upfrontRevenue = Math.max(0, upfrontSplitsAmt - totalPaidLater);
+                        } else {
+                            upfrontRevenue = upfrontSplitsAmt;
+                        }
+                    } else if (method === 'Credit') {
+                        const creditAmt = bill.credit_due !== undefined ? Number(bill.credit_due) : 0;
+                        const paidAmt = Math.max(0, amt - creditAmt);
+                        
+                        if (creditAmt > 0) {
+                            summary.byMethod['Credit'] = (summary.byMethod['Credit'] || 0) + creditAmt;
+                        }
+                        if (paidAmt > 0) {
+                            summary.byMethod['Cash'] = (summary.byMethod['Cash'] || 0) + paidAmt;
+                        }
+                        
+                        let upfrontTendered = tendered;
+                        if (bill.credit_payments && Array.isArray(bill.credit_payments)) {
+                            const totalPaidLater = bill.credit_payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+                            upfrontTendered = Math.max(0, tendered - totalPaidLater);
+                        }
+                        upfrontRevenue = upfrontTendered;
+                    } else {
+                        if(summary.byMethod[method]) summary.byMethod[method] += upfrontRevenue; 
+                        else summary.byMethod[method] = upfrontRevenue;
                     }
 
-                    dailyTotal += actualRevenue;
-                    summary.total += actualRevenue;
+                    dailyTotalsMap[log.date] += upfrontRevenue;
+                    summary.total += upfrontRevenue;
                     summary.count++;
                     
                     const staff = bill.served_by || "Cashier";
-                    if(summary.byStaff[staff]) summary.byStaff[staff] += actualRevenue; else summary.byStaff[staff] = actualRevenue;
+                    if(summary.byStaff[staff]) summary.byStaff[staff] += upfrontRevenue; else summary.byStaff[staff] = upfrontRevenue;
 
-                    const method = bill.payment_method || "Cash"; // Needed below for credit tracking
+                    // --- AUDIT CREDIT PAYMENTS (KHATA COLLECTION TODAY) ---
+                    if (bill.credit_payments && Array.isArray(bill.credit_payments)) {
+                        bill.credit_payments.forEach((p: any) => {
+                            const pAmt = Number(p.amount) || 0;
+                            const pMethod = p.method || "Cash";
+                            const pDateStr = p.date.split('T')[0];
+
+                            // Track in the summary
+                            summary.creditReceived += pAmt;
+                            summary.creditReceivedByMethod[pMethod] = (summary.creditReceivedByMethod[pMethod] || 0) + pAmt;
+                            
+                            summary.total += pAmt;
+                            
+                            // ONLY add to summary.byMethod and summary.byStaff if the bill date is outside the fetched range
+                            const billBS = bill.date.split('T')[0];
+                            if (billBS < startStr) {
+                                if (summary.byMethod[pMethod]) summary.byMethod[pMethod] += pAmt;
+                                else summary.byMethod[pMethod] = pAmt;
+
+                                if (summary.byStaff[staff]) summary.byStaff[staff] += pAmt;
+                                else summary.byStaff[staff] = pAmt;
+                            }
+
+                            // Add to payment date's daily total
+                            if (!dailyTotalsMap[pDateStr]) dailyTotalsMap[pDateStr] = 0;
+                            dailyTotalsMap[pDateStr] += pAmt;
+                        });
+                    }
+
+                    // method is already defined at the top of the loop
                     const amountOwedOnThisBill = bill.credit_due !== undefined ? Number(bill.credit_due) : (method === 'Credit' ? Math.max(0, amt - tendered) : 0);
 
                     if (method === 'Credit' || amountOwedOnThisBill > 0) {
@@ -874,14 +945,18 @@ export async function getCashierReports(days: number) {
                     }
                 }
             });
-            chartData.push({ label: log.date, value: dailyTotal });
         });
+
+        // Convert the dailyTotalsMap into chartData
+        const chartData = Object.entries(dailyTotalsMap)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, value]) => ({ label: date, value }));
+
         return { success: true, bills: allBills.reverse(), summary, chartData };
     } catch (e) { return { success: false }; }
 }
 
-// --- 8. PROCESS CREDIT / KHATA PAYMENTS ---
-export async function processCreditPayment(customerName: string, amountToPay: number) {
+export async function processCreditPayment(customerName: string, amountToPay: number, paymentMethod: string = "Cash") {
     const tenantId = await getTenantId();
     let remainingPayment = Number(amountToPay);
     
@@ -919,7 +994,64 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
                         logModified = true;
                         totalUpdated += deductAmt;
 
-                        return { ...bill, tendered: previouslyTendered + deductAmt, credit_due: currentDue - deductAmt };
+                        // Parse existing splits or create them
+                        let splits = bill.splits;
+                        if (typeof splits === 'string') {
+                            try { splits = JSON.parse(splits); } catch(e) { splits = []; }
+                        }
+                        if (!splits || !Array.isArray(splits)) {
+                            splits = [];
+                        }
+
+                        if (splits.length === 0) {
+                            if (previouslyTendered > 0) {
+                                splits.push({ method: 'Cash', amount: previouslyTendered });
+                            }
+                            splits.push({ method: 'Credit', amount: currentDue });
+                        }
+
+                        // Deduct from the 'Credit' split
+                        let creditSplit = splits.find((s: any) => s.method === 'Credit');
+                        if (!creditSplit) {
+                            creditSplit = { method: 'Credit', amount: currentDue };
+                            splits.push(creditSplit);
+                        }
+                        creditSplit.amount = Math.max(0, Number(creditSplit.amount) - deductAmt);
+
+                        // Keep splits clean by filtering out 0 Credit
+                        if (creditSplit.amount <= 0) {
+                            splits = splits.filter((s: any) => s.method !== 'Credit');
+                        }
+
+                        // Add or merge paymentMethod split
+                        let paySplit = splits.find((s: any) => s.method === paymentMethod);
+                        if (paySplit) {
+                            paySplit.amount = Number(paySplit.amount) + deductAmt;
+                        } else {
+                            splits.push({ method: paymentMethod, amount: deductAmt });
+                        }
+
+                        // Log audit list of credit payments
+                        let creditPayments = bill.credit_payments;
+                        if (typeof creditPayments === 'string') {
+                            try { creditPayments = JSON.parse(creditPayments); } catch(e) { creditPayments = []; }
+                        }
+                        if (!creditPayments || !Array.isArray(creditPayments)) {
+                            creditPayments = [];
+                        }
+                        creditPayments.push({
+                            date: new Date().toISOString(),
+                            amount: deductAmt,
+                            method: paymentMethod
+                        });
+
+                        return { 
+                            ...bill, 
+                            tendered: previouslyTendered + deductAmt, 
+                            credit_due: currentDue - deductAmt,
+                            splits: splits,
+                            credit_payments: creditPayments
+                        };
                     }
                 }
                 return bill;
@@ -942,6 +1074,126 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
         revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true, amountCleared: totalUpdated };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function processCreditBillPayment(invoiceNo: string, amountToPay: number, paymentMethod: string = "Cash") {
+    const tenantId = await getTenantId();
+    const targetAmt = Number(amountToPay);
+    
+    const startDate = new Date(); startDate.setDate(startDate.getDate() - 60);
+    const startStr = startDate.toISOString().split('T')[0];
+
+    try {
+        const { data: logs, error: fetchErr } = await supabaseAdmin.from("daily_order_logs")
+            .select("date, paid_history").eq("tenant_id", tenantId).gte("date", startStr).order("date", { ascending: true });
+
+        if (fetchErr || !logs) return { success: false, error: fetchErr?.message || "No records found" };
+
+        let logModified = false;
+        let targetLogDate = "";
+        let targetNewHistory: any[] = [];
+        
+        for (const log of logs) {
+            const history = safeParse(log.paid_history);
+            let billFound = false;
+
+            const newHistory = history.map((bill: any) => {
+                const invNo = bill.invoice_no || bill.bill_no || "";
+                if (invNo === invoiceNo) {
+                    billFound = true;
+                    const method = bill.payment_method || "";
+                    const grandTotal = Number(bill.grandTotal) || 0;
+                    const previouslyTendered = Number(bill.tendered) || 0;
+                    const currentDue = bill.credit_due !== undefined ? Number(bill.credit_due) : (method === 'Credit' ? Math.max(0, grandTotal - previouslyTendered) : 0);
+                    
+                    const deductAmt = Math.min(currentDue, targetAmt);
+
+                    // Parse existing splits or create them
+                    let splits = bill.splits;
+                    if (typeof splits === 'string') {
+                        try { splits = JSON.parse(splits); } catch(e) { splits = []; }
+                    }
+                    if (!splits || !Array.isArray(splits)) {
+                        splits = [];
+                    }
+
+                    if (splits.length === 0) {
+                        if (previouslyTendered > 0) {
+                            splits.push({ method: 'Cash', amount: previouslyTendered });
+                        }
+                        splits.push({ method: 'Credit', amount: currentDue });
+                    }
+
+                    // Deduct from the 'Credit' split
+                    let creditSplit = splits.find((s: any) => s.method === 'Credit');
+                    if (!creditSplit) {
+                        creditSplit = { method: 'Credit', amount: currentDue };
+                        splits.push(creditSplit);
+                    }
+                    creditSplit.amount = Math.max(0, Number(creditSplit.amount) - deductAmt);
+
+                    if (creditSplit.amount <= 0) {
+                        splits = splits.filter((s: any) => s.method !== 'Credit');
+                    }
+
+                    // Add or merge paymentMethod split
+                    let paySplit = splits.find((s: any) => s.method === paymentMethod);
+                    if (paySplit) {
+                        paySplit.amount = Number(paySplit.amount) + deductAmt;
+                    } else {
+                        splits.push({ method: paymentMethod, amount: deductAmt });
+                    }
+
+                    // Log audit list of credit payments
+                    let creditPayments = bill.credit_payments;
+                    if (typeof creditPayments === 'string') {
+                        try { creditPayments = JSON.parse(creditPayments); } catch(e) { creditPayments = []; }
+                    }
+                    if (!creditPayments || !Array.isArray(creditPayments)) {
+                        creditPayments = [];
+                    }
+                    creditPayments.push({
+                        date: new Date().toISOString(),
+                        amount: deductAmt,
+                        method: paymentMethod
+                    });
+
+                    return { 
+                        ...bill, 
+                        tendered: previouslyTendered + deductAmt, 
+                        credit_due: currentDue - deductAmt,
+                        splits: splits,
+                        credit_payments: creditPayments
+                    };
+                }
+                return bill;
+            });
+
+            if (billFound) {
+                logModified = true;
+                targetLogDate = log.date;
+                targetNewHistory = newHistory;
+                break;
+            }
+        }
+
+        if (logModified) {
+            const { error: updateErr } = await supabaseAdmin.from("daily_order_logs")
+                .update({ paid_history: targetNewHistory })
+                .eq("tenant_id", tenantId)
+                .eq("date", targetLogDate); 
+                
+            if (updateErr) throw new Error(updateErr.message);
+        } else {
+            return { success: false, error: "Invoice not found or already fully cleared." };
+        }
+
+        revalidateTag(`orders-${tenantId}`, undefined as any);
+        revalidatePath("/staff/cashier");
+        return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message };
     }

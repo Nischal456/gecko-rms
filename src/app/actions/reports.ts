@@ -168,21 +168,47 @@ export async function getReportData(range: ReportRange) {
               }
               
               if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                  const creditAmt = currentDue;
+                  const paidAmt = Math.max(0, grandTotal - creditAmt);
+                  
+                  const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
+                  const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                  
+                  if (creditAmt > 0) {
+                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
+                  }
+                  
+                  if (nonCreditSplits.length > 0) {
+                      nonCreditSplits.forEach((s: any) => {
+                          const sAmt = Number(s.amount) || 0;
+                          const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
+                          const allocated = paidAmt * share;
+                          paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
+                      });
+                  } else if (paidAmt > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
+                  }
+                  
                   let totalSplitTendered = 0;
                   safeSplits.forEach((s: any) => {
-                      const splitAmt = Number(s.amount) || 0;
-                      const splitMethod = s.method || 'Cash';
-                      paymentMethods[splitMethod] = (paymentMethods[splitMethod] || 0) + splitAmt;
-                      totalSplitTendered += splitAmt;
+                      if (s.method !== 'Credit') {
+                          totalSplitTendered += (Number(s.amount) || 0);
+                      }
                   });
-                  // EXTREME ACCURACY FIX: Subtract the returning change from Cash!
-                  const originalTendered = Number(order.tendered) || 0;
-                  const changeToReturn = Math.max(0, originalTendered - grandTotal);
+                  const changeToReturn = totalSplitTendered - actualRevenue;
                   if (changeToReturn > 0) {
                       paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
                   }
+              } else if (finalMethod === 'Credit') {
+                  const creditAmt = currentDue;
+                  const paidAmt = Math.max(0, grandTotal - creditAmt);
+                  if (creditAmt > 0) {
+                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
+                  }
+                  if (paidAmt > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
+                  }
               } else {
-                  // FIX: Now uses Grand Total so Credit shows generated volume!
                   paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + grandTotal;
               }
               const staff = order.served_by || order.staff || "Cashier"; 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { getCashierReports } from "@/app/actions/cashier"; 
-import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ShieldCheck, X, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ShieldCheck, X, ArrowRight, AlertTriangle, BookOpen } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,6 +47,76 @@ export function getDisplayMethod(tx: any) {
         }).filter(Boolean).join(' + ') || 'Cash';
     }
     return tx.payment_method || tx.method || "Cash";
+}
+
+export function getDetailedPaymentBreakdown(b: any) {
+    let parsedSplits = b.splits;
+    if (typeof parsedSplits === 'string') {
+        try { parsedSplits = JSON.parse(parsedSplits); } catch(e) { parsedSplits = []; }
+    }
+
+    if (parsedSplits && Array.isArray(parsedSplits) && parsedSplits.length > 0) {
+        let totalSplitTendered = 0;
+        parsedSplits.forEach((s: any) => totalSplitTendered += (Number(s.amount) || 0));
+        let change = totalSplitTendered - Number(b.amount || b.grandTotal || 0);
+        if (change < 0) change = 0;
+
+        return (
+            <div className="flex flex-col gap-1 items-end text-xs font-bold text-slate-700 w-full">
+                {parsedSplits.map((s: any, idx: number) => {
+                    let amt = Number(s.amount) || 0;
+                    if ((s.method === 'Cash' || s.method.toLowerCase() === 'cash') && change > 0) {
+                        if (change >= amt) { change -= amt; amt = 0; }
+                        else { amt -= change; change = 0; }
+                    }
+                    if (s.method === 'Credit') {
+                        const due = b.credit_due !== undefined ? Number(b.credit_due) : amt;
+                        return (
+                            <div key={idx} className="flex gap-4 justify-between w-full text-red-600">
+                                <span className="text-red-400 uppercase text-[9px] tracking-wider font-black whitespace-nowrap">Credit (Due)</span>
+                                <span className="font-mono">Rs {due.toLocaleString()}</span>
+                            </div>
+                        );
+                    }
+                    return amt > 0 ? (
+                        <div key={idx} className="flex gap-4 justify-between w-full">
+                            <span className="text-slate-400 uppercase text-[9px] tracking-wider font-black whitespace-nowrap">{s.method}</span>
+                            <span className="font-mono text-slate-700">Rs {amt.toLocaleString()}</span>
+                        </div>
+                    ) : null;
+                })}
+            </div>
+        );
+    }
+
+    const method = b.payment_method || "Cash";
+    const grandTotal = Number(b.grandTotal) || 0;
+    const tendered = Number(b.tendered) || 0;
+    const due = b.credit_due !== undefined ? Number(b.credit_due) : Math.max(0, grandTotal - tendered);
+
+    if (method === 'Credit') {
+        return (
+            <div className="flex flex-col gap-1 items-end text-xs font-bold text-slate-700 w-full">
+                {tendered > 0 && (
+                    <div className="flex gap-4 justify-between w-full">
+                        <span className="text-slate-400 uppercase text-[9px] tracking-wider font-black whitespace-nowrap">Cash Paid</span>
+                        <span className="font-mono text-slate-700">Rs {tendered.toLocaleString()}</span>
+                    </div>
+                )}
+                <div className="flex gap-4 justify-between w-full text-red-600">
+                    <span className="text-red-400 uppercase text-[9px] tracking-wider font-black whitespace-nowrap">Credit (Due)</span>
+                    <span className="font-mono">Rs {due.toLocaleString()}</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex gap-4 justify-between w-full text-xs font-bold text-slate-700">
+            <span className="text-slate-400 uppercase text-[9px] tracking-wider font-black whitespace-nowrap">{method}</span>
+            <span className="font-mono text-slate-700">Rs {grandTotal.toLocaleString()}</span>
+        </div>
+    );
 }
 
 function exportToCSV(bills: any[], startDate: string, endDate: string) {
@@ -161,12 +231,26 @@ export default function ReportsView({ data }: any) {
             const billBS = toBS(b.date);
             const isAfterStart = startDate ? billBS >= startDate : true;
             const isBeforeEnd = endDate ? billBS <= endDate : true;
+            let dateMatches = isAfterStart && isBeforeEnd;
+
+            // Also check if any credit payment fell inside the range
+            let hasPaymentInRange = false;
+            if (b.credit_payments && Array.isArray(b.credit_payments)) {
+                b.credit_payments.forEach((p: any) => {
+                    const pBS = toBS(p.date);
+                    const pAfterStart = startDate ? pBS >= startDate : true;
+                    const pBeforeEnd = endDate ? pBS <= endDate : true;
+                    if (pAfterStart && pBeforeEnd) {
+                        hasPaymentInRange = true;
+                    }
+                });
+            }
 
             // 3. Exact Payment Filter
             const pMethod = getDisplayMethod(b).toLowerCase();
             const matchesFilter = paymentFilter === "All" || pMethod.includes(paymentFilter.toLowerCase());
 
-            return matchesSearch && isAfterStart && isBeforeEnd && matchesFilter;
+            return matchesSearch && (dateMatches || hasPaymentInRange) && matchesFilter;
         }) || [];
     }, [report, searchTerm, startDate, endDate, paymentFilter]);
 
@@ -178,48 +262,134 @@ export default function ReportsView({ data }: any) {
         let totalDiscounts = 0;
         let discountCount = 0;
         
+        let creditReceived = 0;
+        const creditReceivedByMethod: any = {};
+        let totalCreditOutstanding = 0;
+
         filteredBills.forEach((b: any) => {
+            const billBS = toBS(b.date);
+            const billDateInRange = (!startDate || billBS >= startDate) && (!endDate || billBS <= endDate);
+            
             const method = b.payment_method || "Cash";
             const staff = b.served_by || "Cashier";
             const grandTotal = Number(b.grandTotal) || 0; 
-            const actualRevenue = method === 'Credit' ? (Number(b.tendered) || 0) : grandTotal;
-            
-            total += actualRevenue; count++;
-
+            const tendered = Number(b.tendered) || 0;
             const discount = Number(b.discount) || 0;
-            if (discount > 0) {
-                totalDiscounts += discount;
-                discountCount++;
+
+            // 1. Upfront Sales Portion (only if the bill itself was created in this date range)
+            if (billDateInRange) {
+                let upfrontTendered = tendered;
+                if (b.credit_payments && Array.isArray(b.credit_payments)) {
+                    const totalPaidLater = b.credit_payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+                    upfrontTendered = Math.max(0, tendered - totalPaidLater);
+                }
+                const actualRevenue = method === 'Credit' ? upfrontTendered : grandTotal;
+                
+                total += actualRevenue; 
+                count++;
+
+                if (discount > 0) {
+                    totalDiscounts += discount;
+                    discountCount++;
+                }
+
+                // Upfront Payment Methods Split
+                let safeSplits = b.splits;
+                if (typeof safeSplits === 'string') {
+                    try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+                }
+                
+                if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                    const creditAmt = b.credit_due !== undefined ? Number(b.credit_due) : 0;
+                    const paidAmt = Math.max(0, grandTotal - creditAmt);
+                    
+                    const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
+                    const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                    
+                    if (creditAmt > 0) {
+                        pSplit['Credit'] = (pSplit['Credit'] || 0) + creditAmt;
+                    }
+                    
+                    if (nonCreditSplits.length > 0) {
+                        nonCreditSplits.forEach((s: any) => {
+                            const sAmt = Number(s.amount) || 0;
+                            const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
+                            const allocated = paidAmt * share;
+                            pSplit[s.method] = (pSplit[s.method] || 0) + allocated;
+                        });
+                    } else if (paidAmt > 0) {
+                        pSplit['Cash'] = (pSplit['Cash'] || 0) + paidAmt;
+                    }
+                    
+                    let totalSplitTendered = 0;
+                    safeSplits.forEach((s: any) => {
+                        if (s.method !== 'Credit') {
+                            totalSplitTendered += (Number(s.amount) || 0);
+                        }
+                    });
+                    const changeToReturn = totalSplitTendered - actualRevenue;
+                    if (changeToReturn > 0) pSplit['Cash'] = (pSplit['Cash'] || 0) - changeToReturn;
+                } else if (method === 'Credit') {
+                    const creditAmt = b.credit_due !== undefined ? Number(b.credit_due) : 0;
+                    const paidAmt = Math.max(0, grandTotal - creditAmt);
+                    
+                    if (creditAmt > 0) {
+                        pSplit['Credit'] = (pSplit['Credit'] || 0) + creditAmt;
+                    }
+                    if (paidAmt > 0) {
+                        pSplit['Cash'] = (pSplit['Cash'] || 0) + paidAmt;
+                    }
+                } else {
+                    pSplit[method] = (pSplit[method] || 0) + actualRevenue;
+                }
+
+                sSplit[staff] = (sSplit[staff] || 0) + actualRevenue;
             }
 
-            // PRECISE SPLIT PARSING
-            let safeSplits = b.splits;
-            if (typeof safeSplits === 'string') {
-                try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
-            }
-            
-            if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
-                let totalSplitTendered = 0;
-                safeSplits.forEach((s: any) => {
-                    const splitAmt = Number(s.amount) || 0;
-                    const splitMethod = s.method || 'Cash';
-                    pSplit[splitMethod] = (pSplit[splitMethod] || 0) + splitAmt;
-                    totalSplitTendered += splitAmt;
+            // 2. Credit Payments / Khata Collections Portion (received in this date range)
+            if (b.credit_payments && Array.isArray(b.credit_payments)) {
+                b.credit_payments.forEach((p: any) => {
+                    const pBS = toBS(p.date);
+                    const pDateInRange = (!startDate || pBS >= startDate) && (!endDate || pBS <= endDate);
+                    
+                    if (pDateInRange) {
+                        const pAmt = Number(p.amount) || 0;
+                        const pMethod = p.method || "Cash";
+                        
+                        creditReceived += pAmt;
+                        creditReceivedByMethod[pMethod] = (creditReceivedByMethod[pMethod] || 0) + pAmt;
+                        
+                        // Add to total sales
+                        total += pAmt;
+                        
+                        // ONLY add to pSplit and sSplit if the bill itself is NOT in range!
+                        if (!billDateInRange) {
+                            pSplit[pMethod] = (pSplit[pMethod] || 0) + pAmt;
+                            sSplit[staff] = (sSplit[staff] || 0) + pAmt;
+                        }
+                    }
                 });
-                const changeToReturn = totalSplitTendered - actualRevenue;
-                if (changeToReturn > 0) pSplit['Cash'] = (pSplit['Cash'] || 0) - changeToReturn;
-            } else if (method === 'Credit') {
-                pSplit['Credit'] = (pSplit['Credit'] || 0) + (Number(b.due_amount) || 0);
-                if (Number(b.tendered) > 0) pSplit['Cash'] = (pSplit['Cash'] || 0) + Number(b.tendered);
-            } else {
-                pSplit[method] = (pSplit[method] || 0) + actualRevenue;
             }
 
-            sSplit[staff] = (sSplit[staff] || 0) + actualRevenue;
+            // 3. Keep track of current outstanding balance for the filtered bills
+            const currentDue = b.credit_due !== undefined ? Number(b.credit_due) : (method === 'Credit' ? Math.max(0, grandTotal - tendered) : 0);
+            if (currentDue > 0) {
+                totalCreditOutstanding += currentDue;
+            }
         });
         
-        return { paymentSplit: pSplit, staffSplit: sSplit, total, count, totalDiscounts, discountCount };
-    }, [filteredBills]);
+        return { 
+            paymentSplit: pSplit, 
+            staffSplit: sSplit, 
+            total, 
+            count, 
+            totalDiscounts, 
+            discountCount,
+            creditReceived,
+            creditReceivedByMethod,
+            totalCreditOutstanding
+        };
+    }, [filteredBills, startDate, endDate]);
 
     const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
     const itemVariants: any = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 25 } } };
@@ -323,6 +493,49 @@ export default function ReportsView({ data }: any) {
                                     </div>
                                 ))}
                                 {Object.keys(derivedStats.staffSplit).length === 0 && <span className="text-xs text-slate-400 font-bold block mt-2">No staff activity found.</span>}
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* KHATA LEDGER AUDIT CARDS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                        <motion.div variants={itemVariants} className="bg-gradient-to-br from-blue-600 to-indigo-800 p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-white shadow-2xl shadow-blue-600/20 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
+                            <div className="relative z-10 flex flex-col h-full justify-between">
+                                <div>
+                                    <p className="text-blue-100 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2"><BookOpen className="w-4 h-4"/> Credit Received (Khata Collections)</p>
+                                    <h2 className="text-4xl md:text-5xl font-black tracking-tighter truncate">{formatRs(derivedStats.creditReceived)}</h2>
+                                    
+                                    {/* Breakdown of received methods */}
+                                    <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-bold text-blue-200">
+                                        {Object.entries(derivedStats.creditReceivedByMethod).map(([method, amt]: any) => (
+                                            <span key={method} className="bg-white/10 px-2.5 py-1 rounded-lg border border-white/5 shadow-inner uppercase tracking-wider">
+                                                {method}: {formatRs(amt)}
+                                            </span>
+                                        ))}
+                                        {Object.keys(derivedStats.creditReceivedByMethod).length === 0 && (
+                                            <span className="opacity-60 italic">No collections in this range</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
+                            <div className="relative z-10 flex flex-col h-full justify-between">
+                                <div>
+                                    <p className="text-red-500 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
+                                        Remaining Outstanding Dues
+                                    </p>
+                                    <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-red-600 truncate mt-1">
+                                        {formatRs(derivedStats.totalCreditOutstanding)}
+                                    </h2>
+                                </div>
+                                <p className="mt-4 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                                    Total remaining credit due from active outstanding invoices in this range
+                                </p>
                             </div>
                         </motion.div>
                     </div>
@@ -468,12 +681,11 @@ export default function ReportsView({ data }: any) {
                                     ) : filteredBills.map((b:any, i:number) => {
                                         const displayBill = b.bill_no || b.invoice_no || "---";
                                         const isExpanded = expandedBill === displayBill;
-                                        const isCredit = b.payment_method === 'Credit';
-                                        
                                         const grandTotal = Number(b.grandTotal) || 0;
                                         const tendered = Number(b.tendered) || 0;
                                         const due = b.credit_due !== undefined ? Number(b.credit_due) : Math.max(0, grandTotal - tendered);
                                         const isCleared = due <= 0;
+                                        const isCredit = b.payment_method === 'Credit' || due > 0;
 
                                         return (
                                             <React.Fragment key={i}>
@@ -584,15 +796,11 @@ export default function ReportsView({ data }: any) {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                        {b.tendered > 0 && (
-                                                                            <>
-                                                                                <div className="w-px h-full bg-slate-700" />
-                                                                                <div className="flex flex-col text-right">
-                                                                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Amount Paid</span>
-                                                                                    <span className="font-black text-lg text-emerald-400">{formatRs(b.tendered)}</span>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
+                                                                        <div className="w-px h-full bg-slate-700" />
+                                                                        <div className="flex flex-col items-end text-right min-w-[150px]">
+                                                                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Payment Breakdown</span>
+                                                                            {getDetailedPaymentBreakdown(b)}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </td>
@@ -613,12 +821,12 @@ export default function ReportsView({ data }: any) {
                             ) : filteredBills.map((b:any, i:number) => {
                                 const displayBill = b.bill_no || b.invoice_no || "---";
                                 const isExpanded = expandedBill === displayBill;
-                                const isCredit = b.payment_method === 'Credit';
                                 
                                 const grandTotal = Number(b.grandTotal) || 0;
                                 const tendered = Number(b.tendered) || 0;
                                 const due = b.credit_due !== undefined ? Number(b.credit_due) : Math.max(0, grandTotal - tendered);
                                 const isCleared = due <= 0;
+                                const isCredit = b.payment_method === 'Credit' || due > 0;
 
                                 return (
                                     <div key={i} className="flex flex-col">
@@ -633,7 +841,7 @@ export default function ReportsView({ data }: any) {
                                                 <div className="text-right">
                                                     <span className="font-black text-slate-900 text-base block">{formatRs(grandTotal)}</span>
                                                     <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest mt-1 inline-block border ${isCredit ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                                                        {b.payment_method}
+                                                        {getDisplayMethod(b)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -692,10 +900,12 @@ export default function ReportsView({ data }: any) {
                                                             </div>
                                                         )}
 
-                                                        <div className="border-t border-slate-100 mt-2 pt-2 flex flex-col gap-2">
+                                                        <div className="border-t border-slate-100 mt-2 pt-2 flex flex-col gap-2.5">
                                                             <span className="flex justify-between"><strong className="text-slate-400 uppercase tracking-widest text-[10px]">Grand Total</strong> <span className="font-bold text-slate-900 text-sm">{formatRs(grandTotal)}</span></span>
                                                             {b.discount > 0 && <span className="flex justify-between"><strong className="text-amber-500 uppercase tracking-widest text-[10px]">Discount</strong> <span className="font-black text-amber-500 text-sm">-{formatRs(b.discount)}</span></span>}
-                                                            {b.tendered > 0 && <span className="flex justify-between"><strong className="text-emerald-500 uppercase tracking-widest text-[10px]">Amount Paid</strong> <span className="font-black text-emerald-600 text-sm">{formatRs(b.tendered)}</span></span>}
+                                                            <div className="border-t border-slate-50 my-0.5"></div>
+                                                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block mb-0.5">Payment Breakdown</span>
+                                                            {getDetailedPaymentBreakdown(b)}
                                                         </div>
                                                     </div>
                                                 </motion.div>

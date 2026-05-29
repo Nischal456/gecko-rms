@@ -278,6 +278,7 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         let foundDate = null;
         let modifiedOrders = null;
         let itemsToDeductFromInventory: any[] = []; // Tracks items marked as served
+        const stringIdentifiers = (itemIdentifiers || []).map(id => String(id).trim());
 
         for (const log of logs) {
             const currentOrders = safeParse(log.orders_data);
@@ -297,25 +298,24 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
                     let itemsStillReady = false;
 
                     const updatedItems = (order.items || []).map((i: any) => {
-                        
-                        if (itemIdentifiers && itemIdentifiers.length > 0) {
-                            const fallbackSig = `${i.name}||${i.variant || ''}`;
-                            const isItemMatch = (i.unique_id && itemIdentifiers.includes(i.unique_id)) || 
-                                                (i.id && itemIdentifiers.includes(i.id)) || 
-                                                itemIdentifiers.includes(fallbackSig);
+                        const safeStatus = (i.status || '').toLowerCase().trim();
 
-                            if (isItemMatch && i.status === 'ready') {
+                        if (stringIdentifiers.length > 0) {
+                            const sig = String(i.unique_id || i.id || `${i.name}||${i.variant || ''}`).trim();
+                            const isItemMatch = stringIdentifiers.includes(sig);
+
+                            if (isItemMatch && ['pending', 'cooking', 'preparing', 'ready'].includes(safeStatus)) {
                                 itemsToDeductFromInventory.push(i); // Add to inventory deduction queue
                                 return { ...i, status: 'served' };
                             }
                         } 
-                        else if (i.status === 'ready') {
+                        else if (['pending', 'cooking', 'preparing', 'ready'].includes(safeStatus)) {
                             itemsToDeductFromInventory.push(i); // Add to inventory deduction queue
                             return { ...i, status: 'served' };
                         }
 
-                        if (['pending', 'cooking'].includes(i.status)) itemsStillPendingOrCooking = true;
-                        if (i.status === 'ready') itemsStillReady = true;
+                        if (['pending', 'cooking'].includes(safeStatus)) itemsStillPendingOrCooking = true;
+                        if (safeStatus === 'ready') itemsStillReady = true;
 
                         return i;
                     });
@@ -392,6 +392,7 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
         }
 
         revalidateTag(`orders-${tenantId}`, undefined as any);
+        revalidateTag(`inventory-${tenantId}`, undefined as any);
         revalidatePath("/staff/waiter");
         revalidatePath("/admin/inventory");
         return { success: true };

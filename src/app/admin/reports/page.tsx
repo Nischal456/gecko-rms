@@ -8,14 +8,14 @@ import {
   FileSpreadsheet, Loader2, ArrowUpRight, Calendar, CreditCard, 
   PieChart, ArrowDownRight, Search, QrCode, Filter, ChevronDown, 
   ChevronUp, CheckCircle2, Clock, CalendarDays, ShieldCheck, AlertCircle, ShoppingBag, Award, TrendingDown, Layers,
-  X, BookOpen, UserCircle, ArrowRight
+  X, BookOpen, UserCircle, ArrowRight, ArrowLeft
 } from "lucide-react";
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { getReportData, type ReportRange } from "@/app/actions/reports";
 import { getDashboardData } from "@/app/actions/dashboard";
-import { processCreditPayment, getCashierReports } from "@/app/actions/cashier"; 
+import { processCreditPayment, processCreditBillPayment, getCashierReports } from "@/app/actions/cashier"; 
 import { toast } from "sonner";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import NepaliDate from 'nepali-date-converter';
@@ -168,7 +168,9 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
     const [searchQuery, setSearchQuery] = useState("");
     
     // Payment States
-    const [payAmount, setPayAmount] = useState<string>("");
+    const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
+    const [billPayAmount, setBillPayAmount] = useState<string>("");
+    const [billPayMethod, setBillPayMethod] = useState<string>("Cash");
     const [isPaying, setIsPaying] = useState(false);
 
     const loadCredits = async () => {
@@ -176,12 +178,20 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
         const res = await getCashierReports(60);
         if(res.success && res.summary?.creditAccounts) {
             const activeAccounts: any = {};
+            let selectedStillActive = false;
             for (const [key, val] of Object.entries(res.summary.creditAccounts)) {
-                if ((val as any).total > 0) activeAccounts[key] = val;
+                if ((val as any).total > 0) {
+                    activeAccounts[key] = val;
+                    if (key === selectedCustomer) selectedStillActive = true;
+                }
             }
             setData(activeAccounts);
+            if (selectedCustomer && !selectedStillActive) {
+                setSelectedCustomer(null);
+            }
         } else {
             setData({});
+            setSelectedCustomer(null);
         }
         setLoading(false);
     };
@@ -196,19 +206,18 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
     
     const activeData = selectedCustomer ? data[selectedCustomer] : null;
 
-    const handlePayCredit = async () => {
-        if (!selectedCustomer || !activeData) return;
-        const amt = Number(payAmount);
+    const handlePayCreditBill = async (invoiceNo: string, maxDue: number) => {
+        const amt = Number(billPayAmount);
         
         if (!amt || amt <= 0) return toast.error("Please enter a valid amount");
-        if (amt > activeData.total) return toast.error("Amount exceeds total due balance");
+        if (amt > maxDue) return toast.error("Amount exceeds bill due balance");
 
         setIsPaying(true);
-        const res = await processCreditPayment(selectedCustomer, amt);
+        const res = await processCreditBillPayment(invoiceNo, amt, billPayMethod);
         if (res.success) {
-            toast.success(`Successfully cleared Rs ${amt} for ${activeData.displayName}`);
-            setPayAmount("");
-            if (activeData.total - amt <= 0) setSelectedCustomer(null);
+            toast.success(`Successfully cleared Rs ${amt} for Bill ${invoiceNo} via ${billPayMethod}`);
+            setBillPayAmount("");
+            setPayingInvoice(null);
             await loadCredits(); 
         } else {
             toast.error("Payment Failed", { description: res.error || "An error occurred." });
@@ -222,7 +231,8 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
             <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-[#f8fafc] w-full max-w-5xl h-[85vh] rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col md:flex-row overflow-hidden border border-slate-200 transform-gpu">
                 <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 bg-white/50 backdrop-blur rounded-full flex items-center justify-center text-slate-600 hover:bg-white z-50 shadow-sm transition-all active:scale-95"><X className="w-5 h-5" /></button>
                 
-                <div className="w-full md:w-1/3 bg-white border-r border-slate-200 flex flex-col h-[40%] md:h-full shrink-0">
+                {/* Left Side: Customer List */}
+                <div className={`w-full md:w-1/3 bg-white border-r border-slate-200 flex flex-col h-full md:h-full shrink-0 ${selectedCustomer ? 'hidden md:flex' : 'flex'}`}>
                     <div className="p-6 border-b border-slate-100 shrink-0">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><BookOpen className="w-5 h-5" /></div>
@@ -256,7 +266,8 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                     </div>
                 </div>
 
-                <div className="flex-1 p-5 md:p-8 overflow-y-auto custom-scrollbar bg-[#f8fafc] flex flex-col h-[60%] md:h-full relative">
+                {/* Right Side: Invoice Details & Payment */}
+                <div className={`flex-1 p-5 md:p-8 overflow-y-auto custom-scrollbar bg-[#f8fafc] flex flex-col h-full md:h-full relative ${selectedCustomer ? 'flex' : 'hidden md:flex'}`}>
                     {!selectedCustomer || !activeData ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-slate-300 opacity-60">
                             <Users className="w-16 h-16 mb-4" />
@@ -264,33 +275,21 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                         </div>
                     ) : (
                         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={selectedCustomer} className="flex flex-col h-full">
+                            {/* MOBILE BACK BUTTON */}
+                            <button 
+                                onClick={() => setSelectedCustomer(null)} 
+                                className="md:hidden mb-4 flex items-center gap-2 text-blue-600 font-bold text-xs bg-blue-50 px-4 py-2.5 rounded-xl border border-blue-100 w-fit active:scale-95 transition-all shadow-sm"
+                            >
+                                <ArrowLeft className="w-4 h-4" /> Back to Customers
+                            </button>
+
                             <div className="bg-white p-5 md:p-6 rounded-3xl border border-slate-100 shadow-sm mb-6 shrink-0 relative overflow-hidden">
                                 <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-1">{activeData.displayName}</h3>
                                 {activeData.phone && <p className="text-xs font-bold text-slate-500 mb-4">{activeData.phone}</p>}
                                 
-                                <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex justify-between items-center mb-4">
+                                <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex justify-between items-center">
                                     <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Total Outstanding</span>
                                     <span className="text-2xl font-black text-red-600">{formatNPR(activeData.total)}</span>
-                                </div>
-
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Record Khata Payment</p>
-                                    <div className="flex flex-col md:flex-row gap-3">
-                                        <input 
-                                            type="number" 
-                                            value={payAmount} 
-                                            onChange={(e) => setPayAmount(e.target.value)} 
-                                            placeholder="Amount (Rs)" 
-                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
-                                        />
-                                        <button 
-                                            onClick={handlePayCredit}
-                                            disabled={isPaying || !payAmount}
-                                            className="bg-blue-600 hover:bg-blue-500 text-white font-black text-sm px-6 py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                                        >
-                                            {isPaying ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Clear Dues</>}
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                             
@@ -308,8 +307,87 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                 <div className="text-right">
                                                     <span className="text-sm font-black text-slate-900 block mb-0.5">Total: {formatNPR(b.grandTotal)}</span>
                                                     {b.discount > 0 && <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 inline-block mb-0.5 mt-0.5 shadow-sm">Discount: -{formatNPR(b.discount)}</span>}
-                                                    {b.tendered > 0 && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Paid: {formatNPR(b.tendered)}</span>}
                                                     <span className="text-xs font-black text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100 inline-block mt-1 shadow-sm">Due: {formatNPR(b.due_amount)}</span>
+                                                    
+                                                    {/* DETAILED PAYMENT METHOD BREAKDOWN SPLITS */}
+                                                    {(() => {
+                                                        let parsedSplits = b.splits;
+                                                        if (typeof parsedSplits === 'string') {
+                                                            try { parsedSplits = JSON.parse(parsedSplits); } catch(e) { parsedSplits = []; }
+                                                        }
+                                                        if (parsedSplits && Array.isArray(parsedSplits) && parsedSplits.length > 0) {
+                                                            let totalSplitTendered = 0;
+                                                            parsedSplits.forEach((s: any) => totalSplitTendered += (Number(s.amount) || 0));
+                                                            let change = totalSplitTendered - Number(b.grandTotal || 0);
+                                                            if (change < 0) change = 0;
+
+                                                            return (
+                                                                <div className="flex flex-col gap-0.5 items-end mt-2 text-[10px] font-bold text-slate-500">
+                                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Paid Splits:</span>
+                                                                    {parsedSplits.map((s: any, idx: number) => {
+                                                                        let amt = Number(s.amount) || 0;
+                                                                        if ((s.method === 'Cash' || s.method.toLowerCase() === 'cash') && change > 0) {
+                                                                            if (change >= amt) { change -= amt; amt = 0; }
+                                                                            else { amt -= change; change = 0; }
+                                                                        }
+                                                                        if (s.method === 'Credit') {
+                                                                            const due = b.credit_due !== undefined ? Number(b.credit_due) : amt;
+                                                                            const paidOnCredit = amt - due;
+                                                                            return (
+                                                                                <div key={idx} className="flex flex-col items-end gap-0.5">
+                                                                                    {paidOnCredit > 0 && (
+                                                                                        <span className="font-bold text-slate-500 uppercase tracking-widest text-[8px]">
+                                                                                            Credit (Paid): Rs {paidOnCredit.toLocaleString()}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {due > 0 && (
+                                                                                        <span className="font-black text-red-500 uppercase tracking-widest text-[8px]">
+                                                                                            Credit (Due): Rs {due.toLocaleString()}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        return amt > 0 ? (
+                                                                            <span key={idx} className="font-bold uppercase tracking-widest text-[8px]">
+                                                                                {s.method}: Rs {amt.toLocaleString()}
+                                                                            </span>
+                                                                        ) : null;
+                                                                    })}
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        // Single payment method handling
+                                                        const method = b.payment_method || "Cash";
+                                                        const grandTotal = Number(b.grandTotal) || 0;
+                                                        const tendered = Number(b.tendered) || 0;
+                                                        const due = b.credit_due !== undefined ? Number(b.credit_due) : Math.max(0, grandTotal - tendered);
+
+                                                        if (method === 'Credit') {
+                                                            return (
+                                                                <div className="flex flex-col gap-0.5 items-end mt-2 text-[10px] font-bold text-slate-500">
+                                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Payment:</span>
+                                                                    {tendered > 0 && (
+                                                                        <span className="font-bold text-slate-500 uppercase tracking-widest text-[8px]">
+                                                                            Credit (Paid): Rs {tendered.toLocaleString()}
+                                                                        </span>
+                                                                    )}
+                                                                    {due > 0 && (
+                                                                        <span className="font-black text-red-500 uppercase tracking-widest text-[8px]">
+                                                                            Credit (Due): Rs {due.toLocaleString()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div className="mt-2 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right">
+                                                                {method}: Rs {grandTotal.toLocaleString()}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
@@ -332,6 +410,60 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                     )
                                                 })}
                                             </div>
+
+                                            {/* TARGETED BILL PAYMENT DRAWER */}
+                                            {payingInvoice === b.invoice_no ? (
+                                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Pay Invoice {b.invoice_no}</p>
+                                                    <div className="flex gap-2 mb-2.5">
+                                                        {["Cash", "FonePay"].map((m) => (
+                                                            <button 
+                                                                key={m} 
+                                                                onClick={() => setBillPayMethod(m)}
+                                                                type="button"
+                                                                className={`flex-1 py-1.5 px-3 rounded-lg font-black text-[9px] uppercase tracking-wider border transition-all ${billPayMethod === m ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                                            >
+                                                                {m}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <input 
+                                                            type="number" 
+                                                            value={billPayAmount} 
+                                                            onChange={(e) => setBillPayAmount(e.target.value)} 
+                                                            placeholder="Amount (Rs)" 
+                                                            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                                                        />
+                                                        <button 
+                                                            onClick={() => handlePayCreditBill(b.invoice_no, b.due_amount)}
+                                                            disabled={isPaying || !billPayAmount}
+                                                            className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isPaying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm"}
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setPayingInvoice(null); setBillPayAmount(""); }}
+                                                            className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs px-3 py-2 rounded-lg transition-all active:scale-95"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-end mt-2 pt-2 border-t border-slate-50">
+                                                    <button 
+                                                        onClick={() => {
+                                                            setPayingInvoice(b.invoice_no);
+                                                            setBillPayAmount(b.due_amount.toString());
+                                                            setBillPayMethod("Cash");
+                                                        }}
+                                                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Clear Dues
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}
@@ -488,19 +620,45 @@ export default function ReportsPage() {
 
               // EXACT SPLIT HANDLING: Directly map object instead of 'Split'
               if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
+                  const creditAmt = tx.due !== undefined ? Number(tx.due) : 0;
+                  const paidAmt = Math.max(0, amt - creditAmt);
+                  
+                  const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
+                  const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                  
+                  if (creditAmt > 0) {
+                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
+                  }
+                  
+                  if (nonCreditSplits.length > 0) {
+                      nonCreditSplits.forEach((s: any) => {
+                          const sAmt = Number(s.amount) || 0;
+                          const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
+                          const allocated = paidAmt * share;
+                          paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
+                      });
+                  } else if (paidAmt > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
+                  }
+                  
                   let totalSplitTendered = 0;
                   safeSplits.forEach((s: any) => {
-                      const splitAmt = Number(s.amount) || 0;
-                      const splitMethod = s.method || 'Cash';
-                      paymentMethods[splitMethod] = (paymentMethods[splitMethod] || 0) + splitAmt;
-                      totalSplitTendered += splitAmt;
+                      if (s.method !== 'Credit') {
+                          totalSplitTendered += (Number(s.amount) || 0);
+                      }
                   });
-                  // EXTREME ACCURACY FIX: Subtract the returning change from Cash!
                   const changeToReturn = totalSplitTendered - actualRev;
                   if (changeToReturn > 0) paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
               } else if (method === 'Credit') {
-                  paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + (Number(tx.due) || 0);
-                  if (Number(tx.tendered) > 0) paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + Number(tx.tendered);
+                  const creditAmt = tx.due !== undefined ? Number(tx.due) : 0;
+                  const paidAmt = Math.max(0, amt - creditAmt);
+                  
+                  if (creditAmt > 0) {
+                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
+                  }
+                  if (paidAmt > 0) {
+                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
+                  }
               } else {
                   paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
               }

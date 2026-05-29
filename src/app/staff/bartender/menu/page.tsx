@@ -181,7 +181,7 @@ export default function BartenderMenuPage() {
       audioRef.current = audio;
 
       pollForNewOrders();
-      const pollInterval = setInterval(pollForNewOrders, 3000);
+      const pollInterval = setInterval(pollForNewOrders, 1000);
       return () => clearInterval(pollInterval);
   }, []);
 
