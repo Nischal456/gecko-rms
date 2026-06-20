@@ -103,10 +103,11 @@ function RoundStatusBadge({ status }: { status: string }) {
 function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilter }: { order: Order, isLast: boolean, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => void, onEdit: (orderId: string, tableLabel: string) => void, currentFilter: string }) {
     
     // Only Active & Completed Tabs use this block now
-    const displayItems = order.items?.filter(item => {
+    const displayItems = (order.items || []).filter(item => {
+        if (!item) return false;
         const s = (item.status || '').toLowerCase().trim();
         return !['cancelled', 'void'].includes(s) && item.qty > 0;
-    }) || [];
+    });
 
     if (displayItems.length === 0) return null; 
 
@@ -183,7 +184,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
                                 <span className={`font-black w-4 md:w-5 text-right mt-0.5 shrink-0 ${item.status === 'ready' ? 'text-emerald-600' : 'text-slate-500'}`}>{item.qty}x</span>
                                 <div className="flex flex-col w-full min-w-0">
                                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start w-full gap-1.5 sm:gap-2">
-                                        <span className={`font-bold leading-tight truncate pr-1 ${item.status === 'served' ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{item.name}</span>
+                                        <span className={`font-bold leading-tight break-words pr-1 ${item.status === 'served' ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{item.name}</span>
                                         <div className="flex items-center gap-1.5 shrink-0 mt-0.5 sm:mt-0">
                                             {renderItemStatus(item.status)}
                                             {['pending', 'cooking', 'ready'].includes(item.status) && (
@@ -219,20 +220,24 @@ function TableCard({ group, currentFilter, onServe, onCancel, onEdit }: { group:
     const { tableId, orders, isTakeaway } = group;
     const DisplayIcon = isTakeaway ? ShoppingBag : Utensils;
     
-    const hasReadyItems = orders.some(o => o.items.some((i:any) => i.status === 'ready'));
+    const hasReadyItems = orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
 
     // Only render Active and Completed via TableCard
     const validOrdersForTab = orders.filter(order => {
+        if (!order) return false;
+        const items = order.items || [];
         if (currentFilter === 'completed') {
-            return ['paid', 'completed'].includes(order.status) && order.items.some((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+            return ['paid', 'completed'].includes(order.status) && items.some((i:any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
         }
-        return !['paid', 'completed', 'cancelled'].includes(order.status) && order.items.some((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+        return !['paid', 'completed', 'cancelled'].includes(order.status) && items.some((i:any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
     });
 
     if (validOrdersForTab.length === 0) return null;
 
     const dynamicTotalAmount = validOrdersForTab.reduce((total, order) => {
-        const orderItems = order.items.filter(i => {
+        if (!order) return total;
+        const orderItems = (order.items || []).filter(i => {
+            if (!i) return false;
             const s = (i.status || '').toLowerCase().trim();
             return !['cancelled', 'void'].includes(s) && i.qty > 0;
         });
@@ -341,25 +346,26 @@ export default function OrdersPage() {
                 const groups: Record<string, GroupedTableOrder> = {};
 
                 rawOrders.forEach(order => {
-                    const validItems = order.items?.filter((i:any) => !['cancelled', 'void'].includes(i.status) && i.qty > 0) || [];
-                    const itemsReady = validItems.filter((i: any) => i.status === 'ready').length;
+                    if (!order) return;
+                    const validItems = (order.items || []).filter((i:any) => i && !['cancelled', 'void'].includes(i.status) && i.qty > 0);
+                    const itemsReady = validItems.filter((i: any) => i && i.status === 'ready').length;
                     
                     if (itemsReady > 0 && order.status !== 'served' && order.status !== 'payment_pending') {
-                        if (!notifiedReadyIds.current.has(order.id)) {
-                            setTopAlert({ msg: `${itemsReady} Items Ready for Table ${order.tbl}` });
+                        if (order.id && !notifiedReadyIds.current.has(order.id)) {
+                            setTopAlert({ msg: `${itemsReady} Items Ready for Table ${order.tbl || 'Unknown'}` });
                             new Audio(SOUND_NOTIFICATION).play().catch(e => console.log("Audio play blocked", e));
                             notifiedReadyIds.current.add(order.id);
                         }
                     }
 
-                    const tId = order.tbl;
+                    const tId = String(order.tbl || "").trim();
                     if (!groups[tId]) {
                         groups[tId] = {
                             tableId: tId,
                             orders: [],
                             totalAmount: 0,
-                            lastActiveTime: order.time,
-                            isTakeaway: tId.startsWith("TAKEAWAY"),
+                            lastActiveTime: order.time || "",
+                            isTakeaway: tId.toUpperCase().startsWith("TAKEAWAY"),
                             hasActiveOrders: false
                         };
                     }
@@ -374,12 +380,18 @@ export default function OrdersPage() {
                 });
 
                 Object.values(groups).forEach(g => {
-                    g.orders.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                    if (g && g.orders) {
+                        g.orders.sort((a, b) => {
+                            const timeA = a && a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                            const timeB = b && b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                            return timeB - timeA;
+                        });
+                    }
                 });
 
                 const finalGroups = Object.values(groups).sort((a, b) => {
-                    const aHasReady = a.orders.some(o => o.items.some((i:any) => i.status === 'ready'));
-                    const bHasReady = b.orders.some(o => o.items.some((i:any) => i.status === 'ready'));
+                    const aHasReady = a.orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
+                    const bHasReady = b.orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
                     if (aHasReady && !bHasReady) return -1;
                     if (!aHasReady && bHasReady) return 1;
                     return 0; 
@@ -388,6 +400,7 @@ export default function OrdersPage() {
                 setGroupedTables(finalGroups);
             }
         } catch (e) {
+            console.error("Client Load Orders Error:", e);
             toast.error("Sync Error");
         } finally {
             setLoading(false);
@@ -395,27 +408,28 @@ export default function OrdersPage() {
     }
 
     const handleServeOrder = async (orderId: string, tableLabel: string, rawItems: any[]) => {
-        const readyItems = rawItems.filter((i: any) => i.status === 'ready');
+        const readyItems = (rawItems || []).filter((i: any) => i && i.status === 'ready');
         if (readyItems.length === 0) return toast.info("No items are ready to serve yet.");
 
-        const readyItemIdentifiers = readyItems.map((i: any) => i.unique_id || i.id || `${i.name}||${i.variant || ''}`);
+        const readyItemIdentifiers = readyItems.map((i: any) => i ? (i.unique_id || i.id || `${i.name || ''}||${i.variant || ''}`) : "");
 
         setGroupedTables(prev => prev.map(group => {
-            if (group.tableId === tableLabel) {
+            if (group && group.tableId === tableLabel) {
                 return {
                     ...group,
-                    orders: group.orders.map(o => {
-                        if (o.id === orderId) {
-                            const newItems = o.items.map(i => {
-                                const sig = i.unique_id || i.id || `${i.name}||${i.variant || ''}`;
+                    orders: (group.orders || []).map(o => {
+                        if (o && o.id === orderId) {
+                            const newItems = (o.items || []).map(i => {
+                                if (!i) return i;
+                                const sig = i.unique_id || i.id || `${i.name || ''}||${i.variant || ''}`;
                                 if (readyItemIdentifiers.includes(sig) && i.status === 'ready') {
                                     return { ...i, status: 'served' };
                                 }
                                 return i;
                             });
                             
-                            const stillCooking = newItems.some(i => ['pending', 'cooking'].includes(i.status));
-                            const stillReady = newItems.some(i => i.status === 'ready');
+                            const stillCooking = newItems.some(i => i && ['pending', 'cooking'].includes(i.status));
+                            const stillReady = newItems.some(i => i && i.status === 'ready');
                             const newStatus = stillReady ? 'ready' : stillCooking ? 'cooking' : 'payment_pending';
 
                             return { ...o, status: newStatus, items: newItems };
@@ -477,18 +491,34 @@ export default function OrdersPage() {
     // --- PARSE GROUPS FOR ACTIVE/COMPLETED TABS ---
     const filteredGroups = groupedTables.map(group => {
         let filteredOrders: Order[] = [];
+        const orders = group.orders || [];
         if (filter === 'active') {
-            filteredOrders = group.orders.filter(o => !['paid', 'completed', 'cancelled'].includes(o.status));
+            filteredOrders = orders.filter(o => {
+                if (!o || ['paid', 'completed', 'cancelled'].includes(o.status)) return false;
+                const items = o.items || [];
+                return items.some((i: any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+            });
         } else if (filter === 'completed') {
-            filteredOrders = group.orders.filter(o => ['paid', 'completed'].includes(o.status));
+            filteredOrders = orders.filter(o => {
+                if (!o || !['paid', 'completed'].includes(o.status)) return false;
+                const items = o.items || [];
+                return items.some((i: any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+            });
         }
         return { ...group, orders: filteredOrders };
     }).filter(group => {
-        const matchesSearch = group.tableId.toLowerCase().includes(search.toLowerCase());
-        return matchesSearch && group.orders.length > 0;
+        const matchesSearch = String(group.tableId || "").toLowerCase().includes(search.toLowerCase());
+        return matchesSearch && (group.orders || []).length > 0;
     });
 
-    const activeCount = groupedTables.filter(g => g.orders.some(o => !['paid', 'completed', 'cancelled'].includes(o.status))).length;
+    const activeCount = groupedTables.filter(g => {
+        if (!g) return false;
+        return (g.orders || []).some(o => {
+            if (!o || ['paid', 'completed', 'cancelled'].includes(o.status)) return false;
+            const items = o.items || [];
+            return items.some((i: any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
+        });
+    }).length;
 
     return (
         <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">

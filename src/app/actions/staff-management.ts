@@ -18,7 +18,7 @@ export async function getStaffList() {
   const tenantId = await getTenantId();
   if (!tenantId) return { success: false, error: "Unauthorized" };
 
-  const { data, error } = await supabaseAdmin
+  const { data: staffList, error } = await supabaseAdmin
     .from('staff')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -29,7 +29,37 @@ export async function getStaffList() {
     return { success: false, error: error.message };
   }
 
-  return { success: true, data };
+  // Fetch pending leaves
+  const { data: pendingLeaves } = await supabaseAdmin
+    .from("staff_leaves")
+    .select("id, staff_id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pending");
+
+  // Attach hasPendingLeave flag
+  const enrichedStaff = (staffList || []).map(s => ({
+      ...s,
+      hasPendingLeave: pendingLeaves?.some(l => l.staff_id === s.id)
+  }));
+
+  return { success: true, data: enrichedStaff, pendingLeaves: pendingLeaves || [] };
+}
+
+export async function getPendingLeaves() {
+  const tenantId = await getTenantId();
+  if (!tenantId) return { success: false, data: [] };
+
+  const { data, error } = await supabaseAdmin
+    .from("staff_leaves")
+    .select("id, staff_id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pending");
+
+  if (error) {
+    console.error("Get Pending Leaves Error:", error);
+    return { success: false, data: [] };
+  }
+  return { success: true, data: data || [] };
 }
 
 export async function saveStaff(formData: any) {

@@ -66,7 +66,8 @@ export async function getCashierData(isPolling: boolean = false) {
     
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const datesToFetch = isPolling ? [today] : [yesterdayStr, today];
+    // ALWAYS fetch both yesterday and today's logs so that active/unpaid orders from yesterday do not disappear during polling.
+    const datesToFetch = [yesterdayStr, today];
 
     const { data: logs } = await supabaseAdmin
         .from("daily_order_logs")
@@ -160,6 +161,7 @@ export async function getCashierData(isPolling: boolean = false) {
         });
 
         activeOrders.forEach((order: any) => {
+            if (order.id === "DAY_CLOSE_META") return;
             if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
             
             pendingBills++;
@@ -365,6 +367,7 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         const targetId = String(orderId).trim();
         let foundDate = null;
         let modifiedOrders = null;
+        const itemsToRestore: any[] = [];
 
         for (const log of logs) {
             const currentOrders = safeParse(log.orders_data);
@@ -384,9 +387,12 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                             const targetSig = String(itemIdToCancel).trim();
                             const safeStatus = (i.status || '').toLowerCase().trim();
 
-                            if (sig === targetSig && ['pending', 'cooking', 'ready'].includes(safeStatus) && !itemCancelled) {
+                            if (sig === targetSig && ['pending', 'cooking', 'ready', 'served'].includes(safeStatus) && !itemCancelled) {
                                 itemCancelled = true;
                                 amountToDeduct += (Number(i.price) * Number(i.qty));
+                                if (safeStatus === 'served') {
+                                    itemsToRestore.push(i);
+                                }
                                 return { 
                                     ...i, 
                                     previous_status: i.status || 'pending',
@@ -423,18 +429,24 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
                         };
                     } 
                     else {
-                        const isFullyPending = order.items.every((i:any) => ['pending', 'cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
-                        if (isFullyPending) {
+                        const isFullyCancellable = order.items.every((i:any) => ['pending', 'cancelled', 'void', 'served', 'ready', 'cooking'].includes((i.status || '').toLowerCase().trim()));
+                        if (isFullyCancellable) {
                             found = true;
                             foundDate = log.date;
-                            const newItems = order.items.map((i:any) => ({ 
-                                ...i, 
-                                previous_status: i.status || 'pending',
-                                status: 'cancelled',
-                                cancel_reason: 'Round Cancelled',
-                                cancelled_by: staffName,
-                                cancelled_at: new Date().toISOString() 
-                            }));
+                            const newItems = order.items.map((i:any) => {
+                                const safeStatus = (i.status || '').toLowerCase().trim();
+                                if (safeStatus === 'served') {
+                                    itemsToRestore.push(i);
+                                }
+                                return { 
+                                    ...i, 
+                                    previous_status: i.status || 'pending',
+                                    status: 'cancelled',
+                                    cancel_reason: 'Round Cancelled',
+                                    cancelled_by: staffName,
+                                    cancelled_at: new Date().toISOString() 
+                                };
+                            });
                             return { ...order, status: 'cancelled', items: newItems, total: 0 };
                         }
                     }
@@ -449,7 +461,11 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         }
 
         if (!foundDate || !modifiedOrders) {
-            return { success: false, error: "Could not cancel. Item might be already served." };
+            return { success: false, error: "Could not cancel. Order might have completed status." };
+        }
+
+        if (itemsToRestore.length > 0) {
+            await restoreInventoryStock(tenantId, itemsToRestore);
         }
 
         await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", foundDate);
@@ -463,6 +479,7 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
 
         revalidateTag(`orders-${tenantId}`, undefined as any);
         revalidateTag(`tables-${tenantId}`, undefined as any);
+        revalidateTag(`inventory-${tenantId}`, undefined as any);
         revalidatePath("/staff/cashier");
         return { success: true };
 
@@ -813,12 +830,36 @@ export async function getCashierReports(days: number) {
             byStaff: {}, 
             creditAccounts: {},
             creditReceived: 0,
-            creditReceivedByMethod: {}
+            creditReceivedByMethod: {},
+            totalPendingOrders: 0,
+            totalExpiredOrders: 0,
+            unclearedPaymentAmount: 0,
+            pendingOrdersDetails: []
         };
         const dailyTotalsMap: { [dateStr: string]: number } = {};
 
         logs.forEach((log: any) => {
             if (!dailyTotalsMap[log.date]) dailyTotalsMap[log.date] = 0;
+            
+            const activeOrders = safeParse(log.orders_data);
+            activeOrders.forEach((o: any) => {
+                if (o.id === "DAY_CLOSE_META") return;
+                const s = (o.status || '').toLowerCase().trim();
+                if (['pending', 'cooking', 'preparing', 'ready'].includes(s)) {
+                    summary.totalPendingOrders++;
+                    summary.unclearedPaymentAmount += Number(o.total || 0);
+                    summary.pendingOrdersDetails.push({
+                        id: o.id,
+                        tbl: o.tbl,
+                        total: o.total,
+                        staff: o.staff || "Unknown",
+                        status: o.status,
+                        time: o.time
+                    });
+                } else if (s === 'expired') {
+                    summary.totalExpiredOrders++;
+                }
+            });
             
             const history = safeParse(log.paid_history);
             history.forEach((bill: any) => {
@@ -1195,6 +1236,159 @@ export async function processCreditBillPayment(invoiceNo: string, amountToPay: n
         revalidatePath("/staff/cashier");
         return { success: true };
     } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+// --- HELPER: RESTORE INVENTORY ON ORDER CANCELLATION/EXPIRATION ---
+async function restoreInventoryStock(tenantId: number, items: any[]) {
+    try {
+        const { data: inventoryItems } = await supabaseAdmin
+            .from("inventory")
+            .select("id, name, stock, quantity, linked_menu_item, base_unit, volume_per_unit")
+            .eq("tenant_id", tenantId);
+
+        if (inventoryItems && inventoryItems.length > 0) {
+            const superClean = (str: string) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            for (const item of items) {
+                // Restore only if the item was served (which deducted stock)
+                if (item.status === 'served') {
+                    const rawName = item.name || item.n || "";
+                    const rawQty = Number(item.qty || item.q || 1);
+                    const cartClean = superClean(rawName);
+                    
+                    const stockItem = inventoryItems.find(i => {
+                        const invClean = superClean(i.name);
+                        const linkedClean = i.linked_menu_item ? superClean(i.linked_menu_item) : "";
+                        return invClean === cartClean || 
+                               (linkedClean !== "" && linkedClean === cartClean) ||
+                               (linkedClean !== "" && cartClean.includes(linkedClean)) ||
+                               (invClean !== "" && cartClean.includes(invClean));
+                    });
+                    
+                    if (stockItem) {
+                        const restorationAmount = rawQty * Number(stockItem.volume_per_unit || 1);
+                        const currentStock = stockItem.stock !== undefined ? stockItem.stock : (stockItem.quantity || 0);
+                        const newStock = Number(currentStock) + restorationAmount;
+                        
+                        await supabaseAdmin.from("inventory")
+                            .update({ stock: newStock, quantity: newStock })
+                            .eq("id", stockItem.id);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Restore Inventory Stock Error:", error);
+    }
+}
+
+// --- 8. CLOSE BUSINESS DAY ACTION (BLOCK_CLOSING WITH OVERRIDE) ---
+export async function closeBusinessDayAction(dateStr: string, forceCloseWithOverride: boolean = false, managerName: string | null = null) {
+    const tenantId = await getTenantId();
+    try {
+        const { data: log } = await supabaseAdmin
+            .from("daily_order_logs")
+            .select("orders_data, date")
+            .eq("tenant_id", tenantId)
+            .eq("date", dateStr)
+            .maybeSingle();
+
+        if (!log) {
+            return { success: false, error: "No order log found for this day." };
+        }
+
+        const orders = safeParse(log.orders_data);
+        const pendingOrders = orders.filter((o: any) => {
+            if (o.id === "DAY_CLOSE_META") return false;
+            const s = (o.status || '').toLowerCase().trim();
+            return ['pending', 'cooking', 'preparing', 'ready'].includes(s);
+        });
+
+        if (pendingOrders.length > 0 && !forceCloseWithOverride) {
+            return { 
+                success: false, 
+                error: `BLOCK CLOSING: There are ${pendingOrders.length} uncleared pending orders. Manager override required.` 
+            };
+        }
+
+        let finalOrders = [...orders];
+
+        if (pendingOrders.length > 0 && forceCloseWithOverride) {
+            // Revert inventory for any items in these pending orders that were served
+            const itemsToRestore: any[] = [];
+            pendingOrders.forEach((o: any) => {
+                if (o.items && Array.isArray(o.items)) {
+                    o.items.forEach((item: any) => {
+                        if (item.status === 'served') {
+                            itemsToRestore.push(item);
+                        }
+                    });
+                }
+            });
+
+            if (itemsToRestore.length > 0) {
+                await restoreInventoryStock(tenantId, itemsToRestore);
+            }
+
+            // Mark orders as expired
+            finalOrders = orders.map((o: any) => {
+                if (o.id === "DAY_CLOSE_META") return o;
+                const s = (o.status || '').toLowerCase().trim();
+                if (['pending', 'cooking', 'preparing', 'ready'].includes(s)) {
+                    return {
+                        ...o,
+                        status: 'expired',
+                        expired_at: new Date().toISOString(),
+                        expired_by: managerName || "Manager Override"
+                    };
+                }
+                return o;
+            });
+
+            // Free the tables in the DB
+            const tableLabelsToFree = pendingOrders.map((o: any) => o.tbl);
+            if (tableLabelsToFree.length > 0) {
+                await supabaseAdmin
+                    .from("restaurant_tables")
+                    .update({ status: 'free' })
+                    .eq("tenant_id", tenantId)
+                    .in("label", tableLabelsToFree);
+            }
+        }
+
+        // Mark the day as closed inside the daily logs
+        const closeMeta = {
+            id: "DAY_CLOSE_META",
+            tbl: "SYSTEM",
+            status: "closed",
+            time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
+            staff: managerName || "Cashier",
+            timestamp: new Date().toISOString(),
+            closed_by: managerName || "Cashier",
+            is_closed: true
+        };
+
+        const cleanOrders = finalOrders.filter((o: any) => o.id !== "DAY_CLOSE_META");
+        cleanOrders.push(closeMeta);
+
+        const { error: updateErr } = await supabaseAdmin
+            .from("daily_order_logs")
+            .update({ orders_data: cleanOrders })
+            .eq("tenant_id", tenantId)
+            .eq("date", dateStr);
+
+        if (updateErr) throw new Error(updateErr.message);
+
+        revalidateTag(`orders-${tenantId}`, undefined as any);
+        revalidateTag(`tables-${tenantId}`, undefined as any);
+        revalidateTag(`inventory-${tenantId}`, undefined as any);
+        revalidatePath("/staff/cashier");
+        
+        return { success: true };
+    } catch (e: any) {
+        console.error("Close Business Day Action Error:", e);
         return { success: false, error: e.message };
     }
 }

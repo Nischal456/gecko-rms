@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { getCashierReports } from "@/app/actions/cashier"; 
-import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ShieldCheck, X, ArrowRight, AlertTriangle, BookOpen } from "lucide-react";
+import { Loader2, CheckCircle2, Banknote, QrCode, UserCircle, Search, Download, ChevronUp, ChevronDown, Calendar, ShieldCheck, X, ArrowRight, AlertTriangle, BookOpen, Clock } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -539,6 +539,90 @@ export default function ReportsView({ data }: any) {
                             </div>
                         </motion.div>
                     </div>
+
+                    {/* PENDING & EXPIRED ORDERS SUMMARY */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-orange-500 animate-pulse" />
+                                    Total Pending Orders
+                                </p>
+                                <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-orange-600 mt-1">
+                                    {report?.summary?.totalPendingOrders || 0}
+                                </h2>
+                            </div>
+                            <p className="mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active orders currently open on the floor</p>
+                        </motion.div>
+
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
+                                    Uncleared Pending Amount
+                                </p>
+                                <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-red-600 mt-1">
+                                    {formatRs(report?.summary?.unclearedPaymentAmount || 0)}
+                                </h2>
+                            </div>
+                            <p className="mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total value of unpaid active bills</p>
+                        </motion.div>
+
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <X className="w-4 h-4 text-slate-500" />
+                                    Total Expired Orders
+                                </p>
+                                <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-700 mt-1">
+                                    {report?.summary?.totalExpiredOrders || 0}
+                                </h2>
+                            </div>
+                            <p className="mt-4 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders automatically voided at day close</p>
+                        </motion.div>
+                    </div>
+
+                    {report?.summary?.pendingOrdersDetails?.length > 0 && (
+                        <motion.div variants={itemVariants} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex flex-col">
+                            <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <UserCircle className="w-4 h-4 text-emerald-500" />
+                                Uncleared Pending Bills - Responsible Server Breakdown
+                            </p>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                            <th className="pb-3">Order ID</th>
+                                            <th className="pb-3">Table</th>
+                                            <th className="pb-3">Time</th>
+                                            <th className="pb-3">Responsible Server</th>
+                                            <th className="pb-3">Status</th>
+                                            <th className="pb-3 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 text-xs font-bold text-slate-700">
+                                        {report.summary.pendingOrdersDetails.map((o: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="py-3 font-mono font-black text-slate-900">#{o.id.slice(-6)}</td>
+                                                <td className="py-3">Table {o.tbl}</td>
+                                                <td className="py-3">{o.time}</td>
+                                                <td className="py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-5 h-5 rounded-full bg-slate-100 text-[9px] flex items-center justify-center text-slate-500 font-black uppercase">{o.staff.charAt(0)}</div>
+                                                        <span>{o.staff}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3">
+                                                    <span className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-orange-100">{o.status}</span>
+                                                </td>
+                                                <td className="py-3 text-right font-black text-slate-950">{formatRs(o.total)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </motion.div>
+                    )}
 
                     {/* BILL HISTORY SECTION */}
                     <motion.div variants={itemVariants} className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-visible transform-gpu">

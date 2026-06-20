@@ -39,23 +39,23 @@ async function getTenantId() {
 }
 
 export async function getWaiterDashboardData() {
-  const tenantId = await getTenantId();
-
-  // 1. Fetch dynamic staff context safely OUTSIDE the cache
   let currentStaffName = "Team";
   try {
-      const cookieStore = await cookies();
-      const staffCookie = cookieStore.get("gecko_staff_token");
-      if (staffCookie?.value) {
-          currentStaffName = JSON.parse(staffCookie.value).name || "Team";
-      }
-  } catch (e) {}
+    const tenantId = await getTenantId();
 
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+    // 1. Fetch dynamic staff context safely OUTSIDE the cache
+    try {
+        const cookieStore = await cookies();
+        const staffCookie = cookieStore.get("gecko_staff_token");
+        if (staffCookie?.value) {
+            currentStaffName = JSON.parse(staffCookie.value).name || "Team";
+        }
+    } catch (e) {}
 
-  try {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
     const { data: tables, error: tableError } = await supabaseAdmin
         .from("restaurant_tables")
         .select("*")
@@ -71,7 +71,7 @@ export async function getWaiterDashboardData() {
         .in("date", [yesterdayStr, today])
         .order("date", { ascending: false });
 
-    const todayLog = logs?.find((l:any) => l.date === today);
+    const todayLog = logs?.find((l:any) => l && l.date === today);
     const activeOrders = safeParse(todayLog?.orders_data);
     
     const { data: menuData } = await supabaseAdmin
@@ -82,9 +82,10 @@ export async function getWaiterDashboardData() {
     let disabledItems: any[] = [];
     if (menuData) {
         menuData.forEach((cat: any) => {
+            if (!cat) return;
             const items = Array.isArray(cat.items) ? cat.items : [];
             items.forEach((item: any) => {
-                if (item.is_available === false) {
+                if (item && item.is_available === false) {
                     disabledItems.push({
                         id: item.id,
                         title: item.name,
@@ -107,13 +108,15 @@ export async function getWaiterDashboardData() {
     const activeTableStatus = new Map<string, string>();
 
     logs?.forEach(log => {
+        if (!log) return;
         const logActive = safeParse(log.orders_data);
         const logPaid = safeParse(log.paid_history);
         const allOrdersForWaste = [...logActive, ...logPaid];
 
         allOrdersForWaste.forEach((order: any) => {
+            if (!order) return;
             (order.items || []).forEach((item: any) => {
-                if (item.status === 'cancelled' || item.status === 'void') {
+                if (item && (item.status === 'cancelled' || item.status === 'void')) {
                     if (item.previous_status === 'cooking' || item.previous_status === 'ready') {
                         if (item.cancelled_at) {
                             const cancelDate = new Date(item.cancelled_at);
@@ -135,16 +138,17 @@ export async function getWaiterDashboardData() {
     });
 
     activeOrders.forEach((order: any) => {
+        if (!order) return;
         const tableName = String(order.tbl || "").trim();
         const grandTotal = Number(order.total) || 0;
-        const validItems = (order.items || []).filter((i:any) => i.status !== 'cancelled' && i.status !== 'void');
+        const validItems = (order.items || []).filter((i:any) => i && i.status !== 'cancelled' && i.status !== 'void');
 
         if (validItems.length > 0) {
             mySales += grandTotal;
             tablesServed += 1;
             
             validItems.forEach((item: any) => {
-                if (item.status === 'ready') {
+                if (item && item.status === 'ready') {
                     hasReady = true;
                     notifications.push({
                         id: order.id,
@@ -154,7 +158,7 @@ export async function getWaiterDashboardData() {
                         time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' }),
                         items: validItems
                     });
-                } else if (item.status === 'cooking' || item.status === 'pending') {
+                } else if (item && (item.status === 'cooking' || item.status === 'pending')) {
                     hasCooking = true;
                 }
             });
@@ -166,15 +170,17 @@ export async function getWaiterDashboardData() {
     });
 
     const processedTables = tables?.map(t => {
-        const status = activeTableStatus.get(t.label.trim()) || 'available';
+        if (!t) return null;
+        const label = String(t.label || "").trim();
+        const status = activeTableStatus.get(label) || 'available';
         return {
             ...t,
             section: t.section || "Main Hall", 
             status: status
         };
-    }) || [];
+    }).filter(Boolean) || [];
 
-    const sections = Array.from(new Set(processedTables.map(t => t.section))).filter(Boolean);
+    const sections = Array.from(new Set(processedTables.map((t: any) => t.section))).filter(Boolean);
     const finalSections = sections.length > 0 ? sections : ["Main Hall"];
 
     const finalCancelledItems = Array.from(cancelledItemsMap.values());

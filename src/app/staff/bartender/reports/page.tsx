@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { 
   FileText, Calendar, DollarSign, CheckCircle2, Bell, Clock, 
-  ChevronDown, ChevronUp, Check, AlertTriangle, Wine, GlassWater, History,Wallet2
+  ChevronDown, ChevronUp, Check, AlertTriangle, Wine, GlassWater, History, Wallet2,
+  LayoutGrid, Package, LogOut, FileBarChart
 } from "lucide-react";
 import { getBartenderStats, getBartenderTickets } from "@/app/actions/bartender";
+import { logoutStaff } from "@/app/actions/staff-auth";
 import { toast } from "sonner";
 import React from "react";
 import NepaliDate from 'nepali-date-converter';
+import { motion, AnimatePresence } from "framer-motion";
 
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
@@ -184,9 +187,10 @@ export default function BartenderReportsPage() {
                             </div>
                         </motion.div>
                     </motion.div>
-                </div>
             </div>
+            <BartenderDock activeTab="reports" />
         </div>
+      </div>
     )
 }
 
@@ -201,4 +205,82 @@ function StatCard({ label, value, color, icon }: any) {
             </div>
         </div>
     )
+}
+
+function BartenderDock({ activeTab }: { activeTab: 'overview' | 'menu' | 'inventory' | 'reports' }) {
+    const handleLogout = () => {
+        toast.custom((t) => (
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
+                <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                        <LogOut className="w-5 h-5 ml-1" />
+                    </div>
+                    <div className="pt-0.5">
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">Power Down Terminal?</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            Are you sure you want to end your bar shift and sign out of BarOS?
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            toast.dismiss(t);
+                            toast.loading("Powering down terminal...");
+                            sessionStorage.removeItem("gecko_bar_init");
+                            await logoutStaff();
+                            window.location.href = "/staff/login";
+                        }} 
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                    >
+                        Yes, Sign Out
+                    </button>
+                </div>
+            </div>
+        ), { duration: 8000 });
+    };
+
+    const navLinks = [
+        { id: 'overview', href: "/staff/bartender", icon: Wine, label: "Overview" },
+        { id: 'menu', href: "/staff/bartender/menu", icon: LayoutGrid, label: "Menu" },
+        { id: 'inventory', href: "/staff/bartender/inventory", icon: Package, label: "Inventory" },
+        { id: 'reports', href: "/staff/bartender/reports", icon: FileBarChart, label: "Reports" },
+    ];
+
+    return (
+        <div className="fixed bottom-6 left-0 right-0 mx-auto w-fit z-40 px-4 pointer-events-none">
+            <motion.div 
+                initial={{ y: 100, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100/50 transform-gpu"
+            >
+                {navLinks.map((link) => {
+                    const isActive = activeTab === link.id;
+                    return isActive ? (
+                        <button key={link.id} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </button>
+                    ) : (
+                        <Link key={link.id} href={link.href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </Link>
+                    );
+                })}
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all group relative">
+                    <LogOut className="w-[18px] h-[18px]" />
+                    <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">Sign Out</span>
+                </button>
+            </motion.div>
+        </div>
+    );
 }

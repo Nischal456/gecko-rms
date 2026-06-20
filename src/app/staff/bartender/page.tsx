@@ -6,7 +6,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "
 import { 
   ChefHat, Clock, CheckCircle2, Flame, Bell, GlassWater, 
   X, LogOut, RefreshCcw, Check, CheckCheck, 
-  Volume2, VolumeX, LayoutGrid, FileBarChart, AlertTriangle, Play, GripVertical, ChevronRight, Wine
+  Volume2, VolumeX, LayoutGrid, FileBarChart, AlertTriangle, Play, GripVertical, ChevronRight, Wine, Package
 } from "lucide-react";
 import { toast } from "sonner";
 import { getBartenderTickets, updateBartenderTicketStatus, updateBartenderItemStatus } from "@/app/actions/bartender";
@@ -74,7 +74,7 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
     )
 }
 
-function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: any) {
+function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onRefresh }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
     const [tenantInfo, setTenantInfo] = useState<{ name: string, logo: string | null }>({ name: "Gecko Bar", logo: null });
 
@@ -126,6 +126,9 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: a
 
             <div className="flex items-center gap-2 md:gap-4 shrink-0">
                 <div className="text-right hidden sm:block"><p className="text-lg md:text-3xl font-black text-slate-900 tabular-nums leading-none">{timeInfo.time}</p></div>
+                <button onClick={onRefresh} className="p-2.5 md:p-3 rounded-full bg-slate-50 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 border border-slate-200 hover:border-emerald-200 transition-all active:scale-95 shadow-sm" title="Sync Feed">
+                    <RefreshCcw className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
                 <button onClick={toggleMute} className={`p-2.5 md:p-3 rounded-full transition-all border ${muted ? 'bg-red-50 text-red-500 border-red-100' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-emerald-200 hover:text-emerald-600'}`}>
                     {muted ? <VolumeX className="w-4 h-4 md:w-5 md:h-5" /> : <Volume2 className="w-4 h-4 md:w-5 md:h-5" />}
                 </button>
@@ -134,7 +137,7 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute }: a
     )
 }
 
-function KitchenDock({ onRefresh }: any) {
+function BartenderDock({ activeTab }: { activeTab: 'overview' | 'menu' | 'inventory' | 'reports' }) {
     const handleLogout = () => {
         toast.custom((t) => (
             <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
@@ -173,39 +176,43 @@ function KitchenDock({ onRefresh }: any) {
         ), { duration: 8000 });
     };
 
+    const navLinks = [
+        { id: 'overview', href: "/staff/bartender", icon: Wine, label: "Overview" },
+        { id: 'menu', href: "/staff/bartender/menu", icon: LayoutGrid, label: "Menu" },
+        { id: 'inventory', href: "/staff/bartender/inventory", icon: Package, label: "Inventory" },
+        { id: 'reports', href: "/staff/bartender/reports", icon: FileBarChart, label: "Reports" },
+    ];
+
     return (
-        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none hidden md:block">
+        <div className="fixed bottom-6 left-0 right-0 mx-auto w-fit z-40 px-4 pointer-events-none">
             <motion.div 
-                initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10 transform-gpu"
+                initial={{ y: 100, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100/50 transform-gpu"
             >
-                <DockButton icon={<RefreshCcw className="w-[18px] h-[18px]" />} onClick={onRefresh} label="Sync Feed" />
-                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
-                <DockLink href="/staff/bartender/menu" icon={<LayoutGrid className="w-[18px] h-[18px]" />} label="Menu" />
-                <DockLink href="/staff/bartender/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
-                <div className="w-px h-6 bg-slate-700 mx-1 rounded-full" />
-                <DockButton icon={<LogOut className="w-[18px] h-[18px] text-red-400" />} onClick={handleLogout} label="Sign Out" />
+                {navLinks.map((link) => {
+                    const isActive = activeTab === link.id;
+                    return isActive ? (
+                        <button key={link.id} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </button>
+                    ) : (
+                        <Link key={link.id} href={link.href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </Link>
+                    );
+                })}
+                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
+                <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all group relative">
+                    <LogOut className="w-[18px] h-[18px]" />
+                    <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">Sign Out</span>
+                </button>
             </motion.div>
         </div>
-    )
-}
-
-function DockButton({ icon, onClick, label }: any) {
-    return (
-        <button onClick={onClick} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
-            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
-            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
-        </button>
-    )
-}
-
-function DockLink({ href, icon, label }: any) {
-    return (
-        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition-all group relative">
-            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
-            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">{label}</span>
-        </Link>
-    )
+    );
 }
 
 export default function BartenderPage() {
@@ -395,7 +402,7 @@ export default function BartenderPage() {
 
     return (
         <div className="flex h-full w-full bg-[#F8FAFC] flex-col relative overflow-hidden">
-            <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} />
+            <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} onRefresh={loadData} />
 
             {/* --- KANBAN BOARD --- */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">
@@ -428,12 +435,12 @@ export default function BartenderPage() {
                 </div>
             </div>
 
-            <KitchenDock onRefresh={loadData} />
+            <BartenderDock activeTab="overview" />
 
             {/* --- DETAIL MODAL --- */}
             <AnimatePresence>
                 {selectedTicket && (
-                    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4">
+                    <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedTicket(null)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
                         <motion.div
                             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -454,12 +461,12 @@ export default function BartenderPage() {
 
                                     return (
                                         <div key={item.unique_id || item.id} className={`p-4 md:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition-all shadow-sm ${isCompleted ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
-                                            <div className={`flex gap-3 md:gap-4 flex-1 ${isCompleted ? 'cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}`} onClick={() => handleItemClick(item, selectedTicket.id)}>
+                                            <div className={`flex gap-3 md:gap-4 flex-1 min-w-0 ${isCompleted ? 'cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}`} onClick={() => handleItemClick(item, selectedTicket.id)}>
                                                 <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center font-black text-base md:text-lg shrink-0 ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-md'}`}>
                                                     {item.quantity}x
                                                 </div>
-                                                <div className="flex flex-col justify-center min-w-0 pr-2">
-                                                    <h4 className={`font-black text-base md:text-xl leading-tight truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
+                                                <div className="flex flex-col justify-center min-w-0 pr-2 flex-1">
+                                                    <h4 className={`font-black text-base md:text-xl leading-tight break-words whitespace-normal ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
                                                     
                                                     <div className="flex flex-wrap gap-1.5 mt-1">
                                                         {item.variant && <span className="text-[9px] md:text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wider truncate max-w-[150px]">{item.variant}</span>}
@@ -605,14 +612,14 @@ function TicketCardContent({ ticket }: { ticket: BartenderTicket }) {
                     const isCooking = s === 'cooking' || s === 'preparing';
 
                     return (
-                        <div key={i} className="flex flex-col gap-1 mb-2 last:mb-0">
-                            <div className="flex justify-between items-start text-xs md:text-sm w-full">
-                                <div className="flex items-start gap-2 md:gap-2.5 overflow-hidden">
+                        <div key={i} className="flex flex-col gap-1 mb-2 last:mb-0 w-full min-w-0">
+                            <div className="flex justify-between items-start text-xs md:text-sm w-full gap-2 min-w-0">
+                                <div className="flex items-start gap-2 md:gap-2.5 overflow-hidden flex-1 min-w-0">
                                     <span className="font-black text-slate-600 bg-slate-50 px-1.5 md:px-2 py-0.5 rounded text-[10px] md:text-sm min-w-[20px] md:min-w-[24px] text-center shrink-0 mt-0.5">{item.quantity}</span>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className={`font-bold truncate max-w-[110px] sm:max-w-[140px] md:max-w-[160px] ${isDone ? 'text-emerald-600 line-through opacity-70' : 'text-slate-800'}`}>{item.name}</span>
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                        <span className={`font-bold block truncate w-full ${isDone ? 'text-emerald-600 line-through opacity-70' : 'text-slate-800'}`}>{item.name}</span>
                                         {item.notes && (
-                                            <span className="text-[8px] md:text-[9px] text-red-500 font-bold truncate max-w-[110px] sm:max-w-[140px] md:max-w-[160px] flex items-center gap-1 mt-0.5">
+                                            <span className="text-[8px] md:text-[9px] text-red-500 font-bold truncate w-full flex items-center gap-1 mt-0.5">
                                                 <AlertTriangle className="w-2.5 h-2.5 shrink-0" /> {item.notes}
                                             </span>
                                         )}

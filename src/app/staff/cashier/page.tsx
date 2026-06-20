@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import InventoryView from "./components/InventoryView";
 import { useRouter } from "next/navigation"; 
-import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment, processCreditBillPayment, verifyManagerPIN } from "@/app/actions/cashier"; 
+import { getCashierData, finalizeTransaction, updateStoreSettings, createCashierOrder, cancelOrder, serveOrder, getCashierReports, processCreditPayment, processCreditBillPayment, verifyManagerPIN, closeBusinessDayAction } from "@/app/actions/cashier"; 
 import { logoutStaff } from "@/app/actions/staff-auth"; 
 import { toast } from "sonner";
 import React from "react";
@@ -831,6 +831,142 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
     );
 }
 
+// --- CLOSE BUSINESS DAY MODAL COMPONENT (BLOCK_CLOSING WITH OVERRIDE) ---
+function CloseDayModal({ activeOrders, onClose, onConfirm }: { activeOrders: any[], onClose: () => void, onConfirm: (override: boolean, managerName: string | null) => void }) {
+    const [pin, setPin] = useState("");
+    const [verifying, setVerifying] = useState(false);
+    const [error, setError] = useState("");
+    const [manager, setManager] = useState<{ name: string, role: string } | null>(null);
+
+    const pendingOrders = activeOrders?.filter((o: any) => {
+        if (o.id === "DAY_CLOSE_META") return false;
+        const s = (o.status || '').toLowerCase().trim();
+        return ['pending', 'cooking', 'preparing', 'ready'].includes(s);
+    }) || [];
+
+    const hasPending = pendingOrders.length > 0;
+
+    const handleVerifyPIN = async () => {
+        if (!pin.trim()) return;
+        setVerifying(true);
+        setError("");
+        try {
+            const res = await verifyManagerPIN(pin);
+            if (res.success && res.name) {
+                setManager({ name: res.name, role: res.role || "manager" });
+                toast.success(`Authorized: ${res.name} (${res.role})`);
+            } else {
+                setError(res.error || "Invalid PIN");
+            }
+        } catch (e: any) {
+            setError(e.message || "Failed to verify PIN");
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    const handleSubmit = () => {
+        if (hasPending && !manager) {
+            setError("Manager PIN required to override block closing.");
+            return;
+        }
+        onConfirm(hasPending, manager ? manager.name : null);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white w-full max-w-md rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative border border-slate-100 overflow-hidden"
+            >
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 transition-all"><X className="w-4 h-4" /></button>
+                
+                <div className="flex items-start gap-4 mb-6">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-inner ${hasPending ? 'bg-amber-50 text-amber-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                        <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="pt-1">
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Close Business Day</h3>
+                        <p className="text-xs font-bold text-slate-500 mt-1">
+                            {hasPending 
+                                ? "Block Closing is active. Open tables or unpaid bills must be settled or expired by a manager." 
+                                : "Are you sure you want to close today's business day? This will seal shift records."}
+                        </p>
+                    </div>
+                </div>
+
+                {hasPending ? (
+                    <div className="mb-6 p-4 rounded-2xl bg-amber-50/50 border border-amber-100/60 space-y-3">
+                        <div className="flex items-center gap-2 text-amber-800 font-bold text-xs uppercase tracking-wide">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            <span>{pendingOrders.length} Uncleared Pending Orders</span>
+                        </div>
+                        <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                            {pendingOrders.map((o: any, idx: number) => (
+                                <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-slate-600 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
+                                    <span>Table {o.tbl} ({o.staff || "Server"})</span>
+                                    <span className="font-mono font-black text-slate-900">Rs {Number(o.total || 0).toLocaleString()}</span>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {!manager ? (
+                            <div className="pt-2 border-t border-amber-200/40">
+                                <label className="text-[9px] font-black text-amber-700 uppercase tracking-widest block mb-2">Manager Authorization PIN</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="password" 
+                                        maxLength={6}
+                                        value={pin} 
+                                        onChange={e => setPin(e.target.value)} 
+                                        placeholder="Enter PIN" 
+                                        className="flex-1 bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-center outline-none focus:ring-2 focus:ring-amber-200 transition-all shadow-inner"
+                                    />
+                                    <button 
+                                        onClick={handleVerifyPIN}
+                                        disabled={verifying}
+                                        className="px-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 whitespace-nowrap"
+                                    >
+                                        {verifying ? "Verifying..." : "Authorize"}
+                                    </button>
+                                </div>
+                                {error && <p className="text-[10px] text-red-500 font-bold mt-1.5 ml-1">{error}</p>}
+                            </div>
+                        ) : (
+                            <div className="pt-2 border-t border-amber-200/40 flex items-center justify-between text-xs font-bold text-emerald-800 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
+                                <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-600" /> Authorized by: {manager.name}</span>
+                                <button onClick={() => setManager(null)} className="text-[10px] text-slate-400 hover:text-red-500 uppercase tracking-wide">Change</button>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="mb-6 p-4 rounded-2xl bg-emerald-50/40 border border-emerald-100/50 flex items-center gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <span className="text-xs font-bold text-emerald-800 leading-snug">All tables and bills are cleared. You can close the day without manager override.</span>
+                    </div>
+                )}
+
+                <div className="flex gap-3">
+                    <button 
+                        onClick={onClose} 
+                        className="flex-1 py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors border border-slate-200 active:scale-95"
+                    >
+                        Keep Open
+                    </button>
+                    <button 
+                        onClick={handleSubmit}
+                        className={`flex-1 py-3 text-white text-xs font-bold rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 ${hasPending ? (manager ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-slate-300 cursor-not-allowed opacity-50') : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'}`}
+                    >
+                        {hasPending ? "Force Close & Expire Orders" : "Confirm Close Day"}
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
 // --- CREDIT BOOK MODAL COMPONENT (WITH SEARCH & PAYMENT) ---
 function CreditBookModal({ onClose }: { onClose: () => void }) {
     const [data, setData] = useState<any>({});
@@ -1171,6 +1307,7 @@ export default function CashierDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showTotalSales, setShowTotalSales] = useState(true);
   const [showCreditBook, setShowCreditBook] = useState(false); 
+  const [showCloseDayModal, setShowCloseDayModal] = useState(false);
   const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
@@ -1292,6 +1429,26 @@ export default function CashierDashboard() {
       else { toast.error("Failed"); } 
   };
 
+  const handleCloseDayConfirm = async (override: boolean, managerName: string | null) => {
+      const todayDate = new Date().toISOString().split('T')[0];
+      toast.loading("Closing business day...");
+      try {
+          const res = await closeBusinessDayAction(todayDate, override, managerName);
+          toast.dismiss();
+          if (res.success) {
+              toast.success("Business Day Closed Successfully!");
+              setShowCloseDayModal(false);
+              await logoutStaff();
+              window.location.href = "/staff/login";
+          } else {
+              toast.error(res.error || "Failed to close business day");
+          }
+      } catch (err: any) {
+          toast.dismiss();
+          toast.error("An error occurred during closing.");
+      }
+  };
+
   const sections = data ? ['All', ...Array.from(new Set(data.tables?.map((t:any) => t.section || "Main Hall")))] : [];
   const filteredTables = data?.tables?.filter((t: any) => filter === 'All' || (t.section || "Main Hall") === filter);
   const getGreeting = () => { const hr = currentTime.getHours(); if (hr < 12) return "Good Morning"; if (hr < 17) return "Good Afternoon"; return "Good Evening"; };
@@ -1301,6 +1458,7 @@ export default function CashierDashboard() {
       <AnimatePresence>{loading && <SystemLoader />}</AnimatePresence>
       <AnimatePresence>{selectedTable && <CheckoutModal table={selectedTable} restaurant={data?.restaurant} staff={data?.staff} onClose={() => setSelectedTable(null)} onConfirm={processPayment} onCancel={handleCancelOrder} />}</AnimatePresence>
       <AnimatePresence>{showCreditBook && <CreditBookModal onClose={() => setShowCreditBook(false)} />}</AnimatePresence>
+      <AnimatePresence>{showCloseDayModal && <CloseDayModal activeOrders={data?.activeOrders || []} onClose={() => setShowCloseDayModal(false)} onConfirm={handleCloseDayConfirm} />}</AnimatePresence>
       
       <AnimatePresence>
         {notification && (<motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="absolute top-0 left-0 right-0 z-[300] flex justify-center pointer-events-none px-4"><div className="bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold pointer-events-auto border-2 border-emerald-500"><Bell className="w-5 h-5 animate-bounce" /> {notification}</div></motion.div>)}
@@ -1362,6 +1520,12 @@ export default function CashierDashboard() {
                                 <button onClick={() => setShowCreditBook(true)} className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group">
                                     <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                     <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Credit Ledger</span>
+                                </button>
+
+                                {/* CLOSE DAY BUTTON */}
+                                <button onClick={() => setShowCloseDayModal(true)} className="flex items-center gap-2 bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all shadow-sm group">
+                                    <Lock className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                    <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Close Day</span>
                                 </button>
                                 
                                 <div className="flex items-center gap-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">

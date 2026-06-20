@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Search, Image as ImageIcon, Loader2, Trash2, Edit2, 
-  X, UploadCloud, Database, Save, LayoutGrid, GlassWater, Wine, Coffee, Layers, ToggleLeft, ToggleRight, LogOut, FileBarChart, Bell, Ticket
+  X, UploadCloud, Database, Save, LayoutGrid, GlassWater, Wine, Coffee, Layers, ToggleLeft, ToggleRight, LogOut, FileBarChart, Bell, Ticket, Package
 } from "lucide-react";
 import { toast } from "sonner";
 import { logoutStaff } from "@/app/actions/staff-auth";
@@ -57,10 +57,10 @@ async function compressImage(file: File): Promise<File> {
 }
 
 // --- PREMIUM DOCK ---
-function BarDock() {
+function BartenderDock({ activeTab }: { activeTab: 'overview' | 'menu' | 'inventory' | 'reports' }) {
     const handleLogout = () => {
         toast.custom((t) => (
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
                 <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
                         <LogOut className="w-5 h-5 ml-1" />
@@ -96,45 +96,43 @@ function BarDock() {
         ), { duration: 8000 });
     };
 
+    const navLinks = [
+        { id: 'overview', href: "/staff/bartender", icon: Wine, label: "Overview" },
+        { id: 'menu', href: "/staff/bartender/menu", icon: LayoutGrid, label: "Menu" },
+        { id: 'inventory', href: "/staff/bartender/inventory", icon: Package, label: "Inventory" },
+        { id: 'reports', href: "/staff/bartender/reports", icon: FileBarChart, label: "Reports" },
+    ];
+
     return (
-        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
+        <div className="fixed bottom-6 left-0 right-0 mx-auto w-fit z-40 px-4 pointer-events-none">
             <motion.div 
                 initial={{ y: 100, opacity: 0 }} 
                 animate={{ y: 0, opacity: 1 }} 
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100"
+                className="pointer-events-auto flex items-center gap-1.5 p-2 bg-white/90 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-slate-200 ring-1 ring-slate-100/50 transform-gpu"
             >
-                <DockLink href="/staff/bartender" icon={<Wine className="w-[18px] h-[18px]" />} label="Bar" />
-                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
-                
-                {/* Active Tab */}
-                <button className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 transition-all group relative">
-                    <LayoutGrid className="w-[18px] h-[18px]" />
-                </button>
-                
-                <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
-                <DockLink href="/staff/bartender/reports" icon={<FileBarChart className="w-[18px] h-[18px]" />} label="Reports" />
+                {navLinks.map((link) => {
+                    const isActive = activeTab === link.id;
+                    return isActive ? (
+                        <button key={link.id} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </button>
+                    ) : (
+                        <Link key={link.id} href={link.href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
+                            <link.icon className="w-[18px] h-[18px]" />
+                            <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">{link.label}</span>
+                        </Link>
+                    );
+                })}
                 <div className="w-px h-6 bg-slate-200 mx-1 rounded-full" />
                 <button onClick={handleLogout} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all group relative">
                     <LogOut className="w-[18px] h-[18px]" />
-                    <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none">
-                        Sign Out
-                    </span>
+                    <span className="absolute -top-12 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-800 pointer-events-none scale-95 group-hover:scale-100">Sign Out</span>
                 </button>
             </motion.div>
         </div>
-    )
-}
-
-function DockLink({ href, icon, label }: any) {
-    return (
-        <Link href={href} className="flex items-center justify-center w-14 h-12 rounded-[1.2rem] text-slate-400 hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all group relative">
-            <div className="group-hover:scale-110 transition-transform duration-300">{icon}</div>
-            <span className="absolute -top-12 bg-slate-800 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none scale-95 group-hover:scale-100">
-                {label}
-            </span>
-        </Link>
-    )
+    );
 }
 
 // --- MAIN PAGE ---
@@ -468,7 +466,7 @@ export default function BartenderMenuPage() {
             </div>
         </div>
 
-        <BarDock />
+        <BartenderDock activeTab="menu" />
 
         {/* --- MODALS --- */}
         <AnimatePresence>

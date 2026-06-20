@@ -14,6 +14,22 @@ async function getContext() {
   };
 }
 
+async function getStaffMember(tenantId: number, staff: { id: string, name: string }) {
+    let query = supabaseAdmin.from("staff").select("*").eq("tenant_id", tenantId);
+    
+    // Check if staff.id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (staff.id && uuidRegex.test(staff.id)) {
+        query = query.eq("id", staff.id);
+    } else {
+        query = query.eq("full_name", staff.name);
+    }
+    
+    const { data, error } = await query.maybeSingle();
+    if (error) console.error("Error looking up staff member:", error);
+    return data;
+}
+
 // --- 1. GET REPORT DATA ---
 export async function getWaiterReports() {
   const { tenantId, staff } = await getContext();
@@ -43,7 +59,7 @@ export async function getWaiterReports() {
 
       myOrders.forEach((o: any) => {
         totalSales += (Number(o.total) || 0);
-        tablesServed += 1; // Or use unique table logic
+        tablesServed += 1;
         
         // Chart Data
         const day = new Date(log.date).getDate();
@@ -56,20 +72,64 @@ export async function getWaiterReports() {
         sales: dailyMap[d]
     })).sort((a, b) => parseInt(a.day.split(' ')[1]) - parseInt(b.day.split(' ')[1]));
 
-    // B. FETCH PAYROLL & LEAVE (JSON Columns from Staff Profile)
-    // Assuming table 'staff_profiles' exists. If not, we return mock/empty structure.
-    const { data: profile } = await supabaseAdmin
-        .from("staff_members") // Adjust table name if different
-        .select("payroll_history, leave_requests")
-        .eq("tenant_id", tenantId)
-        .eq("name", staff.name)
-        .single();
+    // B. FETCH PAYROLL & LEAVE FROM ACTUAL DB TABLES
+    const staffMember = await getStaffMember(tenantId, staff);
+
+    let payroll: any[] = [];
+    let leaves: any[] = [];
+
+    if (staffMember) {
+        // Fetch payroll history
+        const { data: dbPayments } = await supabaseAdmin
+            .from("staff_payments")
+            .select("*")
+            .eq("staff_id", staffMember.id)
+            .order("payment_date", { ascending: false });
+
+        if (dbPayments) {
+            payroll = dbPayments.map((pay: any) => ({
+                month: pay.salary_month || '',
+                date: pay.payment_date ? pay.payment_date.split('T')[0] : '',
+                amount: Number(pay.amount) || 0
+            }));
+        }
+
+        // Fetch leaves
+        const { data: dbLeaves } = await supabaseAdmin
+            .from("staff_leaves")
+            .select("*")
+            .eq("staff_id", staffMember.id)
+            .order("start_date", { ascending: false });
+
+        if (dbLeaves) {
+            leaves = dbLeaves.map((leave: any) => {
+                let leaveType = 'Leave';
+                let displayReason = leave.reason || '';
+                if (leave.reason && leave.reason.startsWith('[')) {
+                    const closingBracket = leave.reason.indexOf(']');
+                    if (closingBracket > 0) {
+                        leaveType = leave.reason.slice(1, closingBracket);
+                        displayReason = leave.reason.slice(closingBracket + 1).trim();
+                    }
+                }
+                return {
+                    id: leave.id,
+                    status: leave.status || 'pending',
+                    type: leaveType,
+                    from: leave.start_date,
+                    to: leave.end_date,
+                    reason: displayReason,
+                    date_applied: leave.created_at ? leave.created_at.split('T')[0] : (leave.start_date || '')
+                };
+            });
+        }
+    }
 
     return {
         success: true,
         stats: { totalSales, tablesServed, chartData },
-        payroll: profile?.payroll_history || [], 
-        leaves: profile?.leave_requests || []
+        payroll, 
+        leaves
     };
 
   } catch (e) {
@@ -78,38 +138,27 @@ export async function getWaiterReports() {
   }
 }
 
-// --- 2. SUBMIT LEAVE REQUEST (JSON UPDATE) ---
+// --- 2. SUBMIT LEAVE REQUEST (JSON UPDATE -> TABLE INSERT) ---
 export async function submitLeaveRequest(requestData: any) {
     const { tenantId, staff } = await getContext();
     
-    // Create new request object
-    const newRequest = {
-        id: `LVE-${Date.now()}`,
-        ...requestData,
-        status: 'pending',
-        date_applied: new Date().toISOString().split('T')[0]
-    };
-
     try {
-        // 1. Get current list
-        const { data: user } = await supabaseAdmin
-            .from("staff_members")
-            .select("id, leave_requests")
-            .eq("tenant_id", tenantId)
-            .eq("name", staff.name)
-            .single();
+        const staffMember = await getStaffMember(tenantId, staff);
+        if (!staffMember) return { success: false, msg: "Profile not found" };
 
-        if (!user) return { success: false, msg: "Profile not found" };
+        const reasonValue = `[${requestData.type}] ${requestData.reason}`;
 
-        // 2. Append new request to JSON array
-        const currentLeaves = Array.isArray(user.leave_requests) ? user.leave_requests : [];
-        const updatedLeaves = [newRequest, ...currentLeaves];
-
-        // 3. Save back (Efficient Storage)
+        // Insert leave request directly into staff_leaves table
         const { error } = await supabaseAdmin
-            .from("staff_members")
-            .update({ leave_requests: updatedLeaves })
-            .eq("id", user.id);
+            .from("staff_leaves")
+            .insert({
+                tenant_id: tenantId,
+                staff_id: staffMember.id,
+                start_date: requestData.from,
+                end_date: requestData.to,
+                reason: reasonValue,
+                status: 'pending'
+            });
 
         if (error) throw error;
 

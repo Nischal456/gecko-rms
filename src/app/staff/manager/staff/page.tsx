@@ -36,6 +36,28 @@ interface StaffMember {
     hasPendingLeave?: boolean;
 }
 
+const getLeaveDetails = (rawReason: string) => {
+    let type = "Leave";
+    let reason = rawReason || "";
+    if (rawReason && rawReason.startsWith("[")) {
+        const closingBracket = rawReason.indexOf("]");
+        if (closingBracket > 0) {
+            type = rawReason.slice(1, closingBracket);
+            reason = rawReason.slice(closingBracket + 1).trim();
+        }
+    }
+    return { type, reason };
+};
+
+const getLeaveDaysCount = (startStr: string, endStr: string) => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+};
+
 export default function StaffPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -81,6 +103,11 @@ export default function StaffPage() {
         if(dashRes) setTenant(dashRes.tenant);
         if(staffRes.success && Array.isArray(staffRes.data)) {
             setStaffList(staffRes.data);
+            if (Array.isArray(staffRes.pendingLeaves)) {
+                const ids = staffRes.pendingLeaves.map((l: any) => l.id);
+                localStorage.setItem("seen_leave_ids", JSON.stringify(ids));
+                window.dispatchEvent(new Event("leave-status-updated"));
+            }
         } else {
             // Quietly handle empty/error states to prevent UI flash
         }
@@ -232,6 +259,8 @@ export default function StaffPage() {
       await updateLeaveStatus(leaveId, selectedStaff.id, status);
       toast.dismiss();
       toast.success(`Leave ${status}`);
+      loadData();
+      window.dispatchEvent(new Event("leave-status-updated"));
       openStaffDetails(selectedStaff); 
   }
 
@@ -240,6 +269,8 @@ export default function StaffPage() {
       await createLeaveRequest(selectedStaff.id, leaveStart, leaveEnd, leaveReason || "Manual Entry by Manager");
       toast.success("Leave Logged");
       setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
+      loadData();
+      window.dispatchEvent(new Event("leave-status-updated"));
       openStaffDetails(selectedStaff);
   }
 
@@ -496,10 +527,86 @@ export default function StaffPage() {
                                                     {selectedStaff.leaves?.some((l: any) => l.status === 'pending') && (
                                                         <div className="space-y-4">
                                                             <div className="flex items-center gap-2 bg-orange-50 p-3 rounded-xl border border-orange-100"><BellRing className="w-5 h-5 text-orange-600 animate-bounce" /><div><h3 className="font-black text-orange-900 text-sm">Action Required</h3></div></div>
-                                                            {selectedStaff.leaves.filter((l: any) => l.status === 'pending').map((leave: any) => (<div key={leave.id} className="p-6 rounded-[2rem] bg-white border-2 border-orange-100 shadow-sm relative overflow-hidden"><p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-2">Request</p><h4 className="text-xl font-black text-slate-900 mb-1">{leave.reason}</h4><p className="text-sm font-bold text-slate-500 mb-6">{new Date(leave.start_date).toLocaleDateString()} — {new Date(leave.end_date).toLocaleDateString()}</p><div className="flex gap-3"><button onClick={() => handleLeaveApproval(leave.id, 'approved')} className="flex-1 h-12 bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-600"><CheckCircle2 className="w-4 h-4" /> Approve</button><button onClick={() => handleLeaveApproval(leave.id, 'rejected')} className="flex-1 h-12 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-200"><XCircle className="w-4 h-4" /> Reject</button></div></div>))}
+                                                            {selectedStaff.leaves.filter((l: any) => l.status === 'pending').map((leave: any) => {
+                                                                const { type, reason } = getLeaveDetails(leave.reason);
+                                                                return (
+                                                                    <div key={leave.id} className="p-6 rounded-[2rem] bg-white border-2 border-orange-100 shadow-sm relative overflow-hidden">
+                                                                        <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-2">Request ({type})</p>
+                                                                        <h4 className="text-xl font-black text-slate-900 mb-1">{reason || "No reason provided"}</h4>
+                                                                        <p className="text-sm font-bold text-slate-500 mb-6">{new Date(leave.start_date).toLocaleDateString()} — {new Date(leave.end_date).toLocaleDateString()}</p>
+                                                                        <div className="flex gap-3">
+                                                                            <button onClick={() => handleLeaveApproval(leave.id, 'approved')} className="flex-1 h-12 bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-600">
+                                                                                <CheckCircle2 className="w-4 h-4" /> Approve
+                                                                            </button>
+                                                                            <button onClick={() => handleLeaveApproval(leave.id, 'rejected')} className="flex-1 h-12 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-200">
+                                                                                <XCircle className="w-4 h-4" /> Reject
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     )}
-                                                    <div className="pt-6 border-t border-slate-100"><h3 className="font-black text-slate-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">Log Manual Leave</h3><div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3"><div className="flex gap-3"><input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" /><input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" /></div><input value={leaveReason} onChange={e => setLeaveReason(e.target.value)} placeholder="Reason" className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" /><button onClick={handleManualLeave} className="w-full h-10 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Log Leave</button></div></div>
+                                                    <div className="pt-6 border-t border-slate-100">
+                                                        <h3 className="font-black text-slate-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">Log Manual Leave</h3>
+                                                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+                                                            <div className="flex gap-3">
+                                                                <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
+                                                                <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
+                                                            </div>
+                                                            <input value={leaveReason} onChange={e => setLeaveReason(e.target.value)} placeholder="Reason" className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
+                                                            <button onClick={handleManualLeave} className="w-full h-10 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Log Leave</button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="pt-6 border-t border-slate-100">
+                                                        <h3 className="font-black text-slate-900 mb-4 text-xs uppercase tracking-wider flex items-center gap-2">
+                                                            <History className="w-4 h-4" /> Leave History
+                                                        </h3>
+                                                        <div className="space-y-3">
+                                                            {!selectedStaff.leaves || selectedStaff.leaves.length === 0 ? (
+                                                                <div className="text-center py-6 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                                                                    <CalendarDays className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                                                    <p className="text-xs font-bold text-slate-400">No leave records found</p>
+                                                                </div>
+                                                            ) : (
+                                                                selectedStaff.leaves.map((leave: any) => {
+                                                                    const { type, reason } = getLeaveDetails(leave.reason);
+                                                                    const days = getLeaveDaysCount(leave.start_date, leave.end_date);
+                                                                    
+                                                                    let statusStyles = "";
+                                                                    if (leave.status === 'approved') {
+                                                                        statusStyles = "bg-emerald-50 text-emerald-600 border border-emerald-100";
+                                                                    } else if (leave.status === 'rejected') {
+                                                                        statusStyles = "bg-rose-50 text-rose-600 border border-rose-100";
+                                                                    } else {
+                                                                        statusStyles = "bg-amber-50 text-amber-600 border border-amber-100";
+                                                                    }
+
+                                                                    return (
+                                                                        <div key={leave.id} className="flex justify-between items-center p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                                                                            <div className="flex items-center gap-4">
+                                                                                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                                                                                    <CalendarDays className="w-5 h-5" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <p className="font-black text-slate-900 text-sm">{type}</p>
+                                                                                        <span className={`text-[9px] font-black uppercase tracking-wider rounded-full px-2 py-0.5 ${statusStyles}`}>
+                                                                                            {leave.status}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <p className="text-xs text-slate-500 font-medium mt-0.5">{reason || "No reason provided"}</p>
+                                                                                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                                                                        {new Date(leave.start_date).toLocaleDateString()} — {new Date(leave.end_date).toLocaleDateString()} ({days} {days === 1 ? 'Day' : 'Days'})
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
                                         </>

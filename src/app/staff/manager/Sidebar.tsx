@@ -9,6 +9,8 @@ import {
 import { motion } from "framer-motion";
 import { logoutStaff } from "@/app/actions/staff-auth";
 import { toast } from "sonner";
+import { useState, useEffect } from "react";
+import { getPendingLeaves } from "@/app/actions/staff-management";
 
 const MENU = [
   { name: "Overview", icon: LayoutDashboard, path: "/staff/manager" },
@@ -22,6 +24,48 @@ const MENU = [
 
 export default function ManagerSidebar({ tenantName, tenantCode, logo }: any) {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    
+    async function fetchLeaves() {
+      try {
+        const res = await getPendingLeaves();
+        if (res.success && active) {
+          const rawSeen = localStorage.getItem("seen_leave_ids");
+          const seenIds: string[] = rawSeen ? JSON.parse(rawSeen) : [];
+          const unread = (res.data || []).filter((l: any) => !seenIds.includes(l.id));
+          setPendingCount(unread.length);
+        }
+      } catch (e) {}
+    }
+
+    fetchLeaves();
+    const interval = setInterval(fetchLeaves, 8000);
+
+    const handleUpdate = () => {
+      fetchLeaves();
+    };
+    window.addEventListener("leave-status-updated", handleUpdate);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("leave-status-updated", handleUpdate);
+    };
+  }, []);
+
+  const handleMarkAsRead = async () => {
+    try {
+      const res = await getPendingLeaves();
+      if (res.success && res.data) {
+        const ids = res.data.map((l: any) => l.id);
+        localStorage.setItem("seen_leave_ids", JSON.stringify(ids));
+        setPendingCount(0);
+      }
+    } catch (e) {}
+  };
 
   const handleLogout = () => {
       toast.custom((t) => (
@@ -71,9 +115,19 @@ export default function ManagerSidebar({ tenantName, tenantCode, logo }: any) {
         {MENU.slice(0, 5).map((item) => {
           const isActive = pathname === item.path;
           return (
-            <Link key={item.path} href={item.path} className="relative group flex flex-col items-center gap-1">
-              <div className={`p-2.5 rounded-[1.2rem] transition-all ${isActive ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 -translate-y-2" : "text-slate-400 hover:text-emerald-500"}`}>
+            <Link 
+              key={item.path} 
+              href={item.path}
+              onClick={item.name === "Staff Hub" ? handleMarkAsRead : undefined}
+              className="relative group flex flex-col items-center gap-1"
+            >
+              <div className={`p-2.5 rounded-[1.2rem] transition-all relative ${isActive ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 -translate-y-2" : "text-slate-400 hover:text-emerald-500"}`}>
                 <item.icon className="w-5 h-5" />
+                {item.name === "Staff Hub" && pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center shadow-sm">
+                    {pendingCount}
+                  </span>
+                )}
               </div>
               {isActive && <span className="absolute -bottom-1 w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(0,200,83,0.8)]" />}
             </Link>
@@ -103,11 +157,20 @@ export default function ManagerSidebar({ tenantName, tenantCode, logo }: any) {
             {MENU.map((item) => {
                 const isActive = pathname === item.path;
                 return (
-                    <Link key={item.path} href={item.path}>
+                    <Link 
+                      key={item.path} 
+                      href={item.path}
+                      onClick={item.name === "Staff Hub" ? handleMarkAsRead : undefined}
+                    >
                         <div className={`flex items-center gap-3 px-4 py-3.5 rounded-[1.2rem] transition-all group relative overflow-hidden ${isActive ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20" : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"}`}>
                             <item.icon className={`w-5 h-5 transition-colors ${isActive ? "text-emerald-400" : "text-slate-400 group-hover:text-emerald-600"}`} />
                             <span className="font-bold text-sm tracking-wide">{item.name}</span>
-                            {isActive && <motion.div layoutId="active-pill" className="absolute right-3 w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(0,200,83,0.8)]" />}
+                            {item.name === "Staff Hub" && pendingCount > 0 && (
+                                <span className="ml-auto min-w-[1.25rem] h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 animate-pulse shadow-sm z-10">
+                                    {pendingCount}
+                                </span>
+                            )}
+                            {isActive && !pendingCount && <motion.div layoutId="active-pill" className="absolute right-3 w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(0,200,83,0.8)]" />}
                         </div>
                     </Link>
                 );

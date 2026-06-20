@@ -209,7 +209,7 @@ function KitchenDock({ onRefresh }: any) {
     };
 
     return (
-        <div className="fixed bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none hidden md:block">
+        <div className="fixed bottom-4 md:bottom-8 left-0 right-0 mx-auto w-fit z-50 px-4 pointer-events-none">
             <motion.div 
                 initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="pointer-events-auto flex items-center gap-1.5 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] border border-slate-700 ring-1 ring-white/10 transform-gpu"
@@ -580,14 +580,14 @@ export default function KitchenPage() {
                                       }`}
                                   >
                                       <div 
-                                          className={`flex gap-3 md:gap-4 flex-1 ${isCompleted ? 'cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}`} 
+                                          className={`flex gap-3 md:gap-4 flex-1 min-w-0 ${isCompleted ? 'cursor-default' : 'cursor-pointer active:scale-95 transition-transform'}`} 
                                           onClick={() => handleItemClick(item, selectedTicket.id)}
                                       >
                                           <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center font-black text-base md:text-lg shrink-0 ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-md'}`}>
                                               {item.quantity}x
                                           </div>
-                                          <div className="flex flex-col justify-center min-w-0 pr-2">
-                                              <h4 className={`font-black text-base md:text-xl leading-tight truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
+                                          <div className="flex flex-col justify-center min-w-0 pr-2 flex-1">
+                                              <h4 className={`font-black text-base md:text-xl leading-tight break-words whitespace-normal ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</h4>
                                               
                                               <div className="flex flex-wrap gap-1.5 mt-1">
                                                   {item.variant && <span className="text-[9px] md:text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase tracking-wider truncate max-w-[150px]">{item.variant}</span>}
@@ -778,14 +778,14 @@ function TicketCardContent({ ticket }: { ticket: KitchenTicket }) {
                     const isCooking = s === 'cooking' || s === 'preparing';
 
                     return (
-                        <div key={i} className="flex flex-col gap-1 mb-2 last:mb-0">
-                            <div className="flex justify-between items-start text-xs md:text-sm w-full">
-                                <div className="flex items-start gap-2 md:gap-2.5 overflow-hidden">
+                        <div key={i} className="flex flex-col gap-1 mb-2 last:mb-0 w-full min-w-0">
+                            <div className="flex justify-between items-start text-xs md:text-sm w-full gap-2 min-w-0">
+                                <div className="flex items-start gap-2 md:gap-2.5 overflow-hidden flex-1 min-w-0">
                                     <span className="font-black text-slate-600 bg-slate-50 px-1.5 md:px-2 py-0.5 rounded text-[10px] md:text-sm min-w-[20px] md:min-w-[24px] text-center shrink-0 mt-0.5">{item.quantity}</span> 
-                                    <div className="flex flex-col min-w-0">
-                                        <span className={`font-bold truncate max-w-[110px] sm:max-w-[140px] md:max-w-[160px] ${isDone ? 'text-emerald-600 line-through opacity-70' : 'text-slate-800'}`}>{item.name}</span>
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                        <span className={`font-bold block truncate w-full ${isDone ? 'text-emerald-600 line-through opacity-70' : 'text-slate-800'}`}>{item.name}</span>
                                         {item.notes && (
-                                            <span className="text-[8px] md:text-[9px] text-red-500 font-bold truncate max-w-[110px] sm:max-w-[140px] md:max-w-[160px] flex items-center gap-1 mt-0.5">
+                                            <span className="text-[8px] md:text-[9px] text-red-500 font-bold truncate w-full flex items-center gap-1 mt-0.5">
                                                 <AlertTriangle className="w-2.5 h-2.5 shrink-0" /> {item.notes}
                                             </span>
                                         )}
