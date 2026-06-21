@@ -92,7 +92,7 @@ function FloatingDock({ router, dockStatus }: any) {
             animate={{ y: 0, opacity: 1 }} 
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
             /* FIX: Lifted to bottom-[110px] for that premium floating aesthetic */
-            className="md:hidden fixed bottom-[110px] left-0 right-0 mx-auto w-[92%] max-w-[400px] z-[9999] bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_20px_50px_-10px_rgba(0,200,83,0.15)] rounded-full p-1.5 flex justify-between items-center"
+            className="hidden md:flex fixed bottom-8 left-0 right-0 mx-auto w-[92%] max-w-[400px] z-[9999] bg-white/90 backdrop-blur-2xl border border-emerald-100 shadow-[0_20px_50px_-10px_rgba(0,200,83,0.15)] rounded-full p-1.5 justify-between items-center"
         >
             <button onClick={() => router.push('/staff/waiter')} className="flex flex-col items-center justify-center w-[22%] h-[52px] rounded-full text-emerald-600 bg-emerald-50 shadow-sm transition-all group">
                 <Home className="w-[18px] h-[18px] mb-0.5 group-hover:scale-110 transition-transform" />

@@ -27,7 +27,7 @@ export async function getStaff() {
   // 2. Get Pending Leaves for Badge
   const { data: pendingLeaves } = await supabaseAdmin
     .from("staff_leaves")
-    .select("staff_id")
+    .select("id, staff_id")
     .eq("tenant_id", tenantId)
     .eq("status", "pending");
 
@@ -37,7 +37,7 @@ export async function getStaff() {
       hasPendingLeave: pendingLeaves?.some(l => l.staff_id === s.id)
   }));
 
-  return { success: true, data: enrichedStaff };
+  return { success: true, data: enrichedStaff, pendingLeaves: pendingLeaves || [] };
 }
 
 // --- 2. CREATE STAFF ---

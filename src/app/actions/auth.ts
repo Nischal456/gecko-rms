@@ -135,6 +135,14 @@ export async function loginUser(data: any) {
       maxAge: 60 * 60 * 24 * 7, 
       sameSite: "lax"
     });
+
+    cookieStore.set("gecko_admin_token", "true", { 
+      path: '/', 
+      httpOnly: true, 
+      secure: false, 
+      maxAge: 60 * 60 * 24 * 7, 
+      sameSite: "lax"
+    });
     
     return { success: true, role: "restaurant_admin", url: "/admin", name: tenant.name };
 
@@ -158,6 +166,14 @@ export async function impersonateTenant(tenantId: number) {
     sameSite: "lax"
   });
 
+  cookieStore.set("gecko_admin_token", "true", { 
+    path: '/', 
+    httpOnly: true, 
+    secure: false, 
+    maxAge: 60 * 60 * 24, 
+    sameSite: "lax"
+  });
+
   return { success: true, url: "/admin" };
 }
 
@@ -167,5 +183,6 @@ export async function logoutUser() {
   cookieStore.delete("gecko_tenant_id");
   cookieStore.delete("gecko_super_admin");
   cookieStore.delete("gecko_staff_token");
+  cookieStore.delete("gecko_admin_token");
   return { success: true };
 }

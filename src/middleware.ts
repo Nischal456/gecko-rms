@@ -29,8 +29,9 @@ export async function middleware(request: NextRequest) {
         } catch (e) {}
     }
 
+    const adminToken = request.cookies.get("gecko_admin_token")?.value;
     const tenantId = request.cookies.get("gecko_tenant_id");
-    if (!tenantId) return NextResponse.redirect(new URL("/login", request.url));
+    if (!adminToken || !tenantId) return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // 4. STAFF ZONES

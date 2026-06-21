@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import Sidebar from "@/app/staff/manager/Sidebar";
+import Sidebar from "@/app/admin/Sidebar";
 import React from "react";
 import { 
   BarChart3, TrendingUp, Download, Wallet, Banknote, Users, 

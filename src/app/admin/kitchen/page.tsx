@@ -153,19 +153,19 @@ export default function AdminKitchenPage() {
         <div className="flex-1 overflow-x-auto p-6 pb-24">
             <div className="flex gap-6 h-full min-w-[1200px]">
                 <TicketColumn 
-                    title="New Orders" count={pendingTickets.length} tickets={pendingTickets} status="pending"
+                    title="New Orders" count={pendingTickets.length} tickets={pendingTickets}
                     color="border-blue-200 bg-blue-50/50" badgeColor="bg-blue-100 text-blue-700"
-                    onItemClick={handleItemClick} onOpen={setSelectedTicket} onDrop={handleDragDrop}
+                    onOpen={setSelectedTicket}
                 />
                 <TicketColumn 
-                    title="Cooking" count={cookingTickets.length} tickets={cookingTickets} status="cooking"
+                    title="Cooking" count={cookingTickets.length} tickets={cookingTickets}
                     color="border-orange-200 bg-orange-50/50" badgeColor="bg-orange-100 text-orange-700"
-                    onItemClick={handleItemClick} onOpen={setSelectedTicket} onDrop={handleDragDrop}
+                    onOpen={setSelectedTicket}
                 />
                 <TicketColumn 
-                    title="Ready for Pickup" count={readyTickets.length} tickets={readyTickets} status="ready"
+                    title="Ready for Pickup" count={readyTickets.length} tickets={readyTickets}
                     color="border-emerald-200 bg-emerald-50/50" badgeColor="bg-emerald-100 text-emerald-700"
-                    onItemClick={handleItemClick} onOpen={setSelectedTicket} onDrop={handleDragDrop}
+                    onOpen={setSelectedTicket}
                 />
             </div>
         </div>
@@ -196,8 +196,7 @@ export default function AdminKitchenPage() {
                             {selectedTicket.order_items.map((item) => (
                                 <div 
                                     key={item.id} 
-                                    onClick={() => handleItemClick(item, selectedTicket.id)}
-                                    className={`p-4 rounded-2xl border flex justify-between items-center cursor-pointer transition-all active:scale-[0.98] ${item.status === 'served' ? 'bg-slate-50 border-slate-100 opacity-50 grayscale' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'}`}
+                                    className={`p-4 rounded-2xl border flex justify-between items-center ${item.status === 'served' ? 'bg-slate-50 border-slate-100 opacity-50 grayscale' : 'bg-white border-slate-200'}`}
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-sm bg-slate-100 text-slate-700`}>{item.quantity}x</div>
@@ -223,18 +222,10 @@ export default function AdminKitchenPage() {
   );
 }
 
-function TicketColumn({ title, count, tickets, status, color, badgeColor, onItemClick, onOpen, onDrop }: any) {
-    const handleDropInternal = (e: React.DragEvent) => {
-        e.preventDefault();
-        const ticketId = e.dataTransfer.getData("ticketId");
-        if(ticketId) onDrop(ticketId, status);
-    };
-
+function TicketColumn({ title, count, tickets, color, badgeColor, onOpen }: any) {
     return (
         <div 
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDropInternal}
-            className={`flex-1 flex flex-col h-full rounded-[2.5rem] border-2 border-dashed ${color} overflow-hidden transition-colors hover:bg-slate-50`}
+            className={`flex-1 flex flex-col h-full rounded-[2.5rem] border-2 border-dashed ${color} overflow-hidden`}
         >
             <div className="px-6 py-4 flex justify-between items-center sticky top-0 z-10 bg-white/30 backdrop-blur-sm">
                 <h3 className="font-black text-slate-400 uppercase tracking-widest text-xs">{title}</h3>
@@ -244,12 +235,10 @@ function TicketColumn({ title, count, tickets, status, color, badgeColor, onItem
                 {tickets.map((t: KitchenTicket) => (
                     <div 
                         key={t.id} 
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData("ticketId", t.id)}
                         onClick={() => onOpen(t)} 
-                        className="cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-transform"
+                        className="cursor-pointer hover:scale-[1.02] transition-transform"
                     >
-                        <TicketCard ticket={t} onItemClick={onItemClick} />
+                        <TicketCard ticket={t} />
                     </div>
                 ))}
                 {tickets.length === 0 && <div className="h-32 flex items-center justify-center text-slate-400 text-xs font-bold uppercase opacity-50">Empty</div>}
@@ -258,7 +247,7 @@ function TicketColumn({ title, count, tickets, status, color, badgeColor, onItem
     )
 }
 
-function TicketCard({ ticket, onItemClick }: { ticket: KitchenTicket, onItemClick: any }) {
+function TicketCard({ ticket }: { ticket: KitchenTicket }) {
     const [elapsed, setElapsed] = useState("");
     const [isLate, setIsLate] = useState(false);
 
@@ -292,8 +281,7 @@ function TicketCard({ ticket, onItemClick }: { ticket: KitchenTicket, onItemClic
                 {ticket.order_items.map((item, i) => (
                     <div 
                         key={i} 
-                        onClick={() => onItemClick(item, ticket.id)}
-                        className={`flex justify-between items-center text-sm p-1.5 rounded-lg hover:bg-slate-50 transition-colors ${item.status === 'served' ? 'line-through text-slate-300' : 'text-slate-600'}`}
+                        className={`flex justify-between items-center text-sm p-1.5 rounded-lg ${item.status === 'served' ? 'line-through text-slate-300' : 'text-slate-600'}`}
                     >
                         <span className="flex gap-2 items-center">
                             <span className="font-bold text-slate-400 bg-slate-100 px-1.5 rounded text-xs">{item.quantity}x</span> 

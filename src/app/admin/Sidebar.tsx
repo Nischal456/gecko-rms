@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link"; // <--- THE SECRET TO INSTANT SPEED
 import { logoutUser } from "@/app/actions/auth";
 import { uploadRestaurantLogo } from "@/app/actions/dashboard";
+import { getPendingLeaves } from "@/app/actions/staff-management";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -19,6 +20,46 @@ export default function Sidebar({ tenantName, tenantCode, logo }: { tenantName: 
     const [currentTime, setCurrentTime] = useState("");
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        let active = true;
+        async function fetchLeaves() {
+            try {
+                const res = await getPendingLeaves();
+                if (res.success && active) {
+                    const rawSeen = localStorage.getItem("seen_leave_ids");
+                    const seenIds: string[] = rawSeen ? JSON.parse(rawSeen) : [];
+                    const unread = (res.data || []).filter((l: any) => !seenIds.includes(l.id));
+                    setPendingCount(unread.length);
+                }
+            } catch (e) {}
+        }
+        fetchLeaves();
+        const interval = setInterval(fetchLeaves, 8000);
+
+        const handleUpdate = () => {
+            fetchLeaves();
+        };
+        window.addEventListener("leave-status-updated", handleUpdate);
+
+        return () => {
+            active = false;
+            clearInterval(interval);
+            window.removeEventListener("leave-status-updated", handleUpdate);
+        };
+    }, []);
+
+    const handleMarkAsRead = async () => {
+        try {
+            const res = await getPendingLeaves();
+            if (res.success && res.data) {
+                const ids = res.data.map((l: any) => l.id);
+                localStorage.setItem("seen_leave_ids", JSON.stringify(ids));
+                setPendingCount(0);
+            }
+        } catch (e) {}
+    };
 
     useEffect(() => {
         // Safe Client-Side Time Setting
@@ -140,12 +181,20 @@ export default function Sidebar({ tenantName, tenantCode, logo }: { tenantName: 
                                 <Link 
                                     key={i} 
                                     href={item.path}
-                                    onClick={() => setIsOpen(false)} // Close sidebar on mobile click
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        if (item.label === "Staff") handleMarkAsRead();
+                                    }}
                                     prefetch={true} // Ensures instant loading
                                     className={`w-full flex items-center gap-4 p-4 rounded-[1.2rem] transition-all duration-300 group relative overflow-hidden ${isActive ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10 scale-[1.02]' : 'hover:bg-slate-50 text-slate-500 hover:text-slate-900'}`}
                                 >
                                     <item.icon className={`w-5 h-5 relative z-10 transition-colors ${isActive ? 'text-gecko-400' : 'text-slate-400 group-hover:text-slate-900'}`} />
                                     <span className={`font-bold text-sm relative z-10`}>{item.label}</span>
+                                    {item.label === "Staff" && pendingCount > 0 && (
+                                        <span className="ml-auto min-w-[1.25rem] h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 animate-pulse shadow-sm z-10">
+                                            {pendingCount}
+                                        </span>
+                                    )}
                                     
                                     {/* Active/Hover Background Effects */}
                                     {isActive && <div className="absolute inset-0 bg-white/10 z-0" />}
