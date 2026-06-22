@@ -119,16 +119,55 @@ function FloatingDock({ router, dockStatus }: any) {
     )
 }
 
-function PremiumDateCard() {
+function PremiumDateCard({ businessDate }: { businessDate?: string }) {
     const [dateInfo, setDateInfo] = useState({ nepali: "", english: "" });
+
     useEffect(() => {
-        const now = new Date();
-        const nep = new NepaliDate(now);
-        setDateInfo({
-            nepali: `${nepaliMonths[nep.getMonth()]} ${toNepaliDigits(nep.getDate())}, ${toNepaliDigits(nep.getYear())} ${nepaliDays[nep.getDay()]}`,
-            english: now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-        });
-    }, []);
+        let bizStr = businessDate;
+        if (!bizStr) {
+            const date = new Date();
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Kathmandu',
+                hour: '2-digit',
+                hour12: false,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(date);
+            const year = parts.find(p => p.type === 'year')?.value;
+            const month = parts.find(p => p.type === 'month')?.value;
+            const day = parts.find(p => p.type === 'day')?.value;
+            const hourStr = parts.find(p => p.type === 'hour')?.value || "0";
+            const hour = parseInt(hourStr, 10);
+            if (!isNaN(hour) && (hour < 5 || hour === 24)) {
+                const yesterday = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+                const yParts = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Asia/Kathmandu',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).formatToParts(yesterday);
+                const yYear = yParts.find(p => p.type === 'year')?.value;
+                const yMonth = yParts.find(p => p.type === 'month')?.value;
+                const yDay = yParts.find(p => p.type === 'day')?.value;
+                bizStr = `${yYear}-${yMonth}-${yDay}`;
+            } else {
+                bizStr = `${year}-${month}-${day}`;
+            }
+        }
+        
+        try {
+            const [y, m, d] = bizStr.split('-').map(Number);
+            const localDate = new Date(y, m - 1, d);
+            const nep = new NepaliDate(localDate);
+            setDateInfo({
+                nepali: `${nepaliMonths[nep.getMonth()]} ${toNepaliDigits(nep.getDate())}, ${toNepaliDigits(nep.getYear())} ${nepaliDays[nep.getDay()]}`,
+                english: localDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    }, [businessDate]);
     return (
         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4 bg-white pl-2 pr-6 py-2 rounded-[1.5rem] border border-emerald-100/50 shadow-sm hover:shadow-md transition-all cursor-default group min-w-[280px] transform-gpu">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl flex flex-col items-center justify-center text-emerald-700 border border-emerald-200/50 shadow-inner group-hover:scale-105 transition-transform"><Calendar className="w-5 h-5 mb-0.5" /></div>
@@ -283,6 +322,7 @@ export default function WaiterDashboard() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [disabledItems, setDisabledItems] = useState<any[]>([]); 
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [businessDate, setBusinessDate] = useState<string>("");
   
   // --- 0-LAG HARDWARE ACCELERATED PAN STATE ---
   const [scale, setScale] = useState(0.8);
@@ -349,6 +389,7 @@ export default function WaiterDashboard() {
         if (dashRes?.tenant) setTenant(dashRes.tenant);
         
         if (waiterRes.success) {
+            setBusinessDate(waiterRes.businessDate || "");
             setStaff(waiterRes.staff);
             setDockStatus(waiterRes.dockStatus || { hasReady: false, hasCooking: false });
             setDisabledItems(waiterRes.disabledItems || []);
@@ -544,7 +585,7 @@ export default function WaiterDashboard() {
                         ))}
                     </div>
 
-                    <div className="hidden md:block"><PremiumDateCard /></div>
+                    <div className="hidden md:block"><PremiumDateCard businessDate={businessDate} /></div>
                 </header>
 
                 <div className="px-4 md:px-8 pt-6 pb-2 grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">

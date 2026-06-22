@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate } from "@/app/actions/business-date";
 
 // --- HELPERS (Not Exported) ---
 function getSafeId(id: string | null | undefined): number {
@@ -69,7 +71,7 @@ export async function getKitchenTickets() {
   
   const getCachedData = unstable_cache(
     async () => {
-      const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+      const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
       try {
         const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
@@ -172,10 +174,12 @@ export async function getKitchenTickets() {
             }
         });
 
+        const businessDate = await getActiveBusinessDate(tenantId);
         return { 
             success: true, 
             data: mappedOrders, 
-            cancellations: cancellations.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime()) 
+            cancellations: cancellations.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime()),
+            businessDate
         };
       } catch (e) { return { success: false, data: [], cancellations: [] }; }
     },
@@ -189,7 +193,7 @@ export async function getKitchenTickets() {
 export async function updateTicketStatus(orderId: string, status: string) {
     const tenantId = await getTenantId();
     const targetId = String(orderId).trim();
-    const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+    const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
     const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
     const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
@@ -250,7 +254,7 @@ export async function updateItemStatus(itemId: string, status: string, orderId: 
     const tenantId = await getTenantId();
     const targetOrderId = String(orderId).trim();
     const targetItemId = String(itemId).trim();
-    const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+    const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
     const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data").eq("tenant_id", tenantId).gte("date", dateStr);
     if (!logs) return { success: false };
@@ -338,6 +342,22 @@ export async function disableMenuItem(itemName: string) {
     revalidatePath("/staff/menu"); return { success: true };
 }
 
+async function getStaffMember(tenantId: number, staff: { id: string, name: string }) {
+    let query = supabaseAdmin.from("staff").select("*").eq("tenant_id", tenantId);
+    
+    // Check if staff.id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (staff.id && uuidRegex.test(staff.id)) {
+        query = query.eq("id", staff.id);
+    } else {
+        query = query.eq("full_name", staff.name);
+    }
+    
+    const { data, error } = await query.maybeSingle();
+    if (error) console.error("Error looking up staff member:", error);
+    return data;
+}
+
 export async function getKitchenStats() {
     const tenantId = await getTenantId();
     if (!tenantId) return { success: false };
@@ -347,14 +367,10 @@ export async function getKitchenStats() {
         const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
         const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
 
-        const today = new Date();
-        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-        
         const datesToCheck = [
-            yesterday.toISOString().split('T')[0],
-            today.toISOString().split('T')[0],
-            tomorrow.toISOString().split('T')[0]
+            getKathmanduDateString(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+            getKathmanduDateString(),
+            getKathmanduDateString(new Date(Date.now() + 24 * 60 * 60 * 1000))
         ];
 
         const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
@@ -368,7 +384,7 @@ export async function getKitchenStats() {
         allOrders.forEach(o => { if (o.id) uniqueOrdersMap.set(o.id, o); });
         let finalOrders = Array.from(uniqueOrdersMap.values());
 
-        const twentyFourHoursAgo = today.getTime() - (24 * 60 * 60 * 1000);
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
         finalOrders = finalOrders.filter(o => new Date(o.timestamp || o.created_at || 0).getTime() >= twentyFourHoursAgo);
 
         if (isSplitActive) {
@@ -436,16 +452,54 @@ export async function getKitchenStats() {
         const staffCookie = cookieStore.get("gecko_staff_token")?.value;
         if (staffCookie) {
             const staff = JSON.parse(staffCookie);
-            const { data: profile } = await supabaseAdmin
-                .from("staff_members")
-                .select("payroll_history, leave_requests")
-                .eq("tenant_id", tenantId)
-                .eq("name", staff.name)
-                .single();
+            const staffMember = await getStaffMember(tenantId, staff);
 
-            if (profile) {
-                payroll = profile.payroll_history || [];
-                leaves = profile.leave_requests || [];
+            if (staffMember) {
+                // Fetch payroll history
+                const { data: dbPayments } = await supabaseAdmin
+                    .from("staff_payments")
+                    .select("*")
+                    .eq("staff_id", staffMember.id)
+                    .order("payment_date", { ascending: false });
+
+                if (dbPayments) {
+                    payroll = dbPayments.map((pay: any) => ({
+                        id: pay.id,
+                        staff_name: staffMember.full_name,
+                        payment_date: pay.payment_date,
+                        amount: Number(pay.amount) || 0
+                    }));
+                }
+
+                // Fetch leaves
+                const { data: dbLeaves } = await supabaseAdmin
+                    .from("staff_leaves")
+                    .select("*")
+                    .eq("staff_id", staffMember.id)
+                    .order("start_date", { ascending: false });
+
+                if (dbLeaves) {
+                    leaves = dbLeaves.map((leave: any) => {
+                        let leaveType = 'Leave';
+                        let displayReason = leave.reason || '';
+                        if (leave.reason && leave.reason.startsWith('[')) {
+                            const closingBracket = leave.reason.indexOf(']');
+                            if (closingBracket > 0) {
+                                leaveType = leave.reason.slice(1, closingBracket);
+                                displayReason = leave.reason.slice(closingBracket + 1).trim();
+                            }
+                        }
+                        return {
+                            id: leave.id,
+                            status: leave.status || 'pending',
+                            type: leaveType,
+                            from: leave.start_date,
+                            to: leave.end_date,
+                            reason: displayReason,
+                            date_applied: leave.created_at ? leave.created_at.split('T')[0] : (leave.start_date || '')
+                        };
+                    });
+                }
             }
         }
     } catch (e) {

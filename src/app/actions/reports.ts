@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { unstable_noStore as noStore } from 'next/cache';
+import { getBusinessDate, offsetDateString } from "@/lib/utils";
 
 export type ReportRange = "today" | "7d" | "30d" | "90d" | "1y";
 
@@ -40,47 +41,46 @@ export async function getReportData(range: ReportRange) {
   noStore(); 
   const tenantId = await getTenantId();
   
-  // 1. Calculate Date Ranges
-  const now = new Date();
-  let startDate = new Date();
-  let prevStartDate = new Date();
-  let prevEndDate = new Date();
-  
-  now.setHours(23, 59, 59, 999); 
+  // 1. Calculate Date Ranges using the active business date
+  const currentBusinessDate = getBusinessDate(new Date());
+
+  let currentStartStr = "";
+  let currentEndStr = "";
+  let prevStartStr = "";
+  let prevEndStr = "";
 
   switch (range) {
       case "today": 
-          startDate.setHours(0, 0, 0, 0); 
-          prevStartDate.setDate(now.getDate() - 1); 
-          prevStartDate.setHours(0,0,0,0);
-          prevEndDate.setDate(now.getDate() - 1);
-          prevEndDate.setHours(23,59,59,999);
+          currentStartStr = currentBusinessDate;
+          currentEndStr = currentBusinessDate;
+          prevStartStr = offsetDateString(currentBusinessDate, -1);
+          prevEndStr = offsetDateString(currentBusinessDate, -1);
           break;
       case "7d": 
-          startDate.setDate(now.getDate() - 7); 
-          prevStartDate.setDate(now.getDate() - 14);
-          prevEndDate.setDate(now.getDate() - 7);
+          currentStartStr = offsetDateString(currentBusinessDate, -6);
+          currentEndStr = currentBusinessDate;
+          prevStartStr = offsetDateString(currentBusinessDate, -13);
+          prevEndStr = offsetDateString(currentBusinessDate, -7);
           break;
       case "30d": 
-          startDate.setDate(now.getDate() - 30); 
-          prevStartDate.setDate(now.getDate() - 60);
-          prevEndDate.setDate(now.getDate() - 30);
+          currentStartStr = offsetDateString(currentBusinessDate, -29);
+          currentEndStr = currentBusinessDate;
+          prevStartStr = offsetDateString(currentBusinessDate, -59);
+          prevEndStr = offsetDateString(currentBusinessDate, -30);
           break;
       case "90d": 
-          startDate.setDate(now.getDate() - 90); 
-          prevStartDate.setDate(now.getDate() - 180);
-          prevEndDate.setDate(now.getDate() - 90);
+          currentStartStr = offsetDateString(currentBusinessDate, -89);
+          currentEndStr = currentBusinessDate;
+          prevStartStr = offsetDateString(currentBusinessDate, -179);
+          prevEndStr = offsetDateString(currentBusinessDate, -90);
           break;
       case "1y":
-          startDate.setDate(now.getDate() - 365);
-          prevStartDate.setDate(now.getDate() - 730);
-          prevEndDate.setDate(now.getDate() - 365);
+          currentStartStr = offsetDateString(currentBusinessDate, -364);
+          currentEndStr = currentBusinessDate;
+          prevStartStr = offsetDateString(currentBusinessDate, -729);
+          prevEndStr = offsetDateString(currentBusinessDate, -365);
           break;
   }
-  
-  const currentStartStr = startDate.toISOString().split('T')[0];
-  const prevStartStr = prevStartDate.toISOString().split('T')[0];
-  const prevEndStr = prevEndDate.toISOString().split('T')[0];
 
   try {
       // Fetch POS Logs
@@ -89,6 +89,7 @@ export async function getReportData(range: ReportRange) {
           .select("date, orders_data, paid_history") 
           .eq("tenant_id", tenantId)
           .gte("date", currentStartStr)
+          .lte("date", currentEndStr)
           .order("date", { ascending: true });
 
       const { data: prevLogs } = await supabaseAdmin
@@ -112,13 +113,15 @@ export async function getReportData(range: ReportRange) {
               .select("*")
               .eq("tenant_id", tenantId)
               .gte("date", currentStartStr)
+              .lte("date", currentEndStr)
               .order("created_at", { ascending: false });
           if (expData) financialLogs = expData;
       } catch (e) {
           console.error("Failed to fetch expenses", e);
       }
 
-      let totalRevenue = 0; // Actual Cash Received
+      let totalRevenue = 0; // Actual Cash Collected
+      let totalSales = 0;   // Accrual Revenue Source (Order Totals)
       let totalCreditDue = 0; // Money floating in credit
       let prevRevenue = 0;
       let totalExpense = 0;
@@ -140,112 +143,96 @@ export async function getReportData(range: ReportRange) {
           paidOrders.forEach((order: any) => {
               const grandTotal = Number(order.grandTotal || order.total || 0);
               const discountAmt = Number(order.discount || 0);
-              let actualRevenue = grandTotal;
-              let currentDue = 0;
-              let finalMethod = "Pending";
+              const currentDue = order.credit_due !== undefined ? Number(order.credit_due) : 0;
+              const staff = order.served_by || order.staff || "Cashier";
 
-              let rawMethod = String(order.payment_method || order.method || "Cash");
-              if (rawMethod.toLowerCase().includes("credit")) finalMethod = "Credit";
-              else finalMethod = rawMethod;
-
-              // Extract exact cash received if Credit
-              if (finalMethod === "Credit") {
-                  const tendered = Number(order.tendered || 0);
-                  actualRevenue = tendered; 
-                  currentDue = order.credit_due !== undefined ? Number(order.credit_due) : Math.max(0, grandTotal - tendered);
+              let creditPayments = order.credit_payments || [];
+              if (typeof creditPayments === 'string') {
+                  try { creditPayments = JSON.parse(creditPayments); } catch(e) { creditPayments = []; }
+              } else if (!Array.isArray(creditPayments)) {
+                  creditPayments = [];
               }
 
-              // ACTUAL RECEIVED FLOW (For Net Profit & Cash in drawer)
-              totalRevenue += actualRevenue;
-              totalCreditDue += currentDue; 
-              dailyMap[dateKey].revenue += actualRevenue;
+              // ORDER REVENUE: Counted only once at order creation
+              totalSales += grandTotal;
+              orderCount += 1;
+              totalCreditDue += currentDue;
+
+              // Upfront paid cash at checkout
+              const sumCreditPayments = creditPayments.reduce((sum: number, cp: any) => sum + (Number(cp.amount) || 0), 0);
+              const upfrontAmt = grandTotal - (currentDue + sumCreditPayments);
               
-              // SALES VOLUME FLOW (For Methods & Staff Splits)
-              // FIX: Exact Split Ledger Mapping
-              let safeSplits = order.splits;
-              if (typeof safeSplits === 'string') {
-                  try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+              if (upfrontAmt > 0) {
+                  totalRevenue += upfrontAmt;
+                  dailyMap[dateKey].revenue += upfrontAmt;
               }
-              
-              if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
-                  const creditAmt = currentDue;
-                  const paidAmt = Math.max(0, grandTotal - creditAmt);
-                  
-                  const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
-                  const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
-                  
-                  if (creditAmt > 0) {
-                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
-                  }
-                  
-                  if (nonCreditSplits.length > 0) {
-                      nonCreditSplits.forEach((s: any) => {
-                          const sAmt = Number(s.amount) || 0;
-                          const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
-                          const allocated = paidAmt * share;
-                          paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
-                      });
-                  } else if (paidAmt > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
-                  }
-                  
-                  let totalSplitTendered = 0;
-                  safeSplits.forEach((s: any) => {
-                      if (s.method !== 'Credit') {
-                          totalSplitTendered += (Number(s.amount) || 0);
-                      }
-                  });
-                  const changeToReturn = totalSplitTendered - actualRevenue;
-                  if (changeToReturn > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
-                  }
-              } else if (finalMethod === 'Credit') {
-                  const creditAmt = currentDue;
-                  const paidAmt = Math.max(0, grandTotal - creditAmt);
-                  if (creditAmt > 0) {
-                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
-                  }
-                  if (paidAmt > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
-                  }
-              } else {
-                  paymentMethods[finalMethod] = (paymentMethods[finalMethod] || 0) + grandTotal;
-              }
-              const staff = order.served_by || order.staff || "Cashier"; 
+
+              // Top items & staff performance math
               staffPerformance[staff] = (staffPerformance[staff] || 0) + grandTotal;
 
-              orderCount += 1;
-
-              // STRIKOUT WASTE FILTER: Exclude cancelled items from top sellers math
               const cleanItems = (order.items || []).filter((i:any) => !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
-              
-              if (Array.isArray(cleanItems)) {
-                  cleanItems.forEach((item: any) => {
-                      const iName = item.name || item.n || "Unknown";
-                      const iQty = Number(item.qty || item.q || 1);
-                      const iPrice = Number(item.price || item.p || 0);
+              cleanItems.forEach((item: any) => {
+                  const iName = item.name || item.n || "Unknown";
+                  const iQty = Number(item.qty || item.q || 1);
+                  const iPrice = Number(item.price || item.p || 0);
 
-                      if (!itemMap[iName]) itemMap[iName] = { qty: 0, sales: 0 };
-                      itemMap[iName].qty += iQty;
-                      itemMap[iName].sales += iPrice * iQty;
-                  });
-              }
+                  if (!itemMap[iName]) itemMap[iName] = { qty: 0, sales: 0 };
+                  itemMap[iName].qty += iQty;
+                  itemMap[iName].sales += iPrice * iQty;
+              });
+
+              // Push POS Bill transaction
+              let rawMethod = String(order.payment_method || order.method || "Cash");
+              let finalMethod = rawMethod.toLowerCase().includes("credit") ? "Credit" : rawMethod;
 
               allTransactions.push({
                   id: order.invoice_no || order.id || `ORD-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
                   date: order.paid_at || order.timestamp || log.date,
+                  businessDate: log.date,
                   amount: grandTotal,
                   discount: discountAmt,
-                  tendered: Number(order.tendered) || actualRevenue,
+                  tendered: Number(order.tendered) || upfrontAmt,
                   due: currentDue,
                   type: "POS Bill",
                   method: finalMethod,
-                  splits: order.splits || [], // FORWARD SPLITS TO FRONTEND FOR EXACT BADGE PARSING
+                  splits: order.splits || [],
+                  credit_payments: creditPayments,
                   details: `Table ${order.table_no || order.tbl || 'N/A'}`,
                   status: currentDue > 0 ? 'Partial/Credit' : 'Completed', 
                   items: order.items || [], 
-                  served_by: order.served_by || order.staff || "Cashier",
+                  served_by: staff,
                   customer: { name: order.customer_name, address: order.customer_address }
+              });
+
+              // Push separate Credit Payment transactions
+              creditPayments.forEach((p: any) => {
+                  const pAmt = Number(p.amount) || 0;
+                  const pMethod = p.method || "Cash";
+                  const pDateStr = p.business_date || dateKey;
+
+                  if (pAmt > 0) {
+                      allTransactions.push({
+                          id: `PAY-${(order.invoice_no || order.id || "").slice(-6).toUpperCase()}`,
+                          date: p.date || order.paid_at || log.date,
+                          businessDate: pDateStr,
+                          amount: pAmt,
+                          discount: 0,
+                          tendered: pAmt,
+                          due: 0,
+                          type: "Credit Payment",
+                          method: pMethod,
+                          details: `Credit Payment for Inv: ${order.invoice_no}`,
+                          status: "Completed",
+                          items: [],
+                          served_by: staff,
+                          customer: { name: order.customer_name, address: order.customer_address }
+                      });
+
+                      // Cash inflow event counts towards Cash Collected
+                      totalRevenue += pAmt;
+                      if (!dailyMap[pDateStr]) dailyMap[pDateStr] = { revenue: 0, expense: 0 };
+                      dailyMap[pDateStr].revenue += pAmt;
+                  }
               });
           });
       });
@@ -277,14 +264,14 @@ export async function getReportData(range: ReportRange) {
           }
 
           if (isIncome) {
+              totalSales += amount;
               totalRevenue += amount;
               if (dateKey) dailyMap[dateKey].revenue += amount;
-              
-              paymentMethods[paymentIntegration] = (paymentMethods[paymentIntegration] || 0) + amount;
               
               allTransactions.push({
                   id: `INC-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
+                  businessDate: dateKey,
                   amount: amount,
                   discount: 0,
                   tendered: amount,
@@ -300,11 +287,10 @@ export async function getReportData(range: ReportRange) {
               totalExpense += amount;
               if (dateKey) dailyMap[dateKey].expense += amount;
               
-              paymentMethods[paymentIntegration] = (paymentMethods[paymentIntegration] || 0) - amount;
-
               allTransactions.push({
                   id: `EXP-${(log.id || Math.random()).toString().slice(-4).toUpperCase()}`,
                   date: log.created_at || log.date,
+                  businessDate: dateKey,
                   amount: amount,
                   discount: 0,
                   tendered: amount,
@@ -319,19 +305,97 @@ export async function getReportData(range: ReportRange) {
           }
       });
 
-      // 3. Calculate Previous Revenue
+      // 3. Calculate Previous Revenue (Previous Cash Collected)
       (prevLogs || []).forEach((log: any) => {
           const paid = safeParse(log.paid_history);
           paid.forEach((o: any) => {
-              let amt = Number(o.grandTotal || o.total || 0);
-              if (String(o.payment_method).toLowerCase() === 'credit') {
-                  amt = Number(o.tendered || 0); 
+              const grandTotal = Number(o.grandTotal || o.total || 0);
+              const currentDue = o.credit_due !== undefined ? Number(o.credit_due) : 0;
+              let creditPayments = o.credit_payments || [];
+              if (typeof creditPayments === 'string') {
+                  try { creditPayments = JSON.parse(creditPayments); } catch(e) { creditPayments = []; }
+              } else if (!Array.isArray(creditPayments)) {
+                  creditPayments = [];
               }
-              prevRevenue += amt;
+
+              const sumCreditPayments = creditPayments.reduce((sum: number, cp: any) => sum + (Number(cp.amount) || 0), 0);
+              const upfrontAmt = grandTotal - (currentDue + sumCreditPayments);
+
+              // Upfront paid cash in previous range
+              if (log.date >= prevStartStr && log.date <= prevEndStr && upfrontAmt > 0) {
+                  prevRevenue += upfrontAmt;
+              }
+
+              // Credit payments in previous range
+              creditPayments.forEach((p: any) => {
+                  const pAmt = Number(p.amount) || 0;
+                  const pDateStr = p.business_date || log.date;
+                  if (pDateStr >= prevStartStr && pDateStr <= prevEndStr && pAmt > 0) {
+                      prevRevenue += pAmt;
+                  }
+              });
           });
       });
 
-      // 4. Final Calculations
+      // 4. Populate Payment Methods Breakdown from current date range Transactions
+      allTransactions.forEach((tx: any) => {
+          const amt = Number(tx.amount) || 0;
+          const bsDate = tx.businessDate;
+          const isInRange = bsDate >= currentStartStr && bsDate <= currentEndStr;
+
+          if (isInRange) {
+              if (tx.type === 'POS Bill') {
+                  const currentDue = Number(tx.due) || 0;
+                  const creditPayments = tx.credit_payments || [];
+                  const sumCreditPayments = creditPayments.reduce((sum: number, cp: any) => sum + (Number(cp.amount) || 0), 0);
+                  const upfrontAmt = amt - (currentDue + sumCreditPayments);
+
+                  if (upfrontAmt > 0) {
+                      let rawSplits = tx.splits || [];
+                      if (typeof rawSplits === 'string') {
+                          try { rawSplits = JSON.parse(rawSplits); } catch(e) { rawSplits = []; }
+                      }
+                      let upfrontSplits = [...rawSplits];
+                      if (upfrontSplits.length === 0) {
+                          upfrontSplits = [{ method: tx.method || 'Cash', amount: amt }];
+                      }
+
+                      // Deduct credit payments
+                      creditPayments.forEach((cp: any) => {
+                          const cpAmt = Number(cp.amount) || 0;
+                          const cpMethod = cp.method || 'Cash';
+                          let match = upfrontSplits.find((s: any) => s.method === cpMethod);
+                          if (match) {
+                              match.amount = Math.max(0, Number(match.amount) - cpAmt);
+                          }
+                      });
+
+                      // Filter out Credit splits
+                      upfrontSplits = upfrontSplits.filter((s: any) => s.method !== 'Credit' && Number(s.amount) > 0);
+
+                      const totalUpfrontSplitsAmt = upfrontSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                      upfrontSplits.forEach((s: any) => {
+                          const sAmt = Number(s.amount) || 0;
+                          const share = totalUpfrontSplitsAmt > 0 ? (sAmt / totalUpfrontSplitsAmt) : 0;
+                          const allocated = upfrontAmt * share;
+                          paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
+                      });
+                  }
+
+                  if (currentDue > 0) {
+                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + currentDue;
+                  }
+              } else if (tx.type === 'Credit Payment') {
+                  paymentMethods[tx.method] = (paymentMethods[tx.method] || 0) + amt;
+              } else if (tx.type === 'Manual Income') {
+                  paymentMethods[tx.method] = (paymentMethods[tx.method] || 0) + amt;
+              } else if (tx.type === 'Manual Expense') {
+                  paymentMethods[tx.method] = (paymentMethods[tx.method] || 0) - amt;
+              }
+          }
+      });
+
+      // 5. Final Calculations
       const netProfit = totalRevenue - totalExpense;
       const margin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
       
@@ -339,7 +403,6 @@ export async function getReportData(range: ReportRange) {
       if (prevRevenue > 0) revenueTrend = Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100);
       else if (totalRevenue > 0) revenueTrend = 100;
 
-      // 5. Format Data for Frontend
       const chartData = Object.keys(dailyMap).sort().map(date => ({
           date, 
           revenue: dailyMap[date].revenue || 0,
@@ -357,19 +420,21 @@ export async function getReportData(range: ReportRange) {
       return {
           success: true,
           stats: {
-              totalRevenue,
+              totalRevenue, // Cash collected (Actual Received)
               totalCreditDue, 
               totalExpense,
               netProfit,
               margin,
               orderCount,
-              revenueTrend
+              revenueTrend,
+              totalSales // Accrual sales
           },
           chartData,
           paymentMethods,   
           staffPerformance, 
           topItems,
-          transactions: sortedTransactions
+          transactions: sortedTransactions,
+          businessDate: currentBusinessDate
       };
 
   } catch (e) {

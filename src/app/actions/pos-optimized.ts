@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate } from "@/app/actions/business-date";
 
 // --- CONSTANTS ---
 const FALLBACK_TENANT_UUID = "00000000-0000-0000-0000-000000000000";
@@ -24,7 +26,7 @@ async function getTenantId() {
 // --- CREATE ORDER (JSON OPTIMIZED) ---
 export async function createOrderJSON(orderData: any) {
   const tenantId = await getTenantId();
-  const today = new Date().toISOString().split('T')[0];
+  const today = await getActiveBusinessDate(tenantId);
 
   if (!orderData.items || orderData.items.length === 0) {
       return { success: false, error: "Cart is empty" };
@@ -73,7 +75,10 @@ export async function createOrderJSON(orderData: any) {
               category: dbItem.category_name || dbItem.category || i.category || "",
               dietary: dbItem.dietary || i.dietary || ""
           };
-      })
+      }),
+      businessDate: today,
+      createdAt: new Date().toISOString(),
+      serverTimestamp: Date.now()
   };
 
   // 2. Fetch Today's Log

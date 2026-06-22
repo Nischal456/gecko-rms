@@ -74,20 +74,30 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
     )
 }
 
-function KDSHeader({ count, alertingTable, onAcknowledge, alertingCancellation, onAcknowledgeCancellation, muted, toggleMute }: any) {
+function KDSHeader({ count, alertingTable, onAcknowledge, alertingCancellation, onAcknowledgeCancellation, muted, toggleMute, businessDate }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
         const timer = setInterval(() => {
-            const now = new Date();
-            const np = new NepaliDate(now);
+            const date = new Date();
+            let dateStr = "Loading Date...";
+            if (businessDate) {
+                try {
+                    const [y, m, d] = businessDate.split('-').map(Number);
+                    const localDate = new Date(y, m - 1, d);
+                    const np = new NepaliDate(localDate);
+                    dateStr = `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`;
+                } catch (e) {
+                    console.error("KDS Header NepaliDate Error:", e);
+                }
+            }
             setTimeInfo({
-                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                date: `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`
+                time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                date: dateStr
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [businessDate]);
 
     return (
         <header className="flex-shrink-0 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shadow-sm transition-all">
@@ -248,6 +258,7 @@ export default function KitchenPage() {
   const [cancellations, setCancellations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
+  const [businessDate, setBusinessDate] = useState<string>("");
   
   const processingItems = useRef<Set<string>>(new Set()); 
   const [systemReady, setSystemReady] = useState(false);
@@ -389,6 +400,9 @@ export default function KitchenPage() {
   async function loadData() {
     const kdsRes = await getKitchenTickets();
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
+        if ((kdsRes as any).businessDate) {
+            setBusinessDate((kdsRes as any).businessDate);
+        }
         const rawCancellations = (kdsRes as any).cancellations || [];
         setCancellations(rawCancellations);
 
@@ -515,7 +529,7 @@ export default function KitchenPage() {
 
   return (
     <div className="flex h-[100dvh] w-full bg-[#F1F5F9] font-sans text-slate-900 overflow-hidden flex-col relative">
-      <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} alertingCancellation={alertingCancellation} onAcknowledgeCancellation={handleAcknowledgeCancellation} muted={muted} toggleMute={() => setMuted(!muted)} />
+      <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} alertingCancellation={alertingCancellation} onAcknowledgeCancellation={handleAcknowledgeCancellation} muted={muted} toggleMute={() => setMuted(!muted)} businessDate={businessDate} />
 
       {/* --- KANBAN BOARD --- */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">

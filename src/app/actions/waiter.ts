@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate, getPreviousDateString, getNextDateString } from "@/app/actions/business-date";
 
 // --- HELPERS ---
 function getSafeId(id: string | null | undefined): number {
@@ -52,9 +54,8 @@ export async function getWaiterDashboardData() {
         }
     } catch (e) {}
 
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const today = await getActiveBusinessDate(tenantId);
+    const yesterdayStr = await getPreviousDateString(today);
 
     const { data: tables, error: tableError } = await supabaseAdmin
         .from("restaurant_tables")
@@ -187,6 +188,7 @@ export async function getWaiterDashboardData() {
 
     return {
         success: true,
+        businessDate: today,
         stats: { mySales, tablesServed },
         dockStatus: { hasReady, hasCooking },
         sections: finalSections,
@@ -259,14 +261,11 @@ export async function cleanTable(tableName: string) {
 export async function markOrderServed(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    const activeToday = await getActiveBusinessDate(tenantId);
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
     ];
 
     try {
@@ -412,14 +411,11 @@ export async function markOrderServed(orderId: string | number, tableLabel?: str
 export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string, reason?: string) {
     const tenantId = await getTenantId();
     
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    const activeToday = await getActiveBusinessDate(tenantId);
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
     ];
 
     let staffName = "Waiter";
@@ -542,10 +538,8 @@ export async function getWaiterBell() {
     const tenantId = await getTenantId();
     if (tenantId === 5) return { notifications: [] };
     
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const todayStr = await getActiveBusinessDate(tenantId);
+    const yesterdayStr = await getPreviousDateString(todayStr);
 
     try {
         const { data: logs } = await supabaseAdmin

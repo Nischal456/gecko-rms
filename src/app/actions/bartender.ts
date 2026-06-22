@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate } from "@/app/actions/business-date";
 
 // --- HELPERS (Not Exported) ---
 function safeParse(data: any): any[] {
@@ -64,7 +66,7 @@ export async function getBartenderTickets() {
   
   const getCachedTickets = unstable_cache(
     async () => {
-      const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+      const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
       try {
         const { data: tenant } = await supabaseAdmin.from('tenants').select('feature_flags').eq('id', tenantId).single();
@@ -128,7 +130,8 @@ export async function getBartenderTickets() {
             };
         }).filter((ticket: any) => ticket.order_items.length > 0 && ticket.status !== 'served'); 
 
-        return { success: true, data: mappedOrders };
+        const businessDate = await getActiveBusinessDate(tenantId);
+        return { success: true, data: mappedOrders, businessDate };
 
       } catch (e) {
         return { success: false, data: [] };
@@ -144,7 +147,7 @@ export async function getBartenderTickets() {
 export async function updateBartenderTicketStatus(orderId: string, status: string) {
     const tenantId = await getTenantId();
     const targetId = String(orderId).trim();
-    const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+    const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
     const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data").eq("tenant_id", tenantId).gte("date", dateStr);
     if (!logs) return { success: false };
@@ -203,7 +206,7 @@ export async function updateBartenderItemStatus(itemId: string, status: string, 
     const tenantId = await getTenantId();
     const targetOrderId = String(orderId).trim();
     const targetItemId = String(itemId).trim();
-    const dateStr = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0];
+    const dateStr = getKathmanduDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
     const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data").eq("tenant_id", tenantId).gte("date", dateStr);
     if (!logs) return { success: false };
@@ -263,6 +266,22 @@ export async function updateBartenderItemStatus(itemId: string, status: string, 
 // 2. REPORTS LOGIC
 // ============================================================================
 
+async function getStaffMember(tenantId: number, staff: { id: string, name: string }) {
+    let query = supabaseAdmin.from("staff").select("*").eq("tenant_id", tenantId);
+    
+    // Check if staff.id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (staff.id && uuidRegex.test(staff.id)) {
+        query = query.eq("id", staff.id);
+    } else {
+        query = query.eq("full_name", staff.name);
+    }
+    
+    const { data, error } = await query.maybeSingle();
+    if (error) console.error("Error looking up staff member:", error);
+    return data;
+}
+
 export async function getBartenderStats() {
     const tenantId = await getTenantId();
     if (!tenantId) return { success: false };
@@ -278,14 +297,10 @@ export async function getBartenderStats() {
           }
         } catch (e) {}
 
-        const now = new Date();
-        const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
-        const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
-        
         const datesToCheck = [
-            yesterday.toISOString().split('T')[0],
-            now.toISOString().split('T')[0],
-            tomorrow.toISOString().split('T')[0]
+            getKathmanduDateString(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+            getKathmanduDateString(),
+            getKathmanduDateString(new Date(Date.now() + 24 * 60 * 60 * 1000))
         ];
 
         const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
@@ -303,7 +318,7 @@ export async function getBartenderStats() {
         });
         let finalOrders = Array.from(uniqueOrdersMap.values());
 
-        const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
         finalOrders = finalOrders.filter(o => {
             const orderTime = new Date(o.timestamp || o.created_at || 0).getTime();
             return orderTime >= twentyFourHoursAgo;
@@ -388,5 +403,73 @@ export async function getBartenderStats() {
       { tags: [`orders-${tenantId}`], revalidate: 3600 }
     );
     
-    return getCachedStats();
+    const cachedData = await getCachedStats();
+
+    // DYNAMIC STAFF DATA FETCH (OUTSIDE CACHE)
+    let payroll: any[] = [];
+    let leaves: any[] = [];
+    try {
+        const cookieStore = await cookies();
+        const staffCookie = cookieStore.get("gecko_staff_token")?.value;
+        if (staffCookie) {
+            const staff = JSON.parse(staffCookie);
+            const staffMember = await getStaffMember(tenantId, staff);
+
+            if (staffMember) {
+                // Fetch payroll history
+                const { data: dbPayments } = await supabaseAdmin
+                    .from("staff_payments")
+                    .select("*")
+                    .eq("staff_id", staffMember.id)
+                    .order("payment_date", { ascending: false });
+
+                if (dbPayments) {
+                    payroll = dbPayments.map((pay: any) => ({
+                        id: pay.id,
+                        staff_name: staffMember.full_name,
+                        payment_date: pay.payment_date,
+                        amount: Number(pay.amount) || 0
+                    }));
+                }
+
+                // Fetch leaves
+                const { data: dbLeaves } = await supabaseAdmin
+                    .from("staff_leaves")
+                    .select("*")
+                    .eq("staff_id", staffMember.id)
+                    .order("start_date", { ascending: false });
+
+                if (dbLeaves) {
+                    leaves = dbLeaves.map((leave: any) => {
+                        let leaveType = 'Leave';
+                        let displayReason = leave.reason || '';
+                        if (leave.reason && leave.reason.startsWith('[')) {
+                            const closingBracket = leave.reason.indexOf(']');
+                            if (closingBracket > 0) {
+                                leaveType = leave.reason.slice(1, closingBracket);
+                                displayReason = leave.reason.slice(closingBracket + 1).trim();
+                            }
+                        }
+                        return {
+                            id: leave.id,
+                            status: leave.status || 'pending',
+                            type: leaveType,
+                            from: leave.start_date,
+                            to: leave.end_date,
+                            reason: displayReason,
+                            date_applied: leave.created_at ? leave.created_at.split('T')[0] : (leave.start_date || '')
+                        };
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error fetching bartender staff reports context:", e);
+    }
+
+    return {
+        ...cachedData,
+        payroll,
+        leaves
+    };
 }

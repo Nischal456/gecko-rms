@@ -9,7 +9,7 @@ import {
   Edit2, Calendar, Wallet, History, Loader2, X,
   UserCircle2, ArrowRight, BellRing, CheckCircle2, XCircle, 
   Phone, Mail, KeyRound, Save, User, CalendarDays, RefreshCcw,
-  Users, Search, Trash2, Eye, EyeOff, Wand2, HeartPulse, Contact
+  Users, Search, Trash2, Eye, EyeOff, Wand2, HeartPulse, Contact, GlassWater
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardData } from "@/app/actions/dashboard";
@@ -126,6 +126,7 @@ export default function StaffPage() {
         case 'chef': return <ChefHat className="w-6 h-6" />;
         case 'cashier': return <Calculator className="w-6 h-6" />;
         case 'waiter': return <UtensilsCrossed className="w-6 h-6" />;
+        case 'bartender': return <GlassWater className="w-6 h-6" />;
         default: return <User className="w-6 h-6" />;
     }
   };
@@ -136,6 +137,7 @@ export default function StaffPage() {
         case 'chef': return 'bg-orange-50 text-orange-600 border-orange-100';
         case 'cashier': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
         case 'waiter': return 'bg-blue-50 text-blue-600 border-blue-100';
+        case 'bartender': return 'bg-pink-50 text-pink-600 border-pink-100';
         default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
   };
@@ -401,6 +403,9 @@ export default function StaffPage() {
                                                     <option value="chef">Chef</option>
                                                     <option value="waiter">Waiter</option>
                                                     <option value="cashier">Cashier</option>
+                                                    {(tenant?.feature_flags?.split_kot_bot || selectedStaff?.role === 'bartender') && (
+                                                        <option value="bartender">Bartender</option>
+                                                    )}
                                                 </select>
                                             </div>
                                         </div>

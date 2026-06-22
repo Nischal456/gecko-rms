@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate, getPreviousDateString, getNextDateString } from "@/app/actions/business-date";
 
 // --- HELPERS ---
 function getSafeId(id: string | null | undefined): number {
@@ -44,7 +46,7 @@ export async function getPOSStats() {
 
   const getCachedPOSStats = unstable_cache(
     async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = await getActiveBusinessDate(tenantId);
 
       try {
           const { data: tables } = await supabaseAdmin
@@ -184,17 +186,13 @@ export async function getPOSData() {
 // --- 4. SUBMIT ORDER ---
 export async function submitOrder(tableId: string, cartItems: any[], total: number) {
     const tenantId = await getTenantId();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = await getActiveBusinessDate(tenantId);
 
     // 3-Day Window for finding existing pending orders
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
+        await getPreviousDateString(todayStr),
         todayStr,
-        tomorrow.toISOString().split('T')[0]
+        await getNextDateString(todayStr)
     ];
 
     const isTakeaway = tableId.startsWith("TAKEAWAY");
@@ -275,7 +273,10 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
                             ...order,
                             items: [...order.items, ...compactItems],
                             total: Number(order.total) + total,
-                            timestamp: new Date().toISOString()
+                            timestamp: new Date().toISOString(),
+                            businessDate: order.businessDate || log.date,
+                            createdAt: order.createdAt || order.timestamp || new Date().toISOString(),
+                            serverTimestamp: order.serverTimestamp || new Date(order.timestamp || Date.now()).getTime()
                         };
                     }
                     return order;
@@ -303,7 +304,10 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
                 time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
                 staff: staffName,
                 type,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                businessDate: targetDate,
+                createdAt: new Date().toISOString(),
+                serverTimestamp: Date.now()
             };
 
             const todayLog = logs?.find(l => l.date === todayStr);
@@ -340,14 +344,11 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
     const tenantId = await getTenantId();
     const targetId = String(orderId).trim();
     
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    const activeToday = await getActiveBusinessDate(tenantId);
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
     ];
 
     try {
@@ -425,7 +426,10 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
                         items: itemsWithStatus, 
                         total: newTotal,
                         status: newStatus,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        businessDate: order.businessDate || foundDate,
+                        createdAt: order.createdAt || order.timestamp || new Date().toISOString(),
+                        serverTimestamp: order.serverTimestamp || new Date(order.timestamp || Date.now()).getTime()
                     };
                 }
                 return order;

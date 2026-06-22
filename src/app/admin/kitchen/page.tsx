@@ -39,20 +39,30 @@ function toNepaliDigits(num: number | string): string {
 }
 
 // --- HEADER ---
-function KDSHeader({ count }: { count: number }) {
+function KDSHeader({ count, businessDate }: { count: number, businessDate?: string }) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
         const timer = setInterval(() => {
-            const now = new Date();
-            const np = new NepaliDate(now);
+            const date = new Date();
+            let dateStr = "Loading Date...";
+            if (businessDate) {
+                try {
+                    const [y, m, d] = businessDate.split('-').map(Number);
+                    const localDate = new Date(y, m - 1, d);
+                    const np = new NepaliDate(localDate);
+                    dateStr = `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`;
+                } catch (e) {
+                    console.error("KDS Header NepaliDate Error:", e);
+                }
+            }
             setTimeInfo({
-                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                date: `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`
+                time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                date: dateStr
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [businessDate]);
 
     return (
         <header className="flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-4 flex justify-between items-center z-20 shadow-sm">
@@ -83,6 +93,7 @@ export default function AdminKitchenPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [businessDate, setBusinessDate] = useState<string>("");
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
   const [prevCount, setPrevCount] = useState(0);
 
@@ -106,6 +117,9 @@ export default function AdminKitchenPage() {
     const [dashRes, kdsRes] = await Promise.all([getDashboardData(), getKitchenTickets()]);
     if(dashRes) setTenant(dashRes.tenant);
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
+        if ((kdsRes as any).businessDate) {
+            setBusinessDate((kdsRes as any).businessDate);
+        }
         const sorted = (kdsRes.data as KitchenTicket[]).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         setTickets(sorted);
     }
@@ -148,7 +162,7 @@ export default function AdminKitchenPage() {
       
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         
-        <KDSHeader count={tickets.length} />
+        <KDSHeader count={tickets.length} businessDate={businessDate} />
 
         <div className="flex-1 overflow-x-auto p-6 pb-24">
             <div className="flex gap-6 h-full min-w-[1200px]">

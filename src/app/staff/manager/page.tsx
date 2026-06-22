@@ -46,28 +46,66 @@ function SystemLoader() {
 }
 
 // --- 2. PREMIUM DATE CARD ---
-function PremiumDateCard() {
+function PremiumDateCard({ businessDate }: { businessDate?: string }) {
     const [dateInfo, setDateInfo] = useState({ nepali: "", english: "" });
 
     useEffect(() => {
-        const now = new Date();
-        const nep = new NepaliDate(now);
-        const nepYear = toNepaliDigits(nep.getYear());
-        const nepDay = toNepaliDigits(nep.getDate());
-        const nepMonthStr = nepaliMonths[nep.getMonth()];
-        const nepWeekDayStr = nepaliDays[nep.getDay()];
+        let bizStr = businessDate;
+        if (!bizStr) {
+            const date = new Date();
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Kathmandu',
+                hour: '2-digit',
+                hour12: false,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(date);
+            const year = parts.find(p => p.type === 'year')?.value;
+            const month = parts.find(p => p.type === 'month')?.value;
+            const day = parts.find(p => p.type === 'day')?.value;
+            const hourStr = parts.find(p => p.type === 'hour')?.value || "0";
+            const hour = parseInt(hourStr, 10);
+            if (!isNaN(hour) && (hour < 5 || hour === 24)) {
+                const yesterday = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+                const yParts = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Asia/Kathmandu',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).formatToParts(yesterday);
+                const yYear = yParts.find(p => p.type === 'year')?.value;
+                const yMonth = yParts.find(p => p.type === 'month')?.value;
+                const yDay = yParts.find(p => p.type === 'day')?.value;
+                bizStr = `${yYear}-${yMonth}-${yDay}`;
+            } else {
+                bizStr = `${year}-${month}-${day}`;
+            }
+        }
+        
+        try {
+            const [y, m, d] = bizStr.split('-').map(Number);
+            const localDate = new Date(y, m - 1, d);
+            const nep = new NepaliDate(localDate);
+            const nepYear = toNepaliDigits(nep.getYear());
+            const nepDay = toNepaliDigits(nep.getDate());
+            const nepMonthStr = nepaliMonths[nep.getMonth()];
+            const nepWeekDayStr = nepaliDays[nep.getDay()];
 
-        setDateInfo({
-            nepali: `${nepMonthStr} ${nepDay}, ${nepYear} ${nepWeekDayStr}`,
-            english: now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-        });
-    }, []);
+            setDateInfo({
+                nepali: `${nepMonthStr} ${nepDay}, ${nepYear} ${nepWeekDayStr}`,
+                english: localDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    }, [businessDate]);
 
     if (!dateInfo.nepali) return <div className="w-56 h-16 bg-slate-100/50 rounded-[1.5rem] animate-pulse" />;
 
     return (
-        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4 bg-white pl-2 pr-6 py-2 rounded-[1.5rem] border border-emerald-100/50 shadow-sm hover:shadow-md transition-all cursor-default group min-w-[280px]">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl flex flex-col items-center justify-center text-emerald-700 border border-emerald-200/50 shadow-inner group-hover:scale-105 transition-transform">
+        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4 bg-white/70 backdrop-blur-xl pl-2 pr-6 py-2 rounded-[1.5rem] border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] hover:shadow-md hover:bg-white/95 transition-all cursor-default group min-w-[280px]">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500/10 to-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-2xl flex flex-col items-center justify-center shadow-inner group-hover:scale-105 transition-transform">
                 <Calendar className="w-5 h-5 mb-0.5" />
             </div>
             <div className="flex flex-col">
@@ -85,16 +123,25 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     const hasTrend = trend !== 0;
     const isPositive = trend >= 0;
     
-    const themeMap: Record<string, string> = {
-        emerald: "text-emerald-600 bg-emerald-50 border-emerald-100",
-        blue: "text-blue-600 bg-blue-50 border-blue-100",
-        amber: "text-amber-600 bg-amber-50 border-amber-100",
-        violet: "text-violet-600 bg-violet-50 border-violet-100",
-        red: "text-red-600 bg-red-50 border-red-100",
-        orange: "text-orange-600 bg-orange-50 border-orange-100"
+    const glowBgMap: Record<string, string> = {
+        emerald: "bg-emerald-400/20",
+        blue: "bg-blue-400/20",
+        amber: "bg-amber-400/20",
+        violet: "bg-violet-400/20",
+        red: "bg-red-400/20",
+        orange: "bg-orange-400/20"
     };
+    const glowBg = glowBgMap[color] || "bg-slate-400/10";
 
-    const theme = themeMap[color] || "text-slate-600 bg-slate-50 border-slate-100";
+    const iconGlowMap: Record<string, string> = {
+        emerald: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/25 group-hover:bg-emerald-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(16,185,129,0.4)]",
+        blue: "bg-blue-500/10 text-blue-600 border border-blue-500/25 group-hover:bg-blue-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(59,130,246,0.4)]",
+        amber: "bg-amber-500/10 text-amber-600 border border-amber-500/25 group-hover:bg-amber-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(245,158,11,0.4)]",
+        violet: "bg-violet-500/10 text-violet-600 border border-violet-500/25 group-hover:bg-violet-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(139,92,246,0.4)]",
+        red: "bg-red-500/10 text-red-600 border border-red-500/25 group-hover:bg-red-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(239,68,68,0.4)]",
+        orange: "bg-orange-500/10 text-orange-600 border border-orange-500/25 group-hover:bg-orange-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(249,115,22,0.4)]"
+    };
+    const iconGlow = iconGlowMap[color] || "bg-slate-500/10 text-slate-600 border border-slate-500/20";
     
     // Premium Currency Alignment Logic
     const isCurrency = typeof value === 'string' && value.startsWith('Rs');
@@ -105,13 +152,13 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: delay, duration: 0.4 }} 
-            className="bg-white p-5 md:p-6 rounded-[2.2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full transform-gpu"
+            className="bg-white/70 backdrop-blur-xl p-5 md:p-6 rounded-[2.2rem] border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)] hover:bg-white/90 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group h-full transform-gpu"
         >
-            <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-${color}-100 pointer-events-none`} />
+            <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 ${glowBg} pointer-events-none`} />
             
             <div className="relative z-10 flex flex-col justify-between h-full">
                 <div className="flex justify-between items-start mb-6">
-                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-inner ${theme}`}>
+                    <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-inner transition-all duration-300 ${iconGlow}`}>
                         <Icon className="w-6 h-6 md:w-7 md:h-7" />
                     </div>
                     {hasTrend ? (
@@ -125,8 +172,8 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
                 </div>
                 <div>
                     <div className="flex items-baseline gap-1.5 mb-1">
-                        {isCurrency && <span className={`text-sm font-black opacity-70 ${theme.split(' ')[0]}`}>Rs</span>}
-                        <h3 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter leading-none">{valString}</h3>
+                        {isCurrency && <span className={`text-sm font-black opacity-70 ${color === 'emerald' ? 'text-emerald-600' : color === 'blue' ? 'text-blue-600' : color === 'orange' ? 'text-orange-600' : 'text-slate-600'}`}>Rs</span>}
+                        <h3 className="text-3xl lg:text-4xl font-black bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 bg-clip-text text-transparent tracking-tighter leading-none">{valString}</h3>
                     </div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
                 </div>
@@ -141,11 +188,11 @@ function ActionCard({ title, desc, icon: Icon, onClick, delay }: any) {
         <motion.button 
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay }}
             onClick={onClick}
-            className="flex flex-col items-center justify-center text-center bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg hover:border-emerald-200 hover:-translate-y-1 transition-all group relative overflow-hidden h-40 w-full"
+            className="flex flex-col items-center justify-center text-center bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] border border-white/50 shadow-sm hover:shadow-[0_15px_30px_rgba(0,0,0,0.03)] hover:bg-white/95 hover:border-emerald-200/60 hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden h-40 w-full"
         >
-            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-white to-emerald-50/50`} />
-            <div className={`w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-white group-hover:shadow-md transition-all shadow-sm relative z-10`}>
-                <Icon className={`w-7 h-7 text-slate-600 group-hover:text-emerald-600 transition-colors`} />
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent to-emerald-50/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/50 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:from-emerald-500 group-hover:to-teal-500 group-hover:text-white group-hover:shadow-[0_8px_20px_-6px_rgba(16,185,129,0.3)] transition-all relative z-10 shadow-inner">
+                <Icon className="w-7 h-7 text-slate-600 group-hover:text-white transition-colors" />
             </div>
             <h3 className="font-black text-slate-900 text-sm relative z-10 group-hover:text-emerald-700 transition-colors">{title}</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1 relative z-10">{desc}</p>
@@ -236,10 +283,13 @@ export default function ManagerPage() {
     const chartData = data?.chartData || [];
 
     return (
-        <div className="flex min-h-screen bg-[#F8FAFC] font-sans selection:bg-emerald-500 selection:text-white">
+        <div className="flex min-h-screen bg-[#F8FAFC] font-sans selection:bg-emerald-500 selection:text-white relative overflow-hidden">
             <AnimatePresence>{loading && <SystemLoader />}</AnimatePresence>
             {!loading && data && (
                 <>
+                    {/* Ambient Premium Glows */}
+                    <div className="absolute top-[-10%] right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-emerald-400/10 to-teal-300/5 blur-[120px] pointer-events-none z-0" />
+                    <div className="absolute bottom-[20%] left-[20%] w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-blue-400/5 to-indigo-300/10 blur-[150px] pointer-events-none z-0" />
                     <Sidebar tenantName={data.tenant?.name} tenantCode={data.tenant?.code} logo={data.tenant?.logo_url} />
                     
                     {/* PB-[140px] ensures scrolling perfectly clears BOTH bottom nav bars */}
@@ -261,27 +311,27 @@ export default function ManagerPage() {
                                 </motion.div>
                             </div>
                             <div className="flex items-center gap-4 shrink-0 w-full xl:w-auto">
-                                <PremiumDateCard />
+                                <PremiumDateCard businessDate={data?.businessDate} />
                             </div>
                         </header>
 
                         {/* FINANCIAL OVERVIEW */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 relative z-10">
                             
                             {/* Revenue */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-emerald-600/30 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-slate-950 via-emerald-950 to-emerald-900 border border-emerald-500/20 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-emerald-900/30 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none group-hover:scale-150 transition-transform duration-700" />
                                 <div className="relative z-10 flex flex-col h-full justify-between">
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="flex items-center gap-2 text-emerald-100 text-xs font-bold uppercase tracking-widest"><IndianRupee className="w-4 h-4" /> Revenue</span>
-                                            <span className="px-2 py-1 rounded-lg bg-emerald-500/30 border border-white/20 text-[10px] font-bold flex items-center gap-1">
-                                                <TrendingUp className="w-3 h-3" /> Today
+                                            <span className="flex items-center gap-2 text-emerald-350 text-xs font-bold uppercase tracking-widest"><IndianRupee className="w-4 h-4 text-emerald-400" /> Revenue</span>
+                                            <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 text-emerald-450">
+                                                <TrendingUp className="w-3 h-3 text-emerald-400" /> Today
                                             </span>
                                         </div>
                                         <div className="flex items-baseline gap-1.5 mt-1">
-                                            <span className="text-xl font-black text-emerald-300/80">Rs</span>
-                                            <h2 className="text-4xl lg:text-5xl font-black tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.revenue)}</h2>
+                                            <span className="text-xl font-black text-emerald-400/80">Rs</span>
+                                            <h2 className="text-4xl lg:text-5xl font-black tracking-tight bg-gradient-to-r from-white to-emerald-100 bg-clip-text text-transparent">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.revenue)}</h2>
                                         </div>
                                     </div>
                                     <div className="h-12 w-full mt-4 opacity-80">
@@ -289,11 +339,11 @@ export default function ManagerPage() {
                                             <AreaChart data={chartData}>
                                                 <defs>
                                                     <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="0%" stopColor="#ffffff" stopOpacity={0.4}/>
-                                                        <stop offset="100%" stopColor="#ffffff" stopOpacity={0}/>
+                                                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.4}/>
+                                                        <stop offset="100%" stopColor="#10B981" stopOpacity={0}/>
                                                     </linearGradient>
                                                 </defs>
-                                                <Area type="monotone" dataKey="value" stroke="#ffffff" strokeWidth={2} fill="url(#chartGradient)" />
+                                                <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2.5} fill="url(#chartGradient)" />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -301,50 +351,51 @@ export default function ManagerPage() {
                             </motion.div>
 
                             {/* Expenses */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
-                                <div className="flex justify-between items-start h-full">
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white/70 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+                                <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-orange-400 pointer-events-none" />
+                                <div className="flex justify-between items-start h-full relative z-10">
                                     <div className="flex flex-col justify-between h-full">
                                         <div>
-                                            <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase tracking-widest"><TrendingDown className="w-4 h-4" /> Expenses</div>
+                                            <div className="flex items-center gap-2 mb-2 text-slate-405 text-xs font-bold uppercase tracking-widest"><TrendingDown className="w-4 h-4 text-orange-500" /> Expenses</div>
                                             <div className="flex items-baseline gap-1.5 mt-1">
                                                 <span className="text-sm font-black text-orange-500">Rs</span>
-                                                <h2 className="text-3xl font-black text-slate-900 tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.expenses)}</h2>
+                                                <h2 className="text-3xl font-black bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 bg-clip-text text-transparent tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.expenses)}</h2>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                                             <span className="w-2 h-2 rounded-full bg-orange-400" /> Real-time Cost
                                         </div>
                                     </div>
-                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100"><Wallet className="w-6 h-6" /></div>
+                                    <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 border border-orange-500/25 flex items-center justify-center shadow-inner group-hover:bg-orange-500 group-hover:text-white transition-all"><Wallet className="w-6 h-6" /></div>
                                 </div>
                             </motion.div>
 
                             {/* Net Profit */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
-                                <div className="flex justify-between items-start h-full">
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white/70 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.015)] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+                                <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full blur-2xl transition-transform group-hover:scale-150 opacity-20 bg-emerald-450 pointer-events-none" />
+                                <div className="flex justify-between items-start h-full relative z-10">
                                     <div className="flex flex-col justify-between h-full">
                                         <div>
                                             <div className="flex items-center gap-2 mb-2 text-emerald-600 text-xs font-bold uppercase tracking-widest"><Leaf className="w-4 h-4" /> Net Profit</div>
                                             <div className="flex items-baseline gap-1.5 mt-1">
                                                 <span className="text-sm font-black text-emerald-600">Rs</span>
-                                                <h2 className="text-3xl font-black text-emerald-700 tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.profit)}</h2>
+                                                <h2 className="text-3xl font-black bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 bg-clip-text text-transparent tracking-tight">{new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(stats.profit)}</h2>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600">
                                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> {stats.margin}% Margin
                                         </div>
                                     </div>
-                                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100"><FileBarChart className="w-6 h-6" /></div>
+                                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/25 flex items-center justify-center shadow-inner group-hover:bg-emerald-500 group-hover:text-white transition-all"><FileBarChart className="w-6 h-6" /></div>
                                 </div>
                             </motion.div>
                         </div>
 
                         {/* METRICS & ACTIONS */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-10">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-10">
                             <MetricCard title="Active Orders" value={stats.orders} trend={0} icon={ShoppingBag} color="blue" delay={0.5} />
                             <MetricCard title="Total Today" value={stats.totalOrders} trend={0} icon={Map} color="emerald" delay={0.55} />
                             <MetricCard title="Staff Active" value={stats.staffOnline} trend={0} icon={Users} color="orange" delay={0.6} />
-                            <MetricCard title="Avg Ticket" value={formatRs(stats.totalOrders > 0 ? stats.revenue / stats.totalOrders : 0)} trend={0} icon={CreditCard} color="emerald" delay={0.65} />
                         </div>
 
                         <div className="mb-10">
@@ -358,11 +409,11 @@ export default function ManagerPage() {
                         </div>
 
                         {/* Recent Activity Section */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="lg:col-span-2 bg-white/70 backdrop-blur-xl border border-white/80 p-6 md:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.015)] rounded-[2.5rem]">
                                 <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100"><Activity className="w-5 h-5 text-emerald-600" /></div>
+                                        <div className="p-2.5 bg-gradient-to-br from-emerald-500/10 to-emerald-500/20 text-emerald-600 border border-emerald-500/25 rounded-xl shadow-inner"><Activity className="w-5 h-5 text-emerald-600 animate-pulse" /></div>
                                         <div>
                                             <h3 className="text-xl font-black text-slate-900">Recent Activity</h3>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live Feed from Floor</p>
@@ -372,15 +423,15 @@ export default function ManagerPage() {
                                 </div>
                                 <div className="space-y-3">
                                     {recentActivity.length === 0 ? (
-                                        <div className="h-40 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50">
+                                        <div className="h-40 flex flex-col items-center justify-center text-slate-400 border border-slate-200/50 rounded-3xl bg-gradient-to-br from-slate-50/50 to-slate-100/30 shadow-inner group hover:scale-[1.01] transition-transform duration-300">
                                             <Bell className="w-10 h-10 mb-2 opacity-20" />
                                             <p className="font-bold text-sm">No transactions yet today</p>
                                         </div>
                                     ) : (
                                         recentActivity.map((order: any, i: number) => (
-                                            <div key={i} className="flex items-center justify-between p-4 hover:bg-emerald-50/30 rounded-2xl transition-colors cursor-pointer group border border-transparent hover:border-emerald-100">
+                                            <div key={i} className="flex items-center justify-between p-4 hover:bg-emerald-50/40 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-emerald-100/50">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600 font-black text-xs shadow-sm group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors">
+                                                    <div className="w-12 h-12 rounded-2xl bg-slate-100/80 flex items-center justify-center text-slate-600 font-black text-xs shadow-sm group-hover:bg-white group-hover:text-emerald-700 group-hover:shadow-md transition-colors">
                                                         {order.status === 'paid' ? <Check className="w-5 h-5 text-emerald-600"/> : <Clock className="w-5 h-5 text-orange-500"/>}
                                                     </div>
                                                     <div>
@@ -396,19 +447,19 @@ export default function ManagerPage() {
                             </motion.div>
 
                             {/* Kitchen Status */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="bg-slate-900 rounded-[2.5rem] p-6 md:p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[350px] shadow-2xl shadow-slate-900/10">
-                                <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-600 rounded-full blur-[80px] opacity-20" />
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} className="bg-slate-955 bg-slate-950 border border-slate-900/80 shadow-2xl shadow-slate-950/40 rounded-[2.5rem] p-6 md:p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[350px] group">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-600/10 rounded-full blur-[80px] pointer-events-none group-hover:scale-110 transition-transform duration-700" />
                                 <div>
                                     <div className="flex items-center gap-3 mb-6 relative z-10">
-                                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"><ChefHat className="w-5 h-5 text-emerald-400" /></div>
+                                        <div className="w-10 h-10 bg-slate-900 border border-slate-805 border-slate-800/85 rounded-xl flex items-center justify-center text-emerald-400"><ChefHat className="w-5 h-5 text-emerald-400" /></div>
                                         <h3 className="text-xl font-black">Kitchen Status</h3>
                                     </div>
                                     <div className="space-y-4 relative z-10">
-                                        <div className="flex justify-between items-center p-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                        <div className="flex justify-between items-center p-3.5 bg-slate-900/80 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
                                             <span className="text-sm font-bold text-slate-300">Pending Orders</span>
                                             <span className="text-xl font-black text-white">{stats.pendingKitchen || 0}</span>
                                         </div>
-                                        <div className="flex justify-between items-center p-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                        <div className="flex justify-between items-center p-3.5 bg-slate-900/80 rounded-2xl border border-slate-800/80 backdrop-blur-sm">
                                             <span className="text-sm font-bold text-slate-300">Occupancy</span>
                                             <span className="text-xl font-black text-white">{stats.occupancy || 0} Tbls</span>
                                         </div>
@@ -417,7 +468,7 @@ export default function ManagerPage() {
                                 <div className="mt-8 pt-6 border-t border-white/10 relative z-10">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Staff Online</p>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-10 h-10 rounded-full border-2 border-slate-800 bg-emerald-600 flex items-center justify-center text-xs font-bold shadow-lg">{stats.staffOnline}</div>
+                                        <div className="w-10 h-10 rounded-full border border-slate-800 bg-emerald-650 bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold shadow-lg">{stats.staffOnline}</div>
                                         <span className="text-xs font-bold text-slate-400">Active Members</span>
                                     </div>
                                 </div>

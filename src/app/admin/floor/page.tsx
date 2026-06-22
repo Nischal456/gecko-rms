@@ -121,15 +121,12 @@ export default function FloorPlanPage() {
             // Extract Sections
             const loadedSections = Array.from(new Set(liveTables.map((t: any) => t.section))).sort() as string[];
             
-            // Only update sections if we found new ones from DB, preserving current Selection if valid
             if (loadedSections.length > 0) {
-                // Ensure Main Hall is always there if list empty
-                if(loadedSections.length === 0 && sections.length === 0) setSections(["Main Hall"]);
-                else setSections(prev => {
-                    // Merge unique sections
-                    const unique = Array.from(new Set([...prev, ...loadedSections]));
-                    return unique.length > 0 ? unique : ["Main Hall"];
-                });
+                setSections(loadedSections);
+                setCurrentSection(curr => loadedSections.includes(curr) ? curr : loadedSections[0]);
+            } else {
+                setSections(["Main Hall"]);
+                setCurrentSection("Main Hall");
             }
         }
       } catch (e) {
@@ -188,6 +185,38 @@ export default function FloorPlanPage() {
       setIsAddingSection(false);
       setNewSectionName("");
       toast.success(`Created ${newSectionName}`);
+  };
+
+  const handleDeleteSection = (sectionToDelete: string) => {
+      if (sections.length <= 1) {
+          toast.error("Cannot delete the only remaining floor. Please create another floor first.");
+          return;
+      }
+      
+      if (!window.confirm(`Are you sure you want to delete the floor "${sectionToDelete}" and all its tables? This cannot be undone once saved.`)) {
+          return;
+      }
+      
+      // Get all tables in this section to delete
+      const tablesToDelete = tables.filter(t => t.section === sectionToDelete);
+      const idsToDelete = tablesToDelete.map(t => t.id);
+      
+      // Update tables state locally (remove tables in the deleted section)
+      setTables(prev => prev.filter(t => t.section !== sectionToDelete));
+      
+      // Add their IDs to deletedIds to be processed on save
+      setDeletedIds(prev => [...prev, ...idsToDelete]);
+      
+      // Remove section from local sections state
+      const updatedSections = sections.filter(s => s !== sectionToDelete);
+      setSections(updatedSections);
+      
+      // Switch current section if we deleted the active one
+      if (currentSection === sectionToDelete) {
+          setCurrentSection(updatedSections[0]);
+      }
+      
+      toast.success(`Deleted floor "${sectionToDelete}" locally. Save layout to apply changes.`);
   };
 
   const addTable = (shape: 'square' | 'round' | 'rectangle') => {
@@ -280,7 +309,39 @@ export default function FloorPlanPage() {
                 {/* TABS */}
                 <div className="flex items-center gap-1.5 flex-nowrap">
                     {sections.map(section => (
-                        <button key={section} onClick={() => { setCurrentSection(section); setSelectedTableId(null); setViewTable(null); }} className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-all border ${currentSection === section ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{section}</button>
+                        <div key={section} className="relative flex items-center">
+                            <button 
+                                onClick={() => { 
+                                    setCurrentSection(section); 
+                                    setSelectedTableId(null); 
+                                    setViewTable(null); 
+                                }} 
+                                className={`whitespace-nowrap pl-4 py-2 rounded-xl text-sm font-bold transition-all border ${
+                                    isEditMode ? 'pr-9' : 'pr-4'
+                                } ${
+                                    currentSection === section 
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' 
+                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                {section}
+                            </button>
+                            {isEditMode && (
+                                <button 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        handleDeleteSection(section); 
+                                    }}
+                                    className={`absolute right-2 p-1 rounded-lg transition-colors ${
+                                        currentSection === section 
+                                            ? 'text-white/70 hover:text-white hover:bg-white/10' 
+                                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+                                    }`}
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
                     ))}
                     {isEditMode && (
                         <>

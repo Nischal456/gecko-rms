@@ -51,6 +51,7 @@ export default function ManagerFloorPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const hasInitializedRef = useRef(false);
 
   // --- INIT ---
   useEffect(() => {
@@ -106,9 +107,14 @@ export default function ManagerFloorPage() {
 
             // Extract Sections
             const loadedSections = Array.from(new Set(liveTables.map((t: any) => t.section))).sort() as string[];
-            if (loadedSections.length > 0 && sections.length <= 1) {
+            if (loadedSections.length > 0) {
                 setSections(loadedSections);
-                setCurrentSection(loadedSections[0]);
+                if (!hasInitializedRef.current) {
+                    setCurrentSection(loadedSections[0]);
+                    hasInitializedRef.current = true;
+                } else {
+                    setCurrentSection(curr => loadedSections.includes(curr) ? curr : loadedSections[0]);
+                }
             }
         }
       } catch (e) {

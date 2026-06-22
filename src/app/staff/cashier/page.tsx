@@ -41,11 +41,24 @@ interface CashierData {
 // --- HELPER CONFIG ---
 const formatRs = (amount: number) => "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
 
+function getNepaliDateFromBusinessDateStr(bizDateStr: string): NepaliDate | null {
+    if (!bizDateStr) return null;
+    try {
+        const normalized = bizDateStr.split('T')[0].replace(/\//g, '-');
+        const [y, m, d] = normalized.split('-').map(Number);
+        if (!y || !m || !d) return null;
+        const localDate = new Date(y, m - 1, d);
+        return new NepaliDate(localDate);
+    } catch {
+        return null;
+    }
+}
+
 const toBS = (dateStr: string) => { 
     try { 
-        const date = new Date(dateStr);
-        const bsDate = new NepaliDate(date);
-        return bsDate.format('YYYY/MM/DD'); 
+        const npDate = getNepaliDateFromBusinessDateStr(dateStr);
+        if (!npDate) return "---";
+        return npDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
 };
 
@@ -841,7 +854,7 @@ function CloseDayModal({ activeOrders, onClose, onConfirm }: { activeOrders: any
     const pendingOrders = activeOrders?.filter((o: any) => {
         if (o.id === "DAY_CLOSE_META") return false;
         const s = (o.status || '').toLowerCase().trim();
-        return ['pending', 'cooking', 'preparing', 'ready'].includes(s);
+        return !['cancelled', 'paid', 'completed'].includes(s);
     }) || [];
 
     const hasPending = pendingOrders.length > 0;
@@ -1111,7 +1124,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                             <div className="flex justify-between items-start border-b border-slate-50 pb-3">
                                                 <div>
                                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Inv: {b.invoice_no}</p>
-                                                    <p className="text-xs font-bold text-slate-600">{toBS(b.date)}</p>
+                                                    <p className="text-xs font-bold text-slate-600">{toBS(b.businessDate || b.date)}</p>
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="text-sm font-black text-slate-900 block mb-0.5">Total: {formatRs(b.grandTotal)}</span>
@@ -1430,10 +1443,9 @@ export default function CashierDashboard() {
   };
 
   const handleCloseDayConfirm = async (override: boolean, managerName: string | null) => {
-      const todayDate = new Date().toISOString().split('T')[0];
       toast.loading("Closing business day...");
       try {
-          const res = await closeBusinessDayAction(todayDate, override, managerName);
+          const res = await closeBusinessDayAction(override, managerName);
           toast.dismiss();
           if (res.success) {
               toast.success("Business Day Closed Successfully!");

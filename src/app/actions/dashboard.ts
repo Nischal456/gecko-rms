@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { v2 as cloudinary } from 'cloudinary';
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate, getPreviousDateString } from "@/app/actions/business-date";
 
 // CLOUDINARY CONFIG
 cloudinary.config({
@@ -87,8 +89,8 @@ export async function getDashboardData() {
     async () => {
       try {
         // Dates for Trends
-        const today = new Date().toISOString().split('T')[0];
-        const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
+        const today = await getActiveBusinessDate(tenantId);
+        const yesterday = await getPreviousDateString(today);
 
         // FETCH EVERYTHING IN PARALLEL
         const [tenantRes, logsRes, notifRes] = await Promise.all([
@@ -177,7 +179,7 @@ export async function getDashboardData() {
                 items: o.items || []
             }));
 
-        return { tenant, stats, recentOrders };
+        return { tenant, stats, recentOrders, businessDate: today };
 
       } catch (error) {
         console.error("Dashboard Data Error:", error);

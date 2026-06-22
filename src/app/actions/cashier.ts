@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
+import { getKathmanduDateString, getBusinessDate } from "@/lib/utils";
+import { getActiveBusinessDate, getPreviousDateString, getNextDateString } from "@/app/actions/business-date";
 
 // --- HELPERS ---
 function getSafeId(id: string | null | undefined): number {
@@ -54,7 +56,7 @@ export async function getCashierData(isPolling: boolean = false) {
       }
   } catch (e) {}
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = await getActiveBusinessDate(tenantId);
 
   try {
     let tenant = null;
@@ -64,8 +66,7 @@ export async function getCashierData(isPolling: boolean = false) {
     }
     const { data: tables } = await supabaseAdmin.from("restaurant_tables").select("*").eq("tenant_id", tenantId).order("label", { ascending: true });
     
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = await getPreviousDateString(today);
     // ALWAYS fetch both yesterday and today's logs so that active/unpaid orders from yesterday do not disappear during polling.
     const datesToFetch = [yesterdayStr, today];
 
@@ -233,7 +234,8 @@ export async function getCashierData(isPolling: boolean = false) {
       activeOrders: Array.from(tableOrderMap.values()).reverse(),
       cancelledItems: finalCancelledItems,
       isPolling,
-      staff: { name: currentStaffName, role: currentStaffRole } 
+      staff: { name: currentStaffName, role: currentStaffRole },
+      businessDate: today
     };
   } catch (error) {
     return { 
@@ -248,7 +250,7 @@ export async function getCashierData(isPolling: boolean = false) {
 // --- 2. CREATE ORDER ---
 export async function createCashierOrder(tableId: string, items: any[], type: 'dine_in' | 'takeaway') {
     const tenantId = await getTenantId();
-    const today = new Date().toISOString().split('T')[0];
+    const today = await getActiveBusinessDate(tenantId);
     
     // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
     // If the Cashier frontend fails to pass station/category payload,
@@ -338,14 +340,11 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
 export async function cancelOrder(orderId: string | number, tableLabel: string, itemIdToCancel?: string, reason?: string) {
     const tenantId = await getTenantId();
     
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    const activeToday = await getActiveBusinessDate(tenantId);
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
     ];
 
     let staffName = "Cashier";
@@ -492,14 +491,11 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
 export async function serveOrder(orderId: string | number, tableLabel?: string, itemIdentifiers?: string[]) {
     const tenantId = await getTenantId();
     
-    const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    
+    const activeToday = await getActiveBusinessDate(tenantId);
     const datesToCheck = [
-        yesterday.toISOString().split('T')[0],
-        today.toISOString().split('T')[0],
-        tomorrow.toISOString().split('T')[0]
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
     ];
 
     try {
@@ -668,10 +664,39 @@ export async function verifyManagerPIN(pin: string) {
 // --- 5. FINALIZE (Checkout) WITH DOUBLE ENTRY LOCK ---
 export async function finalizeTransaction(tableId: string, orderId: string, paymentMethod: string, paymentDetails: any, tenantInfo: any, customerDetails?: any) {
     const tenantId = await getTenantId();
-    const today = new Date().toISOString().split('T')[0];
-    
-    const { data: log } = await supabaseAdmin.from("daily_order_logs").select("orders_data, paid_history").eq("tenant_id", tenantId).eq("date", today).maybeSingle();
-    if (!log) return { success: false, error: "Log not found" };
+    const activeToday = await getActiveBusinessDate(tenantId);
+    const datesToCheck = [
+        await getPreviousDateString(activeToday),
+        activeToday,
+        await getNextDateString(activeToday)
+    ];
+
+    const { data: logs } = await supabaseAdmin
+        .from("daily_order_logs")
+        .select("date, orders_data, paid_history")
+        .eq("tenant_id", tenantId)
+        .in("date", datesToCheck);
+
+    if (!logs || logs.length === 0) return { success: false, error: "Log not found" };
+
+    let foundLog = null;
+    let foundOrder = null;
+
+    for (const log of logs) {
+        const currentOrders = safeParse(log.orders_data);
+        const hasOrder = currentOrders.some((order: any) => 
+             !['cancelled', 'completed', 'paid'].includes(order.status) && 
+             (String(order.tbl).trim() === String(tableId).trim() || String(order.id).trim() === String(orderId).trim())
+        );
+        if (hasOrder) {
+            foundLog = log;
+            break;
+        }
+    }
+
+    if (!foundLog) return { success: false, error: "Order not found or already checked out." };
+    const today = foundLog.date;
+    const log = foundLog;
 
     const currentOrders = safeParse(log.orders_data);
     const currentHistory = safeParse(log.paid_history);
@@ -688,6 +713,7 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
     let found = false;
     let itemsToDeductFromInventory: any[] = [];
     let servedBySet = new Set<string>();
+    let orderBusinessDate = today;
 
     currentOrders.forEach((order: any) => {
         // MATCH BY TABLE OR BY ORDER ID to catch ALL parts of the order separated by kitchen sends
@@ -696,6 +722,9 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
 
         if (isTarget) {
             found = true;
+            if (order.businessDate) {
+                orderBusinessDate = order.businessDate;
+            }
             if (order.staff) servedBySet.add(order.staff);
             
             // Collect all items from every split order on this table
@@ -721,6 +750,7 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         invoice_no: displayBillNo,
         bill_no: displayBillNo, 
         date: new Date().toISOString(),
+        businessDate: orderBusinessDate,
         table_no: tableId,
         restaurant_name: tenantInfo?.name,
         items: consolidatedItems,
@@ -740,7 +770,9 @@ export async function finalizeTransaction(tableId: string, orderId: string, paym
         paid_at: new Date().toISOString(),
         original_order_id: orderId,
         customer_name: customerDetails?.name || "",
-        customer_address: customerDetails?.address || ""
+        customer_address: customerDetails?.address || "",
+        createdAt: new Date().toISOString(),
+        serverTimestamp: Date.now()
     }];
 
     // --- EXACT INVENTORY SYNC (RUNS AT CHECKOUT) ---
@@ -815,8 +847,8 @@ export async function updateStoreSettings(profile: any, accounts: any[]) {
 // --- 7. REPORTS & CREDIT ACCOUNTS ---
 export async function getCashierReports(days: number) {
     const tenantId = await getTenantId();
-    const startDate = new Date(); startDate.setDate(startDate.getDate() - days);
-    const startStr = startDate.toISOString().split('T')[0];
+    const activeToday = await getActiveBusinessDate(tenantId);
+    const startStr = getKathmanduDateString(new Date(new Date(activeToday).getTime() - days * 24 * 60 * 60 * 1000));
 
     try {
         const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("*").eq("tenant_id", tenantId).gte("date", startStr).order("date", { ascending: true });
@@ -845,7 +877,7 @@ export async function getCashierReports(days: number) {
             activeOrders.forEach((o: any) => {
                 if (o.id === "DAY_CLOSE_META") return;
                 const s = (o.status || '').toLowerCase().trim();
-                if (['pending', 'cooking', 'preparing', 'ready'].includes(s)) {
+                if (!['cancelled', 'paid', 'completed', 'expired'].includes(s)) {
                     summary.totalPendingOrders++;
                     summary.unclearedPaymentAmount += Number(o.total || 0);
                     summary.pendingOrdersDetails.push({
@@ -864,7 +896,10 @@ export async function getCashierReports(days: number) {
             const history = safeParse(log.paid_history);
             history.forEach((bill: any) => {
                 if(bill && bill.grandTotal !== undefined) {
-                    allBills.push(bill);
+                    allBills.push({
+                        ...bill,
+                        businessDate: log.date
+                    });
                     const amt = Number(bill.grandTotal);
                     const tendered = Number(bill.tendered) || 0;
                     const method = bill.payment_method || "Cash";
@@ -946,7 +981,7 @@ export async function getCashierReports(days: number) {
                         bill.credit_payments.forEach((p: any) => {
                             const pAmt = Number(p.amount) || 0;
                             const pMethod = p.method || "Cash";
-                            const pDateStr = p.date.split('T')[0];
+                            const pDateStr = p.business_date || getBusinessDate(p.date);
 
                             // Track in the summary
                             summary.creditReceived += pAmt;
@@ -993,16 +1028,16 @@ export async function getCashierReports(days: number) {
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([date, value]) => ({ label: date, value }));
 
-        return { success: true, bills: allBills.reverse(), summary, chartData };
+        return { success: true, bills: allBills.reverse(), summary, chartData, businessDate: activeToday };
     } catch (e) { return { success: false }; }
 }
 
 export async function processCreditPayment(customerName: string, amountToPay: number, paymentMethod: string = "Cash") {
     const tenantId = await getTenantId();
+    const activeToday = await getActiveBusinessDate(tenantId);
     let remainingPayment = Number(amountToPay);
     
-    const startDate = new Date(); startDate.setDate(startDate.getDate() - 60);
-    const startStr = startDate.toISOString().split('T')[0];
+    const startStr = getKathmanduDateString(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000));
 
     try {
         const { data: logs, error: fetchErr } = await supabaseAdmin.from("daily_order_logs")
@@ -1082,6 +1117,7 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
                         }
                         creditPayments.push({
                             date: new Date().toISOString(),
+                            business_date: activeToday,
                             amount: deductAmt,
                             method: paymentMethod
                         });
@@ -1122,10 +1158,10 @@ export async function processCreditPayment(customerName: string, amountToPay: nu
 
 export async function processCreditBillPayment(invoiceNo: string, amountToPay: number, paymentMethod: string = "Cash") {
     const tenantId = await getTenantId();
+    const activeToday = await getActiveBusinessDate(tenantId);
     const targetAmt = Number(amountToPay);
     
-    const startDate = new Date(); startDate.setDate(startDate.getDate() - 60);
-    const startStr = startDate.toISOString().split('T')[0];
+    const startStr = getKathmanduDateString(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000));
 
     try {
         const { data: logs, error: fetchErr } = await supabaseAdmin.from("daily_order_logs")
@@ -1198,6 +1234,7 @@ export async function processCreditBillPayment(invoiceNo: string, amountToPay: n
                     }
                     creditPayments.push({
                         date: new Date().toISOString(),
+                        business_date: activeToday,
                         amount: deductAmt,
                         method: paymentMethod
                     });
@@ -1285,8 +1322,9 @@ async function restoreInventoryStock(tenantId: number, items: any[]) {
 }
 
 // --- 8. CLOSE BUSINESS DAY ACTION (BLOCK_CLOSING WITH OVERRIDE) ---
-export async function closeBusinessDayAction(dateStr: string, forceCloseWithOverride: boolean = false, managerName: string | null = null) {
+export async function closeBusinessDayAction(forceCloseWithOverride: boolean = false, managerName: string | null = null) {
     const tenantId = await getTenantId();
+    const dateStr = await getActiveBusinessDate(tenantId);
     try {
         const { data: log } = await supabaseAdmin
             .from("daily_order_logs")
@@ -1303,7 +1341,7 @@ export async function closeBusinessDayAction(dateStr: string, forceCloseWithOver
         const pendingOrders = orders.filter((o: any) => {
             if (o.id === "DAY_CLOSE_META") return false;
             const s = (o.status || '').toLowerCase().trim();
-            return ['pending', 'cooking', 'preparing', 'ready'].includes(s);
+            return !['cancelled', 'paid', 'completed', 'expired'].includes(s);
         });
 
         if (pendingOrders.length > 0 && !forceCloseWithOverride) {
@@ -1336,7 +1374,7 @@ export async function closeBusinessDayAction(dateStr: string, forceCloseWithOver
             finalOrders = orders.map((o: any) => {
                 if (o.id === "DAY_CLOSE_META") return o;
                 const s = (o.status || '').toLowerCase().trim();
-                if (['pending', 'cooking', 'preparing', 'ready'].includes(s)) {
+                if (!['cancelled', 'paid', 'completed', 'expired'].includes(s)) {
                     return {
                         ...o,
                         status: 'expired',

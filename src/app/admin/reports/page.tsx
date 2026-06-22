@@ -33,26 +33,23 @@ function toNepaliDigits(num: number | string): string {
     return num.toString().split('').map(c => nepaliDigits[parseInt(c)] || c).join('');
 }
 
-function getFormattedNepaliDate() {
+function getNepaliDateFromBusinessDateStr(bizDateStr: string): NepaliDate | null {
+    if (!bizDateStr) return null;
     try {
-        const np = new NepaliDate(new Date());
-        const y = np.getYear();
-        const m = np.getMonth() + 1; 
-        const d = np.getDate();
-        
-        const mStr = m < 10 ? `0${m}` : m;
-        const dStr = d < 10 ? `0${d}` : d;
-
-        return `${toNepaliDigits(y)}/${toNepaliDigits(mStr)}/${toNepaliDigits(dStr)}`;
-    } catch (e) {
-        return "Loading Date...";
+        const normalized = bizDateStr.split('T')[0].replace(/\//g, '-');
+        const [y, m, d] = normalized.split('-').map(Number);
+        if (!y || !m || !d) return null;
+        const localDate = new Date(y, m - 1, d);
+        return new NepaliDate(localDate);
+    } catch {
+        return null;
     }
 }
 
 const toNepaliDate = (dateStr: string) => {
     try {
-        const jsDate = new Date(dateStr);
-        const npDate = new NepaliDate(jsDate);
+        const npDate = getNepaliDateFromBusinessDateStr(dateStr);
+        if (!npDate) return dateStr;
         return `${NEPALI_MONTHS[npDate.getMonth()]} ${npDate.getDate()}`;
     } catch (e) {
         return dateStr;
@@ -61,25 +58,32 @@ const toNepaliDate = (dateStr: string) => {
 
 const toBS = (dateStr: string) => { 
     try { 
-        const date = new Date(dateStr);
-        const bsDate = new NepaliDate(date);
-        return bsDate.format('YYYY/MM/DD'); 
+        const npDate = getNepaliDateFromBusinessDateStr(dateStr);
+        if (!npDate) return "---";
+        return npDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
 };
 
-// 100% ACCURATE NEPALI DATE CONVERTER FOR STRICT FILTERING & CSV
 const toBSFull = (dateStr: string) => { 
     try { 
-        const date = new Date(dateStr);
-        const bsDate = new NepaliDate(date);
-        return bsDate.format('YYYY-MM-DD'); 
+        const npDate = getNepaliDateFromBusinessDateStr(dateStr);
+        if (!npDate) return "---";
+        return npDate.format('YYYY-MM-DD'); 
     } catch { return "---"; }
 };
 
-// Gets the Nepali date for X days ago to sync Quick Buttons with the Custom Pickers
-const getBSDateFromDaysAgo = (daysAgo: number) => {
-    const pastDate = new Date(Date.now() - (daysAgo > 1 ? daysAgo - 1 : 0) * 24 * 60 * 60 * 1000);
-    return new NepaliDate(pastDate).format('YYYY-MM-DD');
+const getBSDateFromDaysAgo = (baseDateStr: string, daysAgo: number) => {
+    if (!baseDateStr) return "";
+    try {
+        const npDate = getNepaliDateFromBusinessDateStr(baseDateStr);
+        if (!npDate) return "";
+        const [y, m, d] = baseDateStr.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        date.setDate(date.getDate() - (daysAgo > 1 ? daysAgo - 1 : 0));
+        return new NepaliDate(date).format('YYYY-MM-DD');
+    } catch {
+        return "";
+    }
 };
 
 // Exact Split Normalization Helper
@@ -133,7 +137,9 @@ function exportToCSV(transactions: any[], startDate: string, endDate: string) {
         const cName = (t.customer?.name || '').replace(/"/g, '""');
         const cPhone = (t.customer?.address || '').replace(/"/g, '""');
 
-        csv += `${t.id},${dateObj.toISOString().split('T')[0]},${toBSFull(t.date)},${dateObj.toLocaleTimeString()},${t.type},"${safeDetails}","${itemsStr}",${grandTotal},${tendered},${due},"${finalMethod}",${t.status},"${cName}","${cPhone}"\n`;
+        const localDateStr = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+        const displayADDate = t.businessDate || localDateStr;
+        csv += `${t.id},${displayADDate},${toBSFull(t.businessDate || t.date)},${dateObj.toLocaleTimeString()},${t.type},"${safeDetails}","${itemsStr}",${grandTotal},${tendered},${due},"${finalMethod}",${t.status},"${cName}","${cPhone}"\n`;
     });
     
     const link = document.createElement("a"); 
@@ -302,7 +308,7 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                             <div className="flex justify-between items-start border-b border-slate-50 pb-3">
                                                 <div>
                                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Inv: {b.invoice_no}</p>
-                                                    <p className="text-xs font-bold text-slate-600">{toBS(b.date)}</p>
+                                                    <p className="text-xs font-bold text-slate-600">{toBS(b.businessDate || b.date)}</p>
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="text-sm font-black text-slate-900 block mb-0.5">Total: {formatNPR(b.grandTotal)}</span>
@@ -478,7 +484,10 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
 
 // --- MAIN PAGE ---
 export default function ReportsPage() {
-    const npToday = getBSDateFromDaysAgo(1);
+    const [serverBusinessDate, setServerBusinessDate] = useState<string>("");
+    const npToday = useMemo(() => {
+        return getBSDateFromDaysAgo(serverBusinessDate, 1);
+    }, [serverBusinessDate]);
     
     // App State
     const [tenant, setTenant] = useState<any>(null);
@@ -489,8 +498,8 @@ export default function ReportsPage() {
     const [showCreditBook, setShowCreditBook] = useState(false);
   
     // Filter State
-    const [startDate, setStartDate] = useState<string>(npToday);
-    const [endDate, setEndDate] = useState<string>(npToday);
+    const [startDate, setStartDate] = useState<string>("");
+    const [endDate, setEndDate] = useState<string>("");
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("All"); 
     
@@ -502,10 +511,21 @@ export default function ReportsPage() {
   
     useEffect(() => { 
         loadInitial(); 
-        setCurrentNepaliDate(getFormattedNepaliDate());
-        const timer = setInterval(() => setCurrentNepaliDate(getFormattedNepaliDate()), 60000);
-        return () => clearInterval(timer);
     }, []);
+
+    useEffect(() => {
+        if (serverBusinessDate) {
+            const npDate = getNepaliDateFromBusinessDateStr(serverBusinessDate);
+            if (npDate) {
+                const y = npDate.getYear();
+                const m = npDate.getMonth() + 1; 
+                const d = npDate.getDate();
+                const mStr = m < 10 ? `0${m}` : m;
+                const dStr = d < 10 ? `0${d}` : d;
+                setCurrentNepaliDate(`${toNepaliDigits(y)}/${toNepaliDigits(mStr)}/${toNepaliDigits(dStr)}`);
+            }
+        }
+    }, [serverBusinessDate]);
   
     useEffect(() => { loadAllData(); }, []); // Only load once on mount! Data is filtered locally.
   
@@ -525,6 +545,11 @@ export default function ReportsPage() {
   
             if (safeReportRes.success && safeReportRes.transactions) {
                 setRawTransactions(safeReportRes.transactions);
+                if (safeReportRes.businessDate) {
+                    setServerBusinessDate(safeReportRes.businessDate);
+                    setStartDate(prev => prev || getBSDateFromDaysAgo(safeReportRes.businessDate, 1));
+                    setEndDate(prev => prev || getBSDateFromDaysAgo(safeReportRes.businessDate, 1));
+                }
             }
         } catch (e) {
             console.error(e);
@@ -536,7 +561,7 @@ export default function ReportsPage() {
   
     const handleQuickRange = (days: number) => {
         setActiveRangeButton(days);
-        setStartDate(getBSDateFromDaysAgo(days));
+        setStartDate(getBSDateFromDaysAgo(serverBusinessDate, days));
         setEndDate(npToday);
         setShowDatePicker(false);
     };
@@ -560,7 +585,7 @@ export default function ReportsPage() {
                   (t.customer?.name || "").toLowerCase().includes(search);
             
             // 2. Strict Nepali Date Match
-            const billBS = toBSFull(t.date);
+            const billBS = toBSFull(t.businessDate || t.date);
             const isAfterStart = startDate ? billBS >= startDate : true;
             const isBeforeEnd = endDate ? billBS <= endDate : true;
             
@@ -572,9 +597,9 @@ export default function ReportsPage() {
     }, [rawTransactions, searchTerm, startDate, endDate, filterType]);
   
     // 100% ACCURATE DYNAMIC SALES ENGINE
-    // 100% ACCURATE DYNAMIC SALES ENGINE
   const derivedData = useMemo(() => {
-      let totalRevenue = 0;
+      let totalRevenue = 0; // Actual Cash Collected
+      let totalSales = 0;   // Accrual Revenue Source
       let totalExpense = 0;
       let totalCreditDue = 0;
       let orderCount = 0;
@@ -585,90 +610,94 @@ export default function ReportsPage() {
       const chartGroup: any = {};
 
       filteredTransactions.forEach((tx: any) => {
-          const bsDate = toBSFull(tx.date);
+          const bsDate = toBSFull(tx.businessDate || tx.date);
           if (!chartGroup[bsDate]) chartGroup[bsDate] = { bsDate, revenue: 0, expense: 0, rawDate: tx.date };
 
           const isExpense = tx.type?.toLowerCase().includes('expense') || tx.type === 'Manual Expense';
           const amt = Number(tx.amount) || 0;
+          const currentDue = Number(tx.due) || 0;
           
           if (isExpense) {
               totalExpense += amt;
               chartGroup[bsDate].expense += amt;
               
-              // PREMIUM FIX: Deduct expenses directly from the exact Payment Drawer!
               const expMethod = tx.method || 'Cash';
               paymentMethods[expMethod] = (paymentMethods[expMethod] || 0) - amt;
-              
+          } else if (tx.type === 'Manual Income') {
+              totalSales += amt;
+              totalRevenue += amt;
+              chartGroup[bsDate].revenue += amt;
+
+              const incMethod = tx.method || 'Cash';
+              paymentMethods[incMethod] = (paymentMethods[incMethod] || 0) + amt;
+          } else if (tx.type === 'Credit Payment') {
+              totalRevenue += amt;
+              chartGroup[bsDate].revenue += amt;
+
+              const payMethod = tx.method || 'Cash';
+              paymentMethods[payMethod] = (paymentMethods[payMethod] || 0) + amt;
           } else {
-              // Income & POS Orders
+              // POS Bill
               orderCount++;
-              const actualRev = tx.method === 'Credit' ? (Number(tx.tendered) || 0) : amt;
-              totalRevenue += actualRev;
-              chartGroup[bsDate].revenue += actualRev;
-              
-              if (tx.method === 'Credit') {
-                  totalCreditDue += (Number(tx.due) || 0);
-              }
+              totalSales += amt;
+              totalCreditDue += currentDue;
 
-              const method = tx.method === 'Manual Log' ? 'Cash' : (tx.method || "Cash");
               const staff = tx.served_by || tx.staff || "Cashier";
+              staffPerformance[staff] = (staffPerformance[staff] || 0) + amt;
 
-              let safeSplits = tx.splits;
-              if (typeof safeSplits === 'string') {
-                  try { safeSplits = JSON.parse(safeSplits); } catch(e) { safeSplits = []; }
+              // Upfront paid cash at checkout
+              let creditPayments = tx.credit_payments || [];
+              if (typeof creditPayments === 'string') {
+                  try { creditPayments = JSON.parse(creditPayments); } catch(e) { creditPayments = []; }
+              } else if (!Array.isArray(creditPayments)) {
+                  creditPayments = [];
               }
+              const sumCreditPayments = creditPayments.reduce((sum: number, cp: any) => sum + (Number(cp.amount) || 0), 0);
+              const upfrontAmt = amt - (currentDue + sumCreditPayments);
 
-              // EXACT SPLIT HANDLING: Directly map object instead of 'Split'
-              if (safeSplits && Array.isArray(safeSplits) && safeSplits.length > 0) {
-                  const creditAmt = tx.due !== undefined ? Number(tx.due) : 0;
-                  const paidAmt = Math.max(0, amt - creditAmt);
-                  
-                  const nonCreditSplits = safeSplits.filter((s: any) => s.method !== 'Credit');
-                  const totalNonCreditSplits = nonCreditSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
-                  
-                  if (creditAmt > 0) {
-                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
+              if (upfrontAmt > 0) {
+                  totalRevenue += upfrontAmt;
+                  chartGroup[bsDate].revenue += upfrontAmt;
+
+                  // Calculate upfront splits
+                  let rawSplits = tx.splits || [];
+                  if (typeof rawSplits === 'string') {
+                      try { rawSplits = JSON.parse(rawSplits); } catch(e) { rawSplits = []; }
                   }
-                  
-                  if (nonCreditSplits.length > 0) {
-                      nonCreditSplits.forEach((s: any) => {
-                          const sAmt = Number(s.amount) || 0;
-                          const share = totalNonCreditSplits > 0 ? (sAmt / totalNonCreditSplits) : 0;
-                          const allocated = paidAmt * share;
-                          paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
-                      });
-                  } else if (paidAmt > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
+                  let upfrontSplits = [...rawSplits];
+                  if (upfrontSplits.length === 0) {
+                      upfrontSplits = [{ method: tx.method || 'Cash', amount: amt }];
                   }
-                  
-                  let totalSplitTendered = 0;
-                  safeSplits.forEach((s: any) => {
-                      if (s.method !== 'Credit') {
-                          totalSplitTendered += (Number(s.amount) || 0);
+
+                  // Deduct credit payments
+                  creditPayments.forEach((cp: any) => {
+                      const cpAmt = Number(cp.amount) || 0;
+                      const cpMethod = cp.method || 'Cash';
+                      let match = upfrontSplits.find((s: any) => s.method === cpMethod);
+                      if (match) {
+                          match.amount = Math.max(0, Number(match.amount) - cpAmt);
                       }
                   });
-                  const changeToReturn = totalSplitTendered - actualRev;
-                  if (changeToReturn > 0) paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) - changeToReturn;
-              } else if (method === 'Credit') {
-                  const creditAmt = tx.due !== undefined ? Number(tx.due) : 0;
-                  const paidAmt = Math.max(0, amt - creditAmt);
-                  
-                  if (creditAmt > 0) {
-                      paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + creditAmt;
-                  }
-                  if (paidAmt > 0) {
-                      paymentMethods['Cash'] = (paymentMethods['Cash'] || 0) + paidAmt;
-                  }
-              } else {
-                  paymentMethods[method] = (paymentMethods[method] || 0) + actualRev;
+
+                  // Filter out Credit splits
+                  upfrontSplits = upfrontSplits.filter((s: any) => s.method !== 'Credit' && Number(s.amount) > 0);
+
+                  const totalUpfrontSplitsAmt = upfrontSplits.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+                  upfrontSplits.forEach((s: any) => {
+                      const sAmt = Number(s.amount) || 0;
+                      const share = totalUpfrontSplitsAmt > 0 ? (sAmt / totalUpfrontSplitsAmt) : 0;
+                      const allocated = upfrontAmt * share;
+                      paymentMethods[s.method] = (paymentMethods[s.method] || 0) + allocated;
+                  });
               }
 
-              staffPerformance[staff] = (staffPerformance[staff] || 0) + actualRev;
+              if (currentDue > 0) {
+                  paymentMethods['Credit'] = (paymentMethods['Credit'] || 0) + currentDue;
+              }
 
               // Top Items Tracking
               (tx.items || []).forEach((item: any) => {
                   const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
-                  // DO NOT log waste if the item was purely pending!
                   if (isCancelled && item.previous_status === 'pending') return;
                   if (isCancelled) return;
                   const name = item.name;
@@ -686,7 +715,7 @@ export default function ReportsPage() {
       const chartData = Object.values(chartGroup).sort((a:any, b:any) => a.bsDate.localeCompare(b.bsDate));
 
       return {
-          stats: { totalRevenue, totalCreditDue, totalExpense, netProfit, margin, orderCount },
+          stats: { totalRevenue, totalCreditDue, totalExpense, netProfit, margin, orderCount, totalSales },
           paymentMethods,
           staffPerformance,
           topItems,
@@ -1073,7 +1102,7 @@ export default function ReportsPage() {
                                                       <td className="px-6 py-5">
                                                           <div className="flex flex-col gap-0.5">
                                                               <span className="font-bold text-slate-900">{tx.details || "POS Order"}</span>
-                                                              <span className="text-[10px] font-bold text-slate-500">{toBSFull(tx.date)} • {new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                                              <span className="text-[10px] font-bold text-slate-500">{toBSFull(tx.businessDate || tx.date)} • {new Date(tx.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                                                           </div>
                                                       </td>
                                                       <td className="px-6 py-5">
@@ -1213,7 +1242,7 @@ export default function ReportsPage() {
                                                   <div>
                                                       <span className="font-black text-slate-900 text-base capitalize">{tx.details || "POS Order"}</span>
                                                       <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                          <Calendar className="w-3 h-3" /> {toBSFull(tx.date)}
+                                                          <Calendar className="w-3 h-3" /> {toBSFull(tx.businessDate || tx.date)}
                                                       </div>
                                                   </div>
                                                   <div className="text-right flex flex-col items-end">

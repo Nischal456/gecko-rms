@@ -74,7 +74,7 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
     )
 }
 
-function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onRefresh }: any) {
+function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onRefresh, businessDate }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
     const [tenantInfo, setTenantInfo] = useState<{ name: string, logo: string | null }>({ name: "Gecko Bar", logo: null });
 
@@ -82,17 +82,29 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onR
         getPublicStaffList().then(res => {
             if (res.success) setTenantInfo({ name: res.tenantName || "Gecko Bar", logo: res.logo || null });
         });
+    }, []);
 
+    useEffect(() => {
         const timer = setInterval(() => {
-            const now = new Date();
-            const np = new NepaliDate(now);
+            const date = new Date();
+            let dateStr = "Loading Date...";
+            if (businessDate) {
+                try {
+                    const [y, m, d] = businessDate.split('-').map(Number);
+                    const localDate = new Date(y, m - 1, d);
+                    const np = new NepaliDate(localDate);
+                    dateStr = `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`;
+                } catch (e) {
+                    console.error("Bar Header NepaliDate Error:", e);
+                }
+            }
             setTimeInfo({
-                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                date: `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`
+                time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                date: dateStr
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [businessDate]);
 
     return (
         <header className="flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shadow-[0_4px_20px_rgb(0,0,0,0.02)] transition-all">
@@ -218,6 +230,7 @@ function BartenderDock({ activeTab }: { activeTab: 'overview' | 'menu' | 'invent
 export default function BartenderPage() {
     const [tickets, setTickets] = useState<BartenderTicket[]>([]);
     const [loading, setLoading] = useState(true);
+    const [businessDate, setBusinessDate] = useState<string>("");
     const [selectedTicket, setSelectedTicket] = useState<BartenderTicket | null>(null);
     const processingItems = useRef<Set<string>>(new Set());
     const [systemReady, setSystemReady] = useState(false);
@@ -293,6 +306,9 @@ export default function BartenderPage() {
     async function loadData() {
         const kdsRes = await getBartenderTickets();
         if (kdsRes.success && Array.isArray(kdsRes.data)) {
+            if ((kdsRes as any).businessDate) {
+                setBusinessDate((kdsRes as any).businessDate);
+            }
             const rawData = kdsRes.data as any[];
 
             // --- STRICT STATION FILTERING ENGINE (BAROS) ---
@@ -402,7 +418,7 @@ export default function BartenderPage() {
 
     return (
         <div className="flex h-full w-full bg-[#F8FAFC] flex-col relative overflow-hidden">
-            <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} onRefresh={loadData} />
+            <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} onRefresh={loadData} businessDate={businessDate} />
 
             {/* --- KANBAN BOARD --- */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">

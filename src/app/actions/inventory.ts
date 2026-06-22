@@ -3,6 +3,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate } from "@/app/actions/business-date";
 
 async function getTenantId() {
   const cookieStore = await cookies();
@@ -63,7 +65,7 @@ export async function updateStock(id: string, deductAmount: number, reason: stri
 
   await supabaseAdmin.from("inventory").update({ stock: newStock, quantity: newStock }).eq("id", id);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = await getActiveBusinessDate(tenantId);
   const logEntry = { item: item.name, qty_deducted: deductAmount, unit: item.base_unit, cogs: cogsForThisTransaction, time: new Date().toLocaleTimeString(), reason };
 
   const { data: currentLog } = await supabaseAdmin.from('inventory_daily_logs').select('logs, total_cogs').eq('tenant_id', tenantId).eq('date', today).single();
@@ -210,7 +212,7 @@ export async function addExpense(data: any) {
       category: finalCategory, 
       amount: rawAmount, 
       description: encodedDescription, 
-      date: data.date || new Date().toISOString().split('T')[0] 
+      date: data.date || await getActiveBusinessDate(tenantId) 
   });
   
   if (error) console.error("Database Save Error:", error);

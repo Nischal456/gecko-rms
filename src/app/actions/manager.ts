@@ -2,6 +2,8 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { getKathmanduDateString } from "@/lib/utils";
+import { getActiveBusinessDate } from "@/app/actions/business-date";
 
 // --- CONSTANTS & SAAS ID SYNC ---
 const FALLBACK_TENANT_UUID = "00000000-0000-0000-0000-000000000000";
@@ -42,7 +44,7 @@ async function getTenantId() {
 
 export async function getManagerDashboard() {
   const tenantId = await getTenantId();
-  const today = new Date().toISOString().split('T')[0];
+  const today = await getActiveBusinessDate(tenantId);
 
   try {
     // 1. FETCH REVENUE (Today's Active Orders AND Paid Bills)
@@ -212,6 +214,7 @@ export async function getManagerDashboard() {
 
     return {
       success: true,
+      businessDate: today,
       tenant: { 
           name: tenant?.name || "Restaurant Manager", 
           code: tenant?.code || "MGR", 
