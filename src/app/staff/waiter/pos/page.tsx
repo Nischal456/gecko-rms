@@ -301,14 +301,26 @@ function POSContent() {
         return () => clearInterval(interval);
     }, [loading]);
 
+    const MAX_ITEM_QTY = 99;
+
     const addToCart = (item: MenuItem, variant: Variant | undefined, note: string) => {
+        const variantName = variant ? variant.name : "";
+        const cartId = variant ? `${item.id}-${variant.name}-${note}` : `${item.id}-${note}`;
+        const price = variant ? Number(variant.price) : item.price;
+        const name = variant ? `${item.name} (${variant.name})` : item.name;
+        
+        const existing = cart.find(i => i.cartId === cartId);
+        if (existing && existing.qty >= MAX_ITEM_QTY) {
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for ${item.name}`);
+            return;
+        }
+
         setCart(prev => {
-            const variantName = variant ? variant.name : "";
-            const cartId = variant ? `${item.id}-${variant.name}-${note}` : `${item.id}-${note}`;
-            const price = variant ? Number(variant.price) : item.price;
-            const name = variant ? `${item.name} (${variant.name})` : item.name;
-            const existing = prev.find(i => i.cartId === cartId);
-            if(existing) return prev.map(i => i.cartId === cartId ? { ...i, qty: i.qty + 1 } : i);
+            const ex = prev.find(i => i.cartId === cartId);
+            if (ex) {
+                if (ex.qty >= MAX_ITEM_QTY) return prev;
+                return prev.map(i => i.cartId === cartId ? { ...i, qty: Math.min(MAX_ITEM_QTY, i.qty + 1) } : i);
+            }
             return [...prev, { ...item, cartId, name, price, qty: 1, variantName, note }];
         });
         setModalItem(null);
@@ -316,10 +328,46 @@ function POSContent() {
     };
 
     const updateQty = (cartId: string, delta: number) => {
+        const item = cart.find(i => i.cartId === cartId);
+        const currentQty = Number(item?.qty || 0);
+        if (item && delta > 0 && currentQty >= MAX_ITEM_QTY) {
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for ${item.name}`);
+            return;
+        }
         setCart(prev => prev.map(i => {
-            if (i.cartId === cartId) return { ...i, qty: Math.max(0, i.qty + delta) };
+            if (i.cartId === cartId) {
+                const q = Number(i.qty || 0);
+                return { ...i, qty: Math.min(MAX_ITEM_QTY, Math.max(0, q + delta)) };
+            }
             return i;
-        }).filter(i => i.qty > 0));
+        }).filter(i => Number(i.qty) > 0));
+    };
+
+    const handleQtyInput = (cartId: string, valStr: string) => {
+        if (valStr === "") {
+            setCart(prev => prev.map(i => i.cartId === cartId ? { ...i, qty: 0 } : i));
+            return;
+        }
+        let val = parseInt(valStr, 10);
+        if (isNaN(val)) return;
+        if (val > MAX_ITEM_QTY) {
+            val = MAX_ITEM_QTY;
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for this item`);
+        }
+        setCart(prev => prev.map(i => {
+            if (i.cartId === cartId) return { ...i, qty: Math.max(0, val) };
+            return i;
+        }));
+    };
+
+    const handleQtyBlur = (cartId: string, valStr: string) => {
+        let val = parseInt(valStr, 10);
+        if (isNaN(val) || val <= 0) {
+            val = 1;
+        } else if (val > MAX_ITEM_QTY) {
+            val = MAX_ITEM_QTY;
+        }
+        setCart(prev => prev.map(i => i.cartId === cartId ? { ...i, qty: val } : i).filter(i => Number(i.qty) > 0));
     };
 
     const handleCheckout = async (e?: any) => {
@@ -328,6 +376,16 @@ function POSContent() {
         if(cart.length === 0) return toast.error("Cart is empty");
         if(!tableId && !isTakeaway) return toast.error("No Table Selected"); 
         
+        const invalidItem = cart.find(i => !i.qty || i.qty <= 0 || i.qty > MAX_ITEM_QTY);
+        if (invalidItem) {
+            if (invalidItem.qty > MAX_ITEM_QTY) {
+                toast.error(`Quantity for item "${invalidItem.name}" exceeds maximum allowed limit of ${MAX_ITEM_QTY}.`);
+            } else {
+                toast.error(`Invalid quantity for item "${invalidItem.name}".`);
+            }
+            return;
+        }
+
         if (!navigator.onLine) {
             toast.error("Network Unstable! Please check your internet connection and try again.", { duration: 6000, icon: <AlertCircle className="w-5 h-5 text-red-500" /> }); 
             return;
@@ -518,7 +576,15 @@ function POSContent() {
                                             </div>
                                             <div className="flex items-center bg-slate-100 rounded-xl p-1 shadow-inner shrink-0">
                                                 <button onClick={() => updateQty(item.cartId, -1)} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-red-500 active:scale-90 transition-all"><Minus className="w-3 h-3 md:w-4 md:h-4" /></button>
-                                                <span className="w-7 md:w-8 text-center font-bold text-sm md:text-base text-slate-700">{item.qty}</span>
+                                                <input 
+                                                     type="number" 
+                                                     min="1" 
+                                                     max="99" 
+                                                     value={item.qty ? String(item.qty) : ""} 
+                                                     onChange={(e) => handleQtyInput(item.cartId, e.target.value)} 
+                                                     onBlur={(e) => handleQtyBlur(item.cartId, e.target.value)} 
+                                                     className="w-7 md:w-9 text-center font-bold text-sm md:text-base text-slate-700 bg-transparent outline-none border-none p-0 focus:bg-white focus:ring-1 focus:ring-emerald-400 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                                 />
                                                 <button onClick={() => updateQty(item.cartId, 1)} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-slate-900 text-white rounded-lg shadow-sm hover:bg-slate-800 active:scale-90 transition-all"><Plus className="w-3 h-3 md:w-4 md:h-4" /></button>
                                             </div>
                                         </div>

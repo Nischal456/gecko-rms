@@ -32,6 +32,13 @@ export async function createOrderJSON(orderData: any) {
       return { success: false, error: "Cart is empty" };
   }
 
+  for (const i of orderData.items) {
+      const q = Number(i.qty || i.q || i.quantity || 0);
+      if (q <= 0 || q > 99) {
+          return { success: false, error: `Quantity for item '${i.name || i.n}' exceeds maximum limit of 99.` };
+      }
+  }
+
   // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
   // If the client-side QR menu or mobile app fails to pass station/category payload,
   // we look it up live from the database to guarantee the Chef/Bartender OS routes it.

@@ -210,18 +210,30 @@ export function CashierPOS({ data, onClose, onSubmit, preSelectedTable, orderTyp
         setModalItem({ ...item, variants: v });
     };
 
+    const MAX_ITEM_QTY = 99;
+
     const handleAddToCart = (variant: any | null, note: string) => {
         const item = modalItem;
         if (!item) return;
+        
+        const variantName = variant ? variant.name : "";
+        const cartId = variant ? `${item.id}-${variant.name}-${note}` : `${item.id}-${note}`;
+        const existing = cart.find((i: any) => i.cartId === cartId && !i.isExisting);
+        if (existing && existing.qty >= MAX_ITEM_QTY) {
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for ${item.name}`);
+            return;
+        }
+
         setCart(prev => {
-            const variantName = variant ? variant.name : "";
-            const cartId = variant ? `${item.id}-${variant.name}-${note}` : `${item.id}-${note}`;
             const price = variant ? Number(variant.price) : item.price;
             const name = variant ? `${item.name} (${variant.name})` : item.name;
 
             // Only merge if not existing locked item
-            const existing = prev.find((i: any) => i.cartId === cartId && !i.isExisting);
-            if (existing) return prev.map((i: any) => i.cartId === cartId ? { ...i, qty: i.qty + 1 } : i);
+            const ex = prev.find((i: any) => i.cartId === cartId && !i.isExisting);
+            if (ex) {
+                if (ex.qty >= MAX_ITEM_QTY) return prev;
+                return prev.map((i: any) => i.cartId === cartId ? { ...i, qty: Math.min(MAX_ITEM_QTY, i.qty + 1) } : i);
+            }
             return [...prev, { ...item, cartId, name, price, qty: 1, variantName, note }];
         });
         setModalItem(null);
@@ -229,10 +241,46 @@ export function CashierPOS({ data, onClose, onSubmit, preSelectedTable, orderTyp
     };
 
     const updateQty = (cartId: string, delta: number) => {
+        const item = cart.find((i: any) => i.cartId === cartId && !i.isExisting);
+        const currentQty = Number(item?.qty || 0);
+        if (item && delta > 0 && currentQty >= MAX_ITEM_QTY) {
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for ${item.name}`);
+            return;
+        }
         setCart(prev => prev.map((i: any) => {
-            if (i.cartId === cartId && !i.isExisting) return { ...i, qty: Math.max(0, i.qty + delta) };
+            if (i.cartId === cartId && !i.isExisting) {
+                const q = Number(i.qty || 0);
+                return { ...i, qty: Math.min(MAX_ITEM_QTY, Math.max(0, q + delta)) };
+            }
             return i;
-        }).filter((i: any) => i.qty > 0));
+        }).filter((i: any) => Number(i.qty) > 0));
+    };
+
+    const handleQtyInput = (cartId: string, valStr: string) => {
+        if (valStr === "") {
+            setCart(prev => prev.map((i: any) => i.cartId === cartId && !i.isExisting ? { ...i, qty: 0 } : i));
+            return;
+        }
+        let val = parseInt(valStr, 10);
+        if (isNaN(val)) return;
+        if (val > MAX_ITEM_QTY) {
+            val = MAX_ITEM_QTY;
+            toast.error(`Maximum quantity limit (${MAX_ITEM_QTY}) reached for this item`);
+        }
+        setCart(prev => prev.map((i: any) => {
+            if (i.cartId === cartId && !i.isExisting) return { ...i, qty: Math.max(0, val) };
+            return i;
+        }));
+    };
+
+    const handleQtyBlur = (cartId: string, valStr: string) => {
+        let val = parseInt(valStr, 10);
+        if (isNaN(val) || val <= 0) {
+            val = 1;
+        } else if (val > MAX_ITEM_QTY) {
+            val = MAX_ITEM_QTY;
+        }
+        setCart(prev => prev.map((i: any) => i.cartId === cartId && !i.isExisting ? { ...i, qty: val } : i).filter((i: any) => Number(i.qty) > 0));
     };
 
     const removeFromCart = (id: string) => setCart(cart.filter(c => c.cartId !== id));
@@ -240,6 +288,16 @@ export function CashierPOS({ data, onClose, onSubmit, preSelectedTable, orderTyp
     const handleSubmit = async () => {
         if (newItemsCount === 0) return toast.error("Add new items first");
         if (isSubmitting) return;
+
+        const invalidItem = cart.filter(i => !i.isExisting).find(i => !i.qty || i.qty <= 0 || i.qty > MAX_ITEM_QTY);
+        if (invalidItem) {
+            if (invalidItem.qty > MAX_ITEM_QTY) {
+                toast.error(`Quantity for item "${invalidItem.name}" exceeds maximum allowed limit of ${MAX_ITEM_QTY}.`);
+            } else {
+                toast.error(`Invalid quantity for item "${invalidItem.name}".`);
+            }
+            return;
+        }
 
         if (!navigator.onLine) {
             toast.error("Network Unstable! Please check your internet connection and try again.");
@@ -338,9 +396,17 @@ export function CashierPOS({ data, onClose, onSubmit, preSelectedTable, orderTyp
                                         <span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded-lg">x{item.qty} SENT</span>
                                     ) : (
                                         <div className="flex items-center bg-slate-100 rounded-xl p-1 shadow-inner">
-                                            <button onClick={() => updateQty(item.cartId, -1)} className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-red-500 active:scale-90 transition-all"><Minus className="w-3 h-3" /></button>
-                                            <span className="w-8 text-center font-bold text-sm text-slate-700">{item.qty}</span>
-                                            <button onClick={() => updateQty(item.cartId, 1)} className="w-7 h-7 flex items-center justify-center bg-slate-900 text-white rounded-lg shadow-sm hover:bg-slate-800 active:scale-90 transition-all"><Plus className="w-3 h-3" /></button>
+                                             <button onClick={() => updateQty(item.cartId, -1)} className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-red-500 active:scale-90 transition-all"><Minus className="w-3 h-3" /></button>
+                                             <input 
+                                                 type="number" 
+                                                 min="1" 
+                                                 max="99" 
+                                                 value={item.qty ? String(item.qty) : ""} 
+                                                 onChange={(e) => handleQtyInput(item.cartId, e.target.value)} 
+                                                 onBlur={(e) => handleQtyBlur(item.cartId, e.target.value)} 
+                                                 className="w-8 text-center font-bold text-sm text-slate-700 bg-transparent outline-none border-none p-0 focus:bg-white focus:ring-1 focus:ring-emerald-400 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                             />
+                                             <button onClick={() => updateQty(item.cartId, 1)} className="w-7 h-7 flex items-center justify-center bg-slate-900 text-white rounded-lg shadow-sm hover:bg-slate-800 active:scale-90 transition-all"><Plus className="w-3 h-3" /></button>
                                         </div>
                                     )}
                                 </div>

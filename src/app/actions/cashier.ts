@@ -251,6 +251,13 @@ export async function getCashierData(isPolling: boolean = false) {
 export async function createCashierOrder(tableId: string, items: any[], type: 'dine_in' | 'takeaway') {
     const tenantId = await getTenantId();
     const today = await getActiveBusinessDate(tenantId);
+
+    for (const item of items) {
+        const q = Number(item.qty || item.quantity || 0);
+        if (q <= 0 || q > 99) {
+            return { success: false, msg: `Quantity for "${item.name}" exceeds maximum allowed limit of 99.` };
+        }
+    }
     
     // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
     // If the Cashier frontend fails to pass station/category payload,

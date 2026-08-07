@@ -216,8 +216,12 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         });
     }
 
-    // Validate each cart item against the live menu
+    // Validate each cart item against the live menu & quantity limits
     for (const item of cartItems) {
+        const itemQty = Number(item.qty || item.quantity || 0);
+        if (itemQty <= 0 || itemQty > 99) {
+            return { success: false, msg: `Quantity for "${item.name}" exceeds the maximum allowed limit of 99.` };
+        }
         const baseName = item.name.split(" (")[0]; 
         const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
         if (!dbItem) {
@@ -371,8 +375,12 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
             });
         }
 
-        // Validate updated items (only for newly added/pending items)
+        // Validate updated items (only for newly added/pending items) & quantity limits
         for (const item of updatedItems) {
+            const itemQty = Number(item.qty || item.quantity || 0);
+            if (itemQty <= 0 || itemQty > 99) {
+                return { success: false, msg: `Quantity for "${item.name}" exceeds the maximum allowed limit of 99.` };
+            }
             if (['pending'].includes((item.status || '').toLowerCase().trim())) {
                 const baseName = item.name.split(" (")[0];
                 const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
