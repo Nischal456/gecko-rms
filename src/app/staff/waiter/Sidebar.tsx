@@ -142,6 +142,13 @@ export default function WaiterSidebar({ tenantName, tenantCode, logo }: SidebarP
             </Link>
           );
         })}
+        
+        {/* Mobile Logout Button */}
+        <button onClick={handleLogout} className="relative group flex flex-col items-center gap-1 active:scale-90 transition-transform">
+          <div className="p-2 rounded-2xl transition-all duration-300 text-slate-400 hover:text-red-500">
+            <LogOut className="w-5 h-5" />
+          </div>
+        </button>
       </nav>
 
       {/* ZERO-LAG DESKTOP SIDEBAR */}

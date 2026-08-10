@@ -34,7 +34,7 @@ interface BartenderItem {
 interface BartenderTicket { 
     id: string; 
     table_name: string; 
-    status: 'pending' | 'preparing' | 'cooking' | 'ready' | 'served'; 
+    status: 'pending' | 'preparing' | 'cooking' | 'ready' | 'served' | 'cancelled'; 
     created_at: string; 
     order_items: BartenderItem[]; 
 }
@@ -74,7 +74,7 @@ function SystemInitScreen({ onStart }: { onStart: () => void }) {
     )
 }
 
-function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onRefresh, businessDate }: any) {
+function KDSHeader({ count, alertingTable, alertType, onAcknowledge, muted, toggleMute, onRefresh, businessDate }: any) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
     const [tenantInfo, setTenantInfo] = useState<{ name: string, logo: string | null }>({ name: "Gecko Bar", logo: null });
 
@@ -110,11 +110,11 @@ function KDSHeader({ count, alertingTable, onAcknowledge, muted, toggleMute, onR
         <header className="flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-6 py-3 flex justify-between items-center z-30 sticky top-0 shadow-[0_4px_20px_rgb(0,0,0,0.02)] transition-all">
             <AnimatePresence>
                 {alertingTable && (
-                    <motion.div initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }} className="absolute inset-0 bg-red-500 flex items-center justify-between px-4 md:px-6 z-50 text-white shadow-xl cursor-pointer" onClick={onAcknowledge}>
+                    <motion.div initial={{ y: -120 }} animate={{ y: 0 }} exit={{ y: -120 }} className={`absolute inset-0 ${alertType === 'cancelled' ? 'bg-orange-500' : 'bg-red-500'} flex items-center justify-between px-4 md:px-6 z-50 text-white shadow-xl cursor-pointer`} onClick={onAcknowledge}>
                         <div className="flex items-center gap-3 md:gap-4 animate-pulse">
                             <div className="w-8 h-8 md:w-10 md:h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm"><Bell className="w-4 h-4 md:w-5 md:h-5 fill-current" /></div>
                             <div>
-                                <p className="text-[9px] md:text-[10px] font-bold opacity-90 uppercase tracking-widest">New Drink Order</p>
+                                <p className="text-[9px] md:text-[10px] font-bold opacity-90 uppercase tracking-widest">{alertType === 'cancelled' ? 'ORDER CANCELLED!' : 'New Drink Order'}</p>
                                 <h3 className="text-lg md:text-3xl font-black leading-none truncate max-w-[150px] md:max-w-none">{alertingTable}</h3>
                             </div>
                         </div>
@@ -239,8 +239,19 @@ export default function BartenderPage() {
     const acknowledgedIds = useRef<Set<string>>(new Set());
     const currentlyAlertingId = useRef<string | null>(null);
     const [alertingTable, setAlertingTable] = useState<string | null>(null);
+    const [alertType, setAlertType] = useState<'new' | 'cancelled' | null>(null);
 
     useEffect(() => {
+        try {
+            const stored = localStorage.getItem('gecko_bar_ack_ids');
+            if (stored) {
+                const arr = JSON.parse(stored);
+                if (Array.isArray(arr)) {
+                    acknowledgedIds.current = new Set(arr);
+                }
+            }
+        } catch (e) {}
+
         const isInit = sessionStorage.getItem("gecko_bar_init");
         if (isInit === "true") {
             setSystemReady(true);
@@ -261,13 +272,19 @@ export default function BartenderPage() {
 
     useEffect(() => {
         if (!systemReady) return;
-        const pending = tickets.filter(t => t.status === 'pending');
-        const unacknowledged = pending.find(t => !acknowledgedIds.current.has(t.id));
+        
+        const alertingTicket = tickets.find(t => 
+            (t.status === 'pending' && !acknowledgedIds.current.has(t.id + '-pending')) || 
+            (t.status === 'cancelled' && !acknowledgedIds.current.has(t.id + '-cancelled'))
+        );
 
-        if (unacknowledged) {
-            if (currentlyAlertingId.current !== unacknowledged.id) {
-                currentlyAlertingId.current = unacknowledged.id;
-                setAlertingTable(unacknowledged.table_name);
+        if (alertingTicket) {
+            const targetAlertType = alertingTicket.status === 'cancelled' ? 'cancelled' : 'new';
+            
+            if (currentlyAlertingId.current !== alertingTicket.id || alertType !== targetAlertType) {
+                currentlyAlertingId.current = alertingTicket.id;
+                setAlertingTable(alertingTicket.table_name);
+                setAlertType(targetAlertType);
 
                 if (!muted && audioRef.current) {
                     audioRef.current.play().catch(e => {
@@ -281,10 +298,11 @@ export default function BartenderPage() {
             if (currentlyAlertingId.current) {
                 currentlyAlertingId.current = null;
                 setAlertingTable(null);
+                setAlertType(null);
                 if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
             }
         }
-    }, [tickets, systemReady, muted]);
+    }, [tickets, systemReady, muted, alertType]);
 
     const initializeSystem = () => {
         const audio = new Audio(ALERT_SOUND); audio.volume = 1.0; audio.loop = true; audioRef.current = audio;
@@ -295,11 +313,19 @@ export default function BartenderPage() {
     };
 
     const handleAcknowledge = () => {
-        if (currentlyAlertingId.current) {
-            acknowledgedIds.current.add(currentlyAlertingId.current);
+        if (currentlyAlertingId.current && alertType) {
+            const statusSuffix = alertType === 'cancelled' ? 'cancelled' : 'pending';
+            acknowledgedIds.current.add(currentlyAlertingId.current + '-' + statusSuffix);
+            
+            try {
+                localStorage.setItem('gecko_bar_ack_ids', JSON.stringify(Array.from(acknowledgedIds.current)));
+            } catch (e) {}
+
             currentlyAlertingId.current = null;
             setAlertingTable(null);
+            setAlertType(null);
             if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+            loadData();
         }
     };
 
@@ -332,7 +358,7 @@ export default function BartenderPage() {
                 return { ...t, order_items: barItems };
             }).filter(t => t.order_items.length > 0); 
 
-            const activeOrders = stationFilteredData.filter(t => t.status !== 'served');
+            const activeOrders = stationFilteredData.filter(t => t.status !== 'served' && !(t.status === 'cancelled' && acknowledgedIds.current.has(t.id + '-cancelled')));
             const sorted = activeOrders.sort((a, b) => {
                 const statusOrder = { 'pending': 0, 'preparing': 1, 'cooking': 1, 'ready': 2, 'served': 3 };
                 const statusDiff = (statusOrder[a.status as keyof typeof statusOrder] || 0) - (statusOrder[b.status as keyof typeof statusOrder] || 0);
@@ -418,7 +444,7 @@ export default function BartenderPage() {
 
     return (
         <div className="flex h-full w-full bg-[#F8FAFC] flex-col relative overflow-hidden">
-            <KDSHeader count={tickets.length} alertingTable={alertingTable} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} onRefresh={loadData} businessDate={businessDate} />
+            <KDSHeader count={tickets.length} alertingTable={alertingTable} alertType={alertType} onAcknowledge={handleAcknowledge} muted={muted} toggleMute={() => setMuted(!muted)} onRefresh={loadData} businessDate={businessDate} />
 
             {/* --- KANBAN BOARD --- */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-y-hidden md:overflow-x-auto p-4 md:p-6 pb-32 scroll-smooth custom-scrollbar">

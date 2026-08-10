@@ -28,7 +28,7 @@ function toNepaliDigits(num: number | string): string {
 }
 
 const formatRs = (amount: number) => {
-    return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
+    return "रु " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
 };
 
 // --- 1. SYSTEM LOADER ---
@@ -324,7 +324,7 @@ export default function ManagerPage() {
                                 <div className="relative z-10 flex flex-col h-full justify-between">
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="flex items-center gap-2 text-emerald-350 text-xs font-bold uppercase tracking-widest"><IndianRupee className="w-4 h-4 text-emerald-400" /> Revenue</span>
+                                            <span className="flex items-center gap-2 text-emerald-350 text-xs font-bold uppercase tracking-widest"><span className="text-[1.1rem] font-bold text-emerald-400 leading-none">रु</span> Revenue</span>
                                             <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 text-emerald-450">
                                                 <TrendingUp className="w-3 h-3 text-emerald-400" /> Today
                                             </span>

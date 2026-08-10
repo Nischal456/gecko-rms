@@ -272,6 +272,19 @@ export default function KitchenPage() {
   const [alertingCancellation, setAlertingCancellation] = useState<any>(null);
 
   useEffect(() => {
+      try {
+          const storedAck = localStorage.getItem('gecko_kitchen_ack_ids');
+          if (storedAck) {
+              const arr = JSON.parse(storedAck);
+              if (Array.isArray(arr)) acknowledgedIds.current = new Set(arr);
+          }
+          const storedCancel = localStorage.getItem('gecko_kitchen_cancel_ids');
+          if (storedCancel) {
+              const arr = JSON.parse(storedCancel);
+              if (Array.isArray(arr)) acknowledgedCancellations.current = new Set(arr);
+          }
+      } catch (e) {}
+
       const isInit = sessionStorage.getItem("gecko_kitchen_init");
       if(isInit === "true") {
           setSystemReady(true);
@@ -371,6 +384,9 @@ export default function KitchenPage() {
   const handleAcknowledge = () => {
       if (currentlyAlertingId.current) {
           acknowledgedIds.current.add(currentlyAlertingId.current);
+          try {
+              localStorage.setItem('gecko_kitchen_ack_ids', JSON.stringify(Array.from(acknowledgedIds.current)));
+          } catch (e) {}
           currentlyAlertingId.current = null;
           setAlertingTable(null);
           if (audioRef.current) {
@@ -387,6 +403,9 @@ export default function KitchenPage() {
               : `cancel-item-${alertingCancellation.orderId}-${alertingCancellation.itemId}`;
           
           acknowledgedCancellations.current.add(sig);
+          try {
+              localStorage.setItem('gecko_kitchen_cancel_ids', JSON.stringify(Array.from(acknowledgedCancellations.current)));
+          } catch (e) {}
           setAlertingCancellation(null);
           currentlyAlertingId.current = null;
           

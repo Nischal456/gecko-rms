@@ -308,6 +308,7 @@ export default function OrdersPage() {
     const [groupedTables, setGroupedTables] = useState<GroupedTableOrder[]>([]);
     const [cancelledItemsGlobal, setCancelledItemsGlobal] = useState<any[]>([]); // NEW STATE
     const [filter, setFilter] = useState<'active' | 'completed' | 'cancelled'>('active');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'cooking' | 'pending' | 'served'>('all'); // NEW SECONDARY FILTER
     const [search, setSearch] = useState("");
     
     // Notification State
@@ -508,7 +509,8 @@ export default function OrdersPage() {
         return { ...group, orders: filteredOrders };
     }).filter(group => {
         const matchesSearch = String(group.tableId || "").toLowerCase().includes(search.toLowerCase());
-        return matchesSearch && (group.orders || []).length > 0;
+        const matchesStatus = statusFilter === 'all' || (group.orders || []).some(o => (o.items || []).some(i => i && !['cancelled', 'void'].includes(i.status) && (i.status || '').toLowerCase().trim() === statusFilter));
+        return matchesSearch && matchesStatus && (group.orders || []).length > 0;
     });
 
     const activeCount = groupedTables.filter(g => {
@@ -656,6 +658,35 @@ export default function OrdersPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* SECONDARY FILTER (STATUS PILLS) */}
+                        {filter === 'active' && (
+                            <div className="flex items-center gap-2 md:gap-3 mt-4 md:mt-5 overflow-x-auto no-scrollbar pb-1">
+                                {[
+                                    { id: 'all', label: 'All Active' },
+                                    { id: 'ready', label: 'Ready to Serve', active: 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20', inactive: 'bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50' },
+                                    { id: 'cooking', label: 'Cooking', active: 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-500/20', inactive: 'bg-white text-orange-600 border-orange-200 hover:bg-orange-50' },
+                                    { id: 'pending', label: 'Pending', active: 'bg-blue-500 text-white border-blue-600 shadow-md shadow-blue-500/20', inactive: 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50' },
+                                    { id: 'served', label: 'Served', active: 'bg-slate-500 text-white border-slate-600 shadow-md shadow-slate-500/20', inactive: 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' },
+                                ].map((tab) => {
+                                    const isActive = statusFilter === tab.id;
+                                    
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setStatusFilter(tab.id as any)}
+                                            className={`px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                                                isActive 
+                                                ? (tab.id === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-md' : tab.active) 
+                                                : (tab.id === 'all' ? 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50' : tab.inactive)
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </header>
 

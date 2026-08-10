@@ -211,7 +211,10 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
     if (menuData) {
         menuData.forEach((cat: any) => {
             if (Array.isArray(cat.items)) {
-                cat.items.forEach((m: any) => liveMenu.set(m.name, m));
+                cat.items.forEach((m: any) => {
+                    liveMenu.set(m.name, m);
+                    if (m.id) liveMenu.set(m.id.toString(), m);
+                });
             }
         });
     }
@@ -223,7 +226,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
             return { success: false, msg: `Quantity for "${item.name}" exceeds the maximum allowed limit of 99.` };
         }
         const baseName = item.name.split(" (")[0]; 
-        const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
+        const dbItem = (item.id ? liveMenu.get(item.id.toString()) : null) || liveMenu.get(item.name) || liveMenu.get(baseName);
         if (!dbItem) {
             return { success: false, msg: `"${item.name}" has been deleted from the menu.` };
         }
@@ -233,7 +236,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
     }
 
     const compactItems = cartItems.map((i: any) => {
-        const dbItem = liveMenu.get(i.name) || {};
+        const dbItem = (i.id ? liveMenu.get(i.id.toString()) : null) || liveMenu.get(i.name) || liveMenu.get(i.name.split(" (")[0]) || {};
         return {
             id: i.id || dbItem.id || "",
             unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
@@ -383,7 +386,7 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
             }
             if (['pending'].includes((item.status || '').toLowerCase().trim())) {
                 const baseName = item.name.split(" (")[0];
-                const dbItem = liveMenu.get(baseName) || liveMenu.get(item.name);
+                const dbItem = (item.id ? liveMenu.get(item.id.toString()) : null) || liveMenu.get(item.name) || liveMenu.get(baseName);
                 if (!dbItem) {
                     return { success: false, msg: `"${item.name}" has been deleted from the menu.` };
                 }

@@ -90,22 +90,25 @@ export async function getBartenderTickets() {
         });
 
         const activeOrders = allOrders.filter((o: any) => 
-            ['pending', 'cooking', 'ready', 'preparing'].includes((o.status || '').toLowerCase().trim())
+            ['pending', 'cooking', 'ready', 'preparing', 'cancelled'].includes((o.status || '').toLowerCase().trim())
         );
 
         const mappedOrders = activeOrders.map((order: any) => {
             let validItems = (order.items || []).filter((item: any) => {
                 const s = (item.status || '').toLowerCase().trim();
-                if (['void', 'cancelled'].includes(s) || item.qty <= 0) return false;
+                if (['void'].includes(s) || item.qty <= 0) return false;
                 return isItemForBar(item);
             });
 
             // CALCULATE BAR-SPECIFIC STATUS TO PREVENT KANBAN JUMPING
             let barOnlyStatus = 'pending';
             if (validItems.length > 0) {
+                const allCancelled = validItems.every((i: any) => ['cancelled', 'void'].includes((i.status||'').toLowerCase()));
                 const allReady = validItems.every((i: any) => ['ready', 'served', 'cancelled', 'void'].includes((i.status||'').toLowerCase()));
                 const anyCooking = validItems.some((i: any) => ['cooking', 'ready', 'preparing'].includes((i.status||'').toLowerCase()));
-                if (allReady) barOnlyStatus = 'ready';
+                
+                if (allCancelled || (order.status || '').toLowerCase().trim() === 'cancelled') barOnlyStatus = 'cancelled';
+                else if (allReady) barOnlyStatus = 'ready';
                 else if (anyCooking) barOnlyStatus = 'cooking';
             } else {
                 barOnlyStatus = 'served'; // Hide ticket if there are no bar items

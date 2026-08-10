@@ -212,8 +212,8 @@ export default function KitchenMenuPage() {
                   return true;
               });
 
-              return { ...cat, items: safeItems };
-          }).filter((cat: any) => cat.items.length > 0); 
+              return { ...cat, items: safeItems, _originalCount: cat.items.length };
+          }).filter((cat: any) => cat.items.length > 0 || cat._originalCount === 0); 
       }
 
       setCategories(filteredCategories);
