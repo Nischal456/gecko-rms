@@ -216,6 +216,7 @@ export default function StaffPage() {
 
   // --- LOGIC: PAYROLL ---
   async function handlePayment() {
+      if(!selectedYear) return toast.error("Year is required.");
       if(!amount) return toast.error("Enter amount");
       const salaryString = `${selectedMonth} ${selectedYear}`;
       const res = await recordPayment(selectedStaff.id, Number(amount), payType, payNote, salaryString);
@@ -405,10 +406,10 @@ export default function StaffPage() {
                                     <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-4">
                                         <label className="text-xs font-black uppercase text-slate-400">Contact & Salary</label>
                                         <div className="flex gap-4">
-                                            <input name="phone" defaultValue={selectedStaff?.phone} placeholder="Phone" className="flex-1 h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
-                                            <input name="email" defaultValue={selectedStaff?.email} placeholder="Email" className="flex-1 h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
+                                            <input name="phone" type="tel" maxLength={10} pattern="[0-9]{10}" onInvalid={(e) => (e.target as HTMLInputElement).setCustomValidity('Please enter exactly 10 numbers.')} onInput={(e) => { (e.target as HTMLInputElement).setCustomValidity(''); e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '').slice(0, 10); }} defaultValue={selectedStaff?.phone} placeholder="Phone" className="flex-1 h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
+                                            <input name="email" type="email" defaultValue={selectedStaff?.email} placeholder="Email" className="flex-1 h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
                                         </div>
-                                        <input name="salary" defaultValue={selectedStaff?.salary} type="number" placeholder="Monthly Salary (Rs)" className="w-full h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
+                                        <input name="salary" defaultValue={selectedStaff?.salary} type="number" min="0" onKeyDown={(e) => { if (e.key === '-') e.preventDefault(); }} onInput={(e) => { if (e.currentTarget.value.length > 5) e.currentTarget.value = e.currentTarget.value.slice(0, 5); }} placeholder="Monthly Salary (Rs)" className="w-full h-10 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400" />
                                     </div>
 
                                     {/* Emergency Contact */}
@@ -416,7 +417,7 @@ export default function StaffPage() {
                                         <label className="text-xs font-black uppercase text-orange-400 flex items-center gap-2"><HeartPulse className="w-4 h-4" /> Emergency Contact</label>
                                         <div className="flex gap-4">
                                             <input name="emergency_contact_name" defaultValue={selectedStaff?.emergency_contact_name} placeholder="Contact Person Name" className="flex-1 h-10 px-4 bg-white border border-orange-200 rounded-xl text-sm font-bold outline-none focus:border-orange-400" />
-                                            <input name="emergency_contact_phone" defaultValue={selectedStaff?.emergency_contact_phone} placeholder="Phone Number" className="flex-1 h-10 px-4 bg-white border border-orange-200 rounded-xl text-sm font-bold outline-none focus:border-orange-400" />
+                                            <input name="emergency_contact_phone" type="tel" maxLength={10} pattern="[0-9]{10}" onInvalid={(e) => (e.target as HTMLInputElement).setCustomValidity('Please enter exactly 10 numbers.')} onInput={(e) => { (e.target as HTMLInputElement).setCustomValidity(''); e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '').slice(0, 10); }} defaultValue={selectedStaff?.emergency_contact_phone} placeholder="Phone Number" className="flex-1 h-10 px-4 bg-white border border-orange-200 rounded-xl text-sm font-bold outline-none focus:border-orange-400" />
                                         </div>
                                     </div>
                                 </div>
@@ -486,7 +487,7 @@ export default function StaffPage() {
                                                         <h3 className="font-black mb-6 flex items-center gap-2 relative z-10"><Banknote className="w-5 h-5" /> Record Payment</h3>
                                                         <div className="space-y-4 relative z-10">
                                                             <div className="grid grid-cols-2 gap-3"><select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500">{NEPALI_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select><input value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Year" className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500" /></div>
-                                                            <div className="grid grid-cols-2 gap-3"><input value={amount} onChange={e => setAmount(e.target.value)} type="number" placeholder="Rs Amount" className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500 placeholder:text-slate-500" /><select value={payType} onChange={e => setPayType(e.target.value)} className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500"><option value="salary">Salary</option><option value="bonus">Bonus</option><option value="advance">Advance</option></select></div>
+                                                            <div className="grid grid-cols-2 gap-3"><input value={amount} onChange={e => e.target.value.length <= 5 && setAmount(e.target.value)} type="number" min="0" onKeyDown={(e) => { if (e.key === '-') e.preventDefault(); }} placeholder="Rs Amount" className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500 placeholder:text-slate-500" /><select value={payType} onChange={e => setPayType(e.target.value)} className="h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500"><option value="salary">Salary</option><option value="bonus">Bonus</option><option value="advance">Advance</option></select></div>
                                                             <input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="Note (Optional)" className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold outline-none focus:border-emerald-500 placeholder:text-slate-500" />
                                                             <button onClick={handlePayment} className="w-full h-14 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20">Confirm Payment</button>
                                                         </div>

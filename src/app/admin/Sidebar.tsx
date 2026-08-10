@@ -95,10 +95,18 @@ export default function Sidebar({ tenantName, tenantCode, logo }: { tenantName: 
 
     async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
         if (!e.target.files || !e.target.files[0]) return;
+        
+        const file = e.target.files[0];
+        if (!file.type.startsWith('image/')) {
+            toast.error("Invalid File Type", { description: "Please upload an image file." });
+            e.target.value = ''; // Reset input
+            return;
+        }
+
         setIsUploading(true);
         
         const formData = new FormData();
-        formData.append("file", e.target.files[0]);
+        formData.append("file", file);
 
         const res = await uploadRestaurantLogo(formData);
         

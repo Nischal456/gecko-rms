@@ -24,7 +24,7 @@ function toNepaliDigits(num: number | string): string {
 }
 
 const formatRs = (amount: number) => {
-    return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
+    return "रु " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
 };
 
 // --- 1. PREMIUM DATE CARD ---
@@ -241,6 +241,11 @@ function PlanBadge({ plan }: { plan: string }) {
     )
 }
 
+// --- 4.5 CUSTOM ICONS ---
+const NepaliRupeeIcon = ({ className }: { className?: string }) => (
+    <span className={`${className} flex items-center justify-center font-bold`} style={{ fontSize: '1.4rem' }}>रु</span>
+);
+
 // --- 5. PREMIUM METRIC CARD ---
 function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     const hasTrend = trend !== 0;
@@ -267,8 +272,8 @@ function MetricCard({ title, value, trend, icon: Icon, color, delay }: any) {
     const iconGlow = iconGlowMap[color] || "bg-slate-500/10 text-slate-600 border border-slate-500/20";
     
     // Premium Currency Alignment Logic
-    const isCurrency = typeof value === 'string' && value.startsWith('Rs');
-    const valString = isCurrency ? value.replace('Rs ', '') : value;
+    const isCurrency = typeof value === 'string' && (value.startsWith('Rs') || value.startsWith('रु'));
+    const valString = isCurrency ? value.replace(/Rs |रु /, '') : value;
 
     return (
         <motion.div 
@@ -383,7 +388,7 @@ export default function AdminDashboard() {
 
                         {/* --- METRICS GRID --- */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-                            <MetricCard title="Real Revenue" value={formatRs(data.stats.revenue.value)} trend={data.stats.revenue.trend} icon={IndianRupee} color="emerald" delay={0.2} />
+                            <MetricCard title="Real Revenue" value={formatRs(data.stats.revenue.value)} trend={data.stats.revenue.trend} icon={NepaliRupeeIcon} color="emerald" delay={0.2} />
                             <MetricCard title="Total Orders" value={data.stats.orders.value} trend={data.stats.orders.trend} icon={ShoppingBag} color="blue" delay={0.3} />
                             <MetricCard title="Kitchen Active" value={`${data.stats.active} Orders`} trend={0} icon={ChefHat} color="amber" delay={0.4} />
                         </div>
