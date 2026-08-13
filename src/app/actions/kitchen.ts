@@ -373,12 +373,29 @@ export async function getKitchenStats() {
             getKathmanduDateString(new Date(Date.now() + 24 * 60 * 60 * 1000))
         ];
 
-        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
+        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data, paid_history").eq("tenant_id", tenantId).in("date", datesToCheck);
 
         if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
 
         let allOrders: any[] = [];
-        logs.forEach(log => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
+        logs.forEach(log => { 
+            const active = safeParse(log.orders_data) || [];
+            let paid = [];
+            try {
+                if (typeof log.paid_history === 'string') paid = JSON.parse(log.paid_history);
+                else if (Array.isArray(log.paid_history)) paid = log.paid_history;
+            } catch(e) {}
+            
+            const normalizedPaid = paid.map((p: any) => ({
+                ...p,
+                id: p.id || p.invoice_no || `paid-${Date.now()}-${Math.random()}`,
+                timestamp: p.timestamp || p.date || new Date(p.serverTimestamp || Date.now()).toISOString(),
+                status: p.status || 'paid',
+                table_name: p.table_name || p.table_no
+            }));
+
+            allOrders = [...allOrders, ...active, ...normalizedPaid]; 
+        });
 
         const uniqueOrdersMap = new Map();
         allOrders.forEach(o => { if (o.id) uniqueOrdersMap.set(o.id, o); });
@@ -392,6 +409,9 @@ export async function getKitchenStats() {
                 const foodItems = (o.items || []).filter((item: any) => !isItemForBar(item));
 
                 const foodRevenue = foodItems.reduce((acc: number, curr: any) => {
+                    const itemStatus = (curr.status || '').toLowerCase().trim();
+                    if (['cancelled', 'void'].includes(itemStatus)) return acc;
+                    
                     const price = Number(curr.price) || 0;
                     const qty = Number(curr.qty || curr.quantity) || 1;
                     return acc + (price * qty);
@@ -401,9 +421,14 @@ export async function getKitchenStats() {
             }).filter(o => o.items.length > 0); 
         }
         
-        const completed = finalOrders.filter((o: any) => {
+        const historyOrders = finalOrders.filter((o: any) => {
             const s = (o.status || '').toLowerCase().trim();
-            return ['ready', 'served', 'payment_pending', 'paid', 'completed'].includes(s);
+            return ['ready', 'served', 'payment_pending', 'paid', 'completed', 'cancelled', 'void'].includes(s);
+        });
+
+        const successfulOrders = historyOrders.filter((o: any) => {
+            const s = (o.status || '').toLowerCase().trim();
+            return !['cancelled', 'void'].includes(s);
         });
         
         const pending = finalOrders.filter((o: any) => {
@@ -411,12 +436,12 @@ export async function getKitchenStats() {
             return ['pending', 'cooking', 'preparing'].includes(s);
         });
         
-        const revenue = completed.reduce((acc: number, curr: any) => {
+        const revenue = successfulOrders.reduce((acc: number, curr: any) => {
             const amountToCount = isSplitActive && curr.custom_food_revenue !== undefined ? curr.custom_food_revenue : curr.total;
             return acc + (Number(amountToCount) || 0);
         }, 0);
 
-        const history = completed
+        const history = historyOrders
             .sort((a,b) => new Date(b.timestamp || b.created_at || 0).getTime() - new Date(a.timestamp || a.created_at || 0).getTime())
             .slice(0, 100)
             .map((order: any) => ({
@@ -431,14 +456,14 @@ export async function getKitchenStats() {
             success: true,
             stats: {
                 total: finalOrders.length,
-                completed: completed.length,
+                completed: successfulOrders.length,
                 pending: pending.length,
                 revenue: revenue
             },
             history: history
         };
       },
-      [`kitchen-stats-${tenantId}`],
+      [`kitchen-stats-v2-${tenantId}`],
       { tags: [`orders-${tenantId}`], revalidate: 3600 }
     );
     

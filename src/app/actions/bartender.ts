@@ -306,13 +306,28 @@ export async function getBartenderStats() {
             getKathmanduDateString(new Date(Date.now() + 24 * 60 * 60 * 1000))
         ];
 
-        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data").eq("tenant_id", tenantId).in("date", datesToCheck);
+        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data, paid_history").eq("tenant_id", tenantId).in("date", datesToCheck);
 
         if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
 
         let allOrders: any[] = [];
         logs.forEach(log => {
-            allOrders = [...allOrders, ...safeParse(log.orders_data)];
+            const active = safeParse(log.orders_data) || [];
+            let paid = [];
+            try {
+                if (typeof log.paid_history === 'string') paid = JSON.parse(log.paid_history);
+                else if (Array.isArray(log.paid_history)) paid = log.paid_history;
+            } catch(e) {}
+            
+            const normalizedPaid = paid.map((p: any) => ({
+                ...p,
+                id: p.id || p.invoice_no || `paid-${Date.now()}-${Math.random()}`,
+                timestamp: p.timestamp || p.date || new Date(p.serverTimestamp || Date.now()).toISOString(),
+                status: p.status || 'paid',
+                table_name: p.table_name || p.table_no
+            }));
+
+            allOrders = [...allOrders, ...active, ...normalizedPaid];
         });
 
         const uniqueOrdersMap = new Map();
@@ -339,7 +354,9 @@ export async function getBartenderStats() {
                 notes: item.note || item.notes || "",
                 variant: item.variant || item.variantName || "",
                 status: item.status || 'pending',
-                price: item.price || 0
+                price: item.price || 0,
+                cancel_reason: item.cancel_reason || '',
+                cancelled_by: item.cancelled_by || ''
             }));
 
             const barRevenue = mappedBarItems.reduce((acc: number, curr: any) => {
@@ -402,7 +419,7 @@ export async function getBartenderStats() {
             history: history
         };
       },
-      [`bartender-stats-${tenantId}`],
+      [`bartender-stats-v2-${tenantId}`],
       { tags: [`orders-${tenantId}`], revalidate: 3600 }
     );
     

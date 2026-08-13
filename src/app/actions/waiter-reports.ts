@@ -40,7 +40,7 @@ export async function getWaiterReports() {
     // A. FETCH PERFORMANCE (Orders from this month)
     const { data: logs } = await supabaseAdmin
       .from("daily_order_logs")
-      .select("date, orders_data")
+      .select("date, orders_data, paid_history")
       .eq("tenant_id", tenantId)
       .gte("date", firstDay); // Current month only
 
@@ -50,20 +50,33 @@ export async function getWaiterReports() {
     const dailyMap: Record<string, number> = {};
 
     (logs || []).forEach((log: any) => {
-      const orders = Array.isArray(log.orders_data) ? log.orders_data : [];
+      const activeOrders = Array.isArray(log.orders_data) ? log.orders_data : [];
+      let paidOrders = [];
+      try {
+          if (typeof log.paid_history === 'string') paidOrders = JSON.parse(log.paid_history);
+          else if (Array.isArray(log.paid_history)) paidOrders = log.paid_history;
+      } catch(e) {}
+      
+      const allOrders = [...activeOrders, ...paidOrders];
+
       // Filter orders by this staff member
-      const myOrders = orders.filter((o: any) => 
-        o.staff?.toLowerCase() === staff.name.toLowerCase() && 
-        o.status !== 'cancelled'
-      );
+      const myOrders = allOrders.filter((o: any) => {
+          if (o.status === 'cancelled') return false;
+          
+          const targetName = staff.name.toLowerCase();
+          if (o.staff && o.staff.toLowerCase() === targetName) return true;
+          if (o.served_by && typeof o.served_by === 'string' && o.served_by.toLowerCase().includes(targetName)) return true;
+          return false;
+      });
 
       myOrders.forEach((o: any) => {
-        totalSales += (Number(o.total) || 0);
+        const amt = Number(o.total || o.grandTotal) || 0;
+        totalSales += amt;
         tablesServed += 1;
         
         // Chart Data
         const day = new Date(log.date).getDate();
-        dailyMap[day] = (dailyMap[day] || 0) + (Number(o.total) || 0);
+        dailyMap[day] = (dailyMap[day] || 0) + amt;
       });
     });
 

@@ -182,18 +182,25 @@ export default function BartenderReportsPage() {
                                         
                                         const validItems = (order.order_items || []).filter((i:any) => {
                                             const qty = Number(i.qty || i.quantity || 1);
-                                            const s = (i.status || '').toLowerCase().trim();
-                                            return qty > 0 && s !== 'cancelled' && s !== 'void';
+                                            return qty > 0;
                                         });
+
+                                        const allCancelled = validItems.length > 0 && validItems.every((i:any) => ['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
 
                                         const os = (order.status || '').toLowerCase().trim();
                                         let statusLabel = "Completed";
                                         let badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
                                         
-                                        if (os === 'ready') {
+                                        if (allCancelled || os === 'cancelled' || os === 'void') {
+                                            statusLabel = "Cancelled";
+                                            badgeColor = "bg-red-50 text-red-700 border-red-200";
+                                        } else if (os === 'ready') {
                                             statusLabel = "Ready";
                                             badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
-                                        } 
+                                        } else if (os === 'served') {
+                                            statusLabel = "Served";
+                                            badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                        }
 
                                         return (
                                             <div key={order.id} className="flex flex-col">
@@ -243,18 +250,25 @@ export default function BartenderReportsPage() {
                                                                     const qty = item.qty || item.quantity || 1;
                                                                     const s = (item.status || '').toLowerCase().trim();
                                                                     const isItemDone = ['ready', 'served', 'completed', 'paid'].includes(s);
+                                                                    const isCancelled = ['cancelled', 'void'].includes(s);
                                                                     const note = item.note || item.notes;
                                                                     const variant = item.variant || item.variantName;
 
                                                                     return (
-                                                                        <div key={idx} className={`p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-colors ${isItemDone ? 'bg-white border-slate-200' : 'bg-orange-50/50 border-orange-200'}`}>
-                                                                            <span className={`font-black px-2 py-1 rounded-lg text-xs border shrink-0 ${isItemDone ? 'bg-slate-50 text-slate-600 border-slate-100' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>{qty}x</span>
+                                                                        <div key={idx} className={`p-4 rounded-2xl border shadow-sm flex items-start gap-3 transition-colors ${isCancelled ? 'bg-red-50/50 border-red-200 opacity-80' : isItemDone ? 'bg-white border-slate-200' : 'bg-orange-50/50 border-orange-200'}`}>
+                                                                            <span className={`font-black px-2 py-1 rounded-lg text-xs border shrink-0 ${isCancelled ? 'bg-red-100 text-red-700 border-red-200 line-through' : isItemDone ? 'bg-slate-50 text-slate-600 border-slate-100' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>{qty}x</span>
                                                                             <div className="flex flex-col">
-                                                                                <span className={`text-sm font-bold leading-tight ${isItemDone ? 'text-slate-800' : 'text-slate-900'}`}>{item.name}</span>
+                                                                                <span className={`text-sm font-bold leading-tight ${isItemDone ? 'text-slate-800' : 'text-slate-900'} ${isCancelled ? 'line-through text-red-700' : ''}`}>{item.name}</span>
                                                                                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                                                                                     {variant && <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{variant}</span>}
                                                                                     {note && <span className="text-[9px] text-orange-600 font-bold uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> {note}</span>}
                                                                                 </div>
+                                                                                {isCancelled && (
+                                                                                    <div className="mt-2 p-2 bg-red-100 rounded-lg text-[10px] text-red-800 border border-red-200">
+                                                                                        <div className="font-bold uppercase tracking-wider mb-0.5 text-[9px] text-red-500">Cancelled By {item.cancelled_by || 'Unknown'}</div>
+                                                                                        <div>Reason: <span className="font-medium">{item.cancel_reason || 'No reason provided'}</span></div>
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     )
