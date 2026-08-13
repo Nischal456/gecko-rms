@@ -141,6 +141,19 @@ export async function getWaiterDashboardData() {
 
     activeOrders.forEach((order: any) => {
         if (!order) return;
+        
+        if (order.type === 'waiter_call' && order.status === 'waiter_call_active') {
+            notifications.push({
+                id: order.id,
+                type: 'call',
+                title: 'Customer Calling',
+                desc: `Table ${order.table_no || order.tbl} requested assistance`,
+                time: new Date(order.timestamp || order.created_at || Date.now()).toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
+                items: []
+            });
+            return;
+        }
+
         const tableName = String(order.tbl || "").trim();
         const grandTotal = Number(order.total) || 0;
         const validItems = (order.items || []).filter((i:any) => i && i.status !== 'cancelled' && i.status !== 'void');

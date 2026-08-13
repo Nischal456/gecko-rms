@@ -8,9 +8,11 @@ import {
   ArrowUpRight, ArrowDownRight, Calendar, Crown, 
   Bell, ChefHat, RefreshCcw, PlusCircle, ZoomIn, ZoomOut, 
   LayoutDashboard, CloudSun, IndianRupee, Trash2, Sparkles,
-  Utensils, Coffee, ArrowRight, LogOut, Ban, AlertTriangle, CheckCircle2, RotateCcw, XCircle, Home, Layers
+  Utensils, Coffee, ArrowRight, LogOut, Ban, AlertTriangle, CheckCircle2, RotateCcw, XCircle, Home, Layers, BellRing
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 import { getWaiterDashboardData, cleanTable, markOrderServed } from "@/app/actions/waiter"; 
+import { resolveWaiterCall } from "@/app/actions/waiter-calls";
 import { getPOSStats } from "@/app/actions/pos"; 
 import { getDashboardData } from "@/app/actions/dashboard";
 import { logoutStaff } from "@/app/actions/staff-auth"; 
@@ -20,6 +22,7 @@ import { toast } from "sonner";
 
 // --- SOUND CONSTANTS ---
 const SOUND_NOTIFICATION = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+const SOUND_CALL = "https://assets.mixkit.co/active_storage/sfx/1000/1000-preview.mp3";
 
 // --- UTILS ---
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
@@ -324,6 +327,32 @@ export default function WaiterDashboard() {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [businessDate, setBusinessDate] = useState<string>("");
   
+  // --- CONTINUOUS ALARM FOR CALLS ---
+  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+      const audio = new Audio(SOUND_CALL);
+      audio.loop = true;
+      alarmAudioRef.current = audio;
+      return () => {
+          audio.pause();
+      };
+  }, []);
+
+  useEffect(() => {
+      const hasCall = notifications.some((n: any) => n.type === 'call');
+      if (hasCall) {
+          if (alarmAudioRef.current && alarmAudioRef.current.paused) {
+              alarmAudioRef.current.play().catch(e => console.log("Audio play blocked", e));
+          }
+      } else {
+          if (alarmAudioRef.current && !alarmAudioRef.current.paused) {
+              alarmAudioRef.current.pause();
+              alarmAudioRef.current.currentTime = 0;
+          }
+      }
+  }, [notifications]);
+  
   // --- 0-LAG HARDWARE ACCELERATED PAN STATE ---
   const [scale, setScale] = useState(0.8);
   const panX = useMotionValue(0);
@@ -349,11 +378,43 @@ export default function WaiterDashboard() {
     setGreeting(hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening");
     const timer = setInterval(() => setTime(new Date()), 1000);
     
-    const dataTimer = setInterval(loadAllData, 4000); 
+    const dataTimer = setInterval(loadAllData, 4000); // Keep as fallback
     loadAllData();
     if(window.innerWidth < 768) setScale(0.5); 
     return () => { clearInterval(timer); clearInterval(dataTimer); };
   }, []);
+
+  // --- SUPABASE REALTIME SYNC (Immediate cross-device updates) ---
+  useEffect(() => {
+      if (!tenant?.id) return;
+      
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+      
+      if (!supabaseUrl || !supabaseKey) return;
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const channel = supabase
+          .channel(`waiter_sync_${tenant.id}`)
+          .on(
+              "postgres_changes",
+              {
+                  event: "*",
+                  schema: "public",
+                  table: "daily_order_logs",
+                  filter: `tenant_id=eq.${tenant.id}`
+              },
+              () => {
+                  loadAllData();
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [tenant?.id]);
 
   // --- NATIVE 2-FINGER SCROLL LOCK ---
   useEffect(() => {
@@ -399,6 +460,9 @@ export default function WaiterDashboard() {
                 if (n.type === 'kitchen' && !notifiedReadyIds.current.has(n.id)) {
                     setTopAlert({ msg: `${n.title} for ${n.desc}` });
                     new Audio(SOUND_NOTIFICATION).play().catch(e => console.log("Audio play blocked", e));
+                    notifiedReadyIds.current.add(n.id);
+                } else if (n.type === 'call' && !notifiedReadyIds.current.has(n.id)) {
+                    setTopAlert({ msg: `Customer Calling: ${n.desc}` });
                     notifiedReadyIds.current.add(n.id);
                 }
             });
@@ -472,7 +536,6 @@ export default function WaiterDashboard() {
           setNotifications(prev => prev.filter(n => n.id !== orderId));
           setTables(prev => prev.map(t => t.label === tableLabel ? { ...t, status: "occupied" } : t)); 
       }
-      
       const res = await markOrderServed(orderId, tableLabel, readyItemIdentifiers);
       if(res.success) {
           toast.success(`Served ${readyItems.length} item(s) to Table ${tableLabel}!`);
@@ -480,6 +543,17 @@ export default function WaiterDashboard() {
       } else {
           toast.error("Failed to mark as served");
           loadAllData(); 
+      }
+  };
+
+  const handleResolveCall = async (callId: string) => {
+      const res = await resolveWaiterCall(tenant?.id?.toString() || "", callId);
+      if (res.success) {
+          toast.success("Call resolved");
+          setNotifications(prev => prev.filter(n => n.id !== callId));
+          loadAllData();
+      } else {
+          toast.error(`Failed to resolve call: ${res.error || 'Unknown error'}`);
       }
   };
 
@@ -677,13 +751,32 @@ export default function WaiterDashboard() {
                                     <span className="text-xs font-bold uppercase tracking-widest">Kitchen Clear</span>
                                 </div>
                             ) : (
-                                activeOrders.filter((o:any) => notifications.some(n => n.id === o.id)).map((order: any, orderIndex: number) => {
+                                notifications.map((n: any, idx: number) => {
+                                    if (n.type === 'call') {
+                                        return (
+                                            <motion.div key={n.id || idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-200 shadow-lg shadow-amber-500/10 group relative overflow-hidden flex flex-col gap-3 transform-gpu">
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-400 to-orange-500 animate-pulse" />
+                                                <div className="flex justify-between items-start pl-2">
+                                                    <div>
+                                                        <p className="font-black text-slate-900 text-2xl tracking-tight">Table {n.desc.split(' ')[1]}</p>
+                                                        <p className="text-sm text-amber-600 mt-1 font-bold flex items-center gap-1.5"><BellRing className="w-3.5 h-3.5" /> Customer Calling Waiter</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => handleResolveCall(n.id)} className="w-full mt-2 py-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-amber-500/20">
+                                                    <CheckCircle2 className="w-4 h-4" /> Customer Served
+                                                </button>
+                                            </motion.div>
+                                        );
+                                    }
+
+                                    const order = activeOrders.find((o: any) => o.id === n.id);
+                                    if (!order) return null;
                                     const readyItems = order.items?.filter((item: any) => item.status === 'ready' && item.qty > 0) || [];
                                     if (readyItems.length === 0) return null; 
 
                                     return (
                                         <motion.div 
-                                            key={order.id || orderIndex}
+                                            key={order.id || idx}
                                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                             className="p-5 rounded-[1.5rem] bg-white border border-emerald-200 shadow-lg shadow-emerald-500/10 group relative overflow-hidden flex flex-col gap-3 transform-gpu"
                                         >
@@ -697,8 +790,8 @@ export default function WaiterDashboard() {
                                             </div>
 
                                             <div className="pl-2 pr-1 space-y-2 max-h-40 overflow-y-auto custom-scrollbar mt-2 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                                                {readyItems.map((item: any, idx: number) => (
-                                                    <div key={idx} className="flex gap-3 text-sm pb-2 border-b border-slate-200/60 last:border-0 last:pb-0">
+                                                {readyItems.map((item: any, itemIdx: number) => (
+                                                    <div key={itemIdx} className="flex gap-3 text-sm pb-2 border-b border-slate-200/60 last:border-0 last:pb-0">
                                                         <span className="font-black text-emerald-600 bg-emerald-50 w-6 h-6 flex items-center justify-center rounded-md shrink-0">{item.qty}</span>
                                                         <div className="flex flex-col w-full pr-1">
                                                             <span className="font-bold text-slate-900 leading-tight">{item.name}</span>

@@ -784,8 +784,12 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
                                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{method === 'Credit' ? 'Advance Credit Received' : 'Cash Received (Rs)'}</label>
                                                         <input 
                                                             type="number" 
+                                                            min="0"
                                                             value={tenderedInput} 
-                                                            onChange={e=>setTenderedInput(e.target.value)} 
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                setTenderedInput(Number(val) < 0 ? "0" : val);
+                                                            }} 
                                                             placeholder="0" 
                                                             className="w-full bg-transparent font-black text-xl md:text-3xl text-slate-900 outline-none" 
                                                         />

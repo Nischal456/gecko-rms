@@ -8,10 +8,12 @@ import {
     Search, X, ChefHat, Info, ChevronRight, Layers, Beef, Leaf, 
     GlassWater, Utensils, ShoppingBag, Sun, Moon, Sunrise, 
     Clock, Wind, Cigarette, AlertCircle, ImageIcon, CheckCircle2,
-    Sparkles, Star, Flame,
+    Sparkles, Star, Flame, BellRing,
     StarHalf,
     StarIcon
 } from "lucide-react";
+import { toast } from "sonner";
+import { callWaiter } from "@/app/actions/waiter-calls";
 import NepaliDate from 'nepali-date-converter';
 
 // --- HYPER-SMOOTH, 0-LAG ANIMATIONS ---
@@ -94,6 +96,24 @@ export default function PublicMenuPage() {
 
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [selectedVariant, setSelectedVariant] = useState<any>(null);
+
+    // Call Waiter State
+    const [showCallModal, setShowCallModal] = useState(false);
+    const [callingTable, setCallingTable] = useState("");
+    const [isCalling, setIsCalling] = useState(false);
+
+    const handleCallWaiter = async () => {
+        if (!callingTable.trim()) return toast.error("Please enter a table number");
+        setIsCalling(true);
+        const res = await callWaiter(params.id as string, callingTable.trim());
+        setIsCalling(false);
+        if (res.success) {
+            toast.success("Waiter called successfully!");
+            setShowCallModal(false);
+        } else {
+            toast.error(res.error || "Failed to call waiter");
+        }
+    };
 
     // Spotlight Auto-Scroll Refs
     const carouselRef = useRef<HTMLDivElement>(null);
@@ -212,6 +232,15 @@ export default function PublicMenuPage() {
                                 <LiveHeaderBadge />
                             </div>
                         </div>
+                        
+                        <button 
+                            onClick={() => setShowCallModal(true)}
+                            className="relative flex items-center gap-1.5 md:gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white px-4 py-2 md:px-5 md:py-2.5 rounded-2xl shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)] transition-all duration-300 active:scale-95 border border-emerald-400/50 group overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
+                            <BellRing className="w-4 h-4 md:w-5 md:h-5 relative z-10 group-hover:rotate-12 transition-transform duration-300" />
+                            <span className="text-[11px] md:text-sm font-black uppercase tracking-widest relative z-10 drop-shadow-md">Call Waiter</span>
+                        </button>
                     </div>
 
                     {/* Interactive Search Bar */}
@@ -453,6 +482,49 @@ export default function PublicMenuPage() {
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* Call Waiter Modal */}
+            <AnimatePresence>
+                {showCallModal && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 p-6"
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-2 text-emerald-600">
+                                    <BellRing className="w-6 h-6" />
+                                    <h2 className="text-xl font-black">Call Waiter</h2>
+                                </div>
+                                <button onClick={() => setShowCallModal(false)} className="text-slate-400 hover:text-slate-600">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+                            <p className="text-sm text-slate-500 font-medium mb-4">Please enter your table number below to call the waiter.</p>
+                            
+                            <input
+                                type="text"
+                                value={callingTable}
+                                onChange={(e) => setCallingTable(e.target.value)}
+                                placeholder="e.g. 5, A2, Outside-1"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 mb-6"
+                                autoFocus
+                            />
+
+                            <button
+                                disabled={isCalling}
+                                onClick={handleCallWaiter}
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-50"
+                            >
+                                {isCalling ? "Calling..." : "Call Now"}
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* --- REFINED FLOATING ACTION BAR WITH SHIMMER EFFECT --- */}
             {!isViewOnly && (

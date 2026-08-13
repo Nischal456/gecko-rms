@@ -24,7 +24,7 @@ function toNepaliDigits(num: number | string): string {
 }
 
 const formatRs = (amount: number) => {
-    return "रु " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
+    return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount);
 };
 
 // --- 1. PREMIUM DATE CARD ---

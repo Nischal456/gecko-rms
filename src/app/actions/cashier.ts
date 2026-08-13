@@ -164,6 +164,7 @@ export async function getCashierData(isPolling: boolean = false) {
         activeOrders.forEach((order: any) => {
             if (order.id === "DAY_CLOSE_META") return;
             if (['cancelled', 'completed', 'paid'].includes(order.status)) return;
+            if (order.type === 'waiter_call' || ['waiter_call_active', 'waiter_call_resolved'].includes(order.status)) return;
             
             pendingBills++;
             if (order.tbl) {
@@ -883,6 +884,7 @@ export async function getCashierReports(days: number) {
             const activeOrders = safeParse(log.orders_data);
             activeOrders.forEach((o: any) => {
                 if (o.id === "DAY_CLOSE_META") return;
+                if (o.type === 'waiter_call' || ['waiter_call_active', 'waiter_call_resolved'].includes(o.status)) return;
                 const s = (o.status || '').toLowerCase().trim();
                 if (!['cancelled', 'paid', 'completed', 'expired'].includes(s)) {
                     summary.totalPendingOrders++;
