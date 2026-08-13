@@ -205,7 +205,7 @@ export async function getCashierData(isPolling: boolean = false) {
         ...t,
         section,
         status: activeOrder 
-            ? (['payment_pending'].includes(activeOrder.status) ? 'payment' 
+            ? (['payment_pending'].includes(activeOrder.status) ? 'payment_pending' 
             : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
             : 'occupied') 
             : 'free',

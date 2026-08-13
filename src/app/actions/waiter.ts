@@ -74,6 +74,7 @@ export async function getWaiterDashboardData() {
 
     const todayLog = logs?.find((l:any) => l && l.date === today);
     const activeOrders = safeParse(todayLog?.orders_data);
+    const paidOrders = safeParse(todayLog?.paid_history);
     
     const { data: menuData } = await supabaseAdmin
         .from("menu_optimized")
@@ -196,7 +197,7 @@ export async function getWaiterDashboardData() {
         notifications: notifications,
         disabledItems: disabledItems,
         cancelledItems: finalCancelledItems,
-        orders_list: activeOrders,
+        orders_list: Array.from(new Map([...activeOrders, ...paidOrders].filter(Boolean).map(o => [o.id, o])).values()),
         staff: { name: currentStaffName } 
     };
 

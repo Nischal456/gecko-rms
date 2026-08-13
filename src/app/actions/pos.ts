@@ -57,13 +57,15 @@ export async function getPOSStats() {
 
           const { data: logs } = await supabaseAdmin
               .from("daily_order_logs")
-              .select("orders_data")
+              .select("orders_data, paid_history")
               .eq("tenant_id", tenantId)
               .eq("date", today)
               .limit(1)
               .maybeSingle();
 
           const orders = logs && Array.isArray(logs.orders_data) ? logs.orders_data : [];
+          const paidOrders = logs && Array.isArray(logs.paid_history) ? logs.paid_history : [];
+          const allOrders = [...orders, ...paidOrders];
           
           const activeOrders = orders.filter((o: any) => 
               !['cancelled', 'completed', 'paid'].includes(o.status)
@@ -106,8 +108,8 @@ export async function getPOSStats() {
           const vacantCount = totalTables - occupiedCount; 
           const occupancyRate = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
 
-          const totalOrders = orders.filter((o: any) => o.status !== 'cancelled').length;
-          const totalRevenue = orders.reduce((acc: number, o: any) => o.status !== 'cancelled' ? acc + (Number(o.total) || 0) : acc, 0);
+          const totalOrders = allOrders.filter((o: any) => o.status !== 'cancelled').length;
+          const totalRevenue = allOrders.reduce((acc: number, o: any) => o.status !== 'cancelled' ? acc + (Number(o.total) || 0) : acc, 0);
 
           return { 
               success: true, 
@@ -119,7 +121,7 @@ export async function getPOSStats() {
                   totalOrders, 
                   totalRevenue,
                   tables: finalTables,
-                  orders_list: orders.reverse() 
+                  orders_list: allOrders.reverse() 
               } 
           };
       } catch (e) { return { success: false, stats: null }; }

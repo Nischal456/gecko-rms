@@ -126,7 +126,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
             
             <div className="flex flex-col gap-3 mb-4">
                 <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs font-black text-slate-900 uppercase tracking-widest shrink-0">#{order.id.slice(-6)}</span>
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-widest shrink-0">#{String(order.id || '').slice(-6)}</span>
                     <RoundStatusBadge status={hasReadyItems ? 'ready' : order.status} />
                     <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 shrink-0 ml-auto"><Clock className="w-3 h-3"/> {order.time}</span>
                 </div>
@@ -278,7 +278,7 @@ function TableCard({ group, currentFilter, onServe, onCancel, onEdit }: { group:
             <div className="p-4 flex-1 bg-white">
                 {validOrdersForTab.map((order, index) => (
                     <OrderRoundBlock 
-                        key={order.id} 
+                        key={order.id || index} 
                         order={order} 
                         isLast={index === validOrdersForTab.length - 1} 
                         onServe={onServe}

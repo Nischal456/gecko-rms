@@ -405,11 +405,17 @@ export default function WaiterDashboard() {
 
             if (posStatsRes.success && posStatsRes.stats) {
                 const rawOrders = posStatsRes.stats.orders_list || [];
-                setActiveOrders(rawOrders);
+                setActiveOrders(waiterRes.orders_list || rawOrders);
                 
                 const validOrders = rawOrders.filter((o: any) => o.status !== 'cancelled');
-                const realRevenue = validOrders.reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0);
-                const uniqueTablesServed = new Set(validOrders.map((o: any) => o.tbl.trim())).size;
+                const targetName = waiterRes.staff?.name || staff?.name;
+                const myOrders = validOrders.filter((o: any) => {
+                    if (o.staff === targetName) return true;
+                    if (o.served_by && typeof o.served_by === 'string' && o.served_by.includes(targetName)) return true;
+                    return false;
+                });
+                const realRevenue = myOrders.reduce((sum: number, o: any) => sum + (Number(o.total || o.grandTotal) || 0), 0);
+                const uniqueTablesServed = new Set(myOrders.map((o: any) => String(o.tbl || o.table_no || '').trim()).filter(Boolean)).size;
 
                 setStats({
                     mySales: realRevenue,
@@ -651,7 +657,7 @@ export default function WaiterDashboard() {
                                 style={{ x: panX, y: panY, scale: scale }}
                             >
                                 <div className="absolute inset-[-500%] pointer-events-none bg-[#F1F5F9]" style={{ backgroundImage: `radial-gradient(#cbd5e1 1px, transparent 1px)`, backgroundSize: '30px 30px' }} />
-                                {visibleTables.map((t) => <ViewerTable key={t.id} data={t} onClick={() => handleTableClick(t)} />)}
+                                {visibleTables.map((t) => <ViewerTable key={t.id || t.label} data={t} onClick={() => handleTableClick(t)} />)}
                             </motion.div>
                         </div>
                     </div>
@@ -671,13 +677,13 @@ export default function WaiterDashboard() {
                                     <span className="text-xs font-bold uppercase tracking-widest">Kitchen Clear</span>
                                 </div>
                             ) : (
-                                activeOrders.filter((o:any) => notifications.some(n => n.id === o.id)).map((order: any) => {
+                                activeOrders.filter((o:any) => notifications.some(n => n.id === o.id)).map((order: any, orderIndex: number) => {
                                     const readyItems = order.items?.filter((item: any) => item.status === 'ready' && item.qty > 0) || [];
                                     if (readyItems.length === 0) return null; 
 
                                     return (
                                         <motion.div 
-                                            key={order.id}
+                                            key={order.id || orderIndex}
                                             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                             className="p-5 rounded-[1.5rem] bg-white border border-emerald-200 shadow-lg shadow-emerald-500/10 group relative overflow-hidden flex flex-col gap-3 transform-gpu"
                                         >
