@@ -87,7 +87,7 @@ export default function ManagerFloorPage() {
             // Merge Data
             const liveTables = rawTables.map((t: any) => {
                 const hasActiveOrder = ordersList.some((o: any) => 
-                    o.tbl === t.label && !['cancelled', 'paid', 'completed'].includes(o.status)
+                    o.tbl === t.label && o.type !== 'waiter_call' && !['cancelled', 'paid', 'completed'].includes(o.status)
                 );
 
                 let visualStatus = t.status === 'free' ? 'available' : t.status;

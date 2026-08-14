@@ -739,22 +739,131 @@ function QREcosystemShowcase() {
     )
 }
 
-// --- 6. HERO COMPONENT ---
-function Hero() {
+// --- 5.5 PRELOADER ---
+function Preloader({ onComplete }: { onComplete: () => void }) {
+    const [step, setStep] = useState(0);
+
+    useEffect(() => {
+        // Prevent scrolling while loading
+        document.body.style.overflow = "hidden";
+        
+        const t1 = setTimeout(() => setStep(1), 1600); // Show "Gecko RMS"
+        const t2 = setTimeout(() => setStep(2), 3200); // Trigger exit animation
+        const t3 = setTimeout(() => {
+            document.body.style.overflow = ""; // Restore scrolling
+            onComplete();
+        }, 4400); // Unmount
+
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+            document.body.style.overflow = "";
+        };
+    }, [onComplete]);
+
     return (
-        <section className="pt-28 md:pt-40 lg:pt-44 pb-16 md:pb-20 container mx-auto px-4 md:px-6 relative z-10">
-            <div className="flex flex-col items-center text-center max-w-5xl mx-auto">
+        <AnimatePresence>
+            {step < 2 && (
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3 }}
+                    initial={{ y: "0%" }}
+                    exit={{ y: "-100%" }}
+                    transition={{ duration: 1.2, ease: EASE_PREMIUM }}
+                    className="fixed inset-0 z-[99999] bg-white flex flex-col items-center justify-center transform-gpu origin-top shadow-2xl pointer-events-auto"
+                >
+                    <AnimatePresence mode="wait">
+                        {step === 0 && (
+                            <motion.div
+                                key="step0"
+                                exit={{ opacity: 0, scale: 1.05, filter: "blur(5px)" }}
+                                transition={{ duration: 0.6, ease: EASE_PREMIUM }}
+                                className="flex flex-col items-center gap-2 md:gap-3"
+                            >
+                                <motion.span 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.8, ease: EASE_PREMIUM, delay: 0.2 }}
+                                    className="text-slate-400 text-[10px] md:text-xs font-semibold tracking-[0.4em] uppercase"
+                                >
+                                    A product of
+                                </motion.span> 
+                                <div className="flex overflow-hidden pb-2">
+                                    {"Gecko Work".split("").map((char, i) => (
+                                        <motion.span
+                                            key={i}
+                                            initial={{ opacity: 0, y: 40 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ 
+                                                duration: 0.8, 
+                                                ease: EASE_PREMIUM, 
+                                                delay: 0.3 + (i * 0.04) 
+                                            }}
+                                            className={cn(
+                                                "text-3xl md:text-5xl font-black tracking-tighter",
+                                                char === " " ? "w-2 md:w-3" : "",
+                                                i >= 6 ? "text-emerald-500" : "text-slate-900"
+                                            )}
+                                        >
+                                            {char}
+                                        </motion.span>
+                                    ))}
+                                    <motion.span
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ duration: 0.5, ease: EASE_PREMIUM, delay: 0.8 }}
+                                        className="w-2 h-2 md:w-3 md:h-3 rounded-full bg-emerald-500 self-end mb-1.5 md:mb-2 ml-1"
+                                    />
+                                </div>
+                            </motion.div>
+                        )}
+                        {step === 1 && (
+                            <motion.div
+                                key="step1"
+                                initial={{ opacity: 0, scale: 0.8, filter: "blur(15px)" }}
+                                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                                exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+                                transition={{ 
+                                    duration: 0.8, 
+                                    ease: EASE_PREMIUM,
+                                    scale: { type: "spring", stiffness: 100, damping: 20 } 
+                                }}
+                                className="flex items-center justify-center drop-shadow-[0_20px_40px_rgba(0,0,0,0.08)]"
+                            >
+                                <img
+                                    src="/rms.png"
+                                    alt="Gecko RMS"
+                                    className="h-20 md:h-32 w-auto object-contain transform-gpu"
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}
+
+// --- 6. HERO COMPONENT ---
+function Hero({ isLoaded }: { isLoaded: boolean }) {
+    return (
+        <section className="pt-24 md:pt-28 pb-16 md:pb-20 container mx-auto px-4 md:px-6 relative z-10 min-h-[90vh] flex flex-col justify-center">
+            <div className="flex flex-col items-center text-center max-w-5xl mx-auto mt-[-4rem]">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.8, y: 30 }}
+                    animate={isLoaded ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 30 }}
+                    transition={{ type: "spring", stiffness: 60, damping: 20, delay: 0.1 }}
                     className="mb-6 md:mb-8 inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-default transform-gpu shrink-0"
                 >
                     <CloudLightning className="w-3 h-3 text-emerald-500 shrink-0" />
                     <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">Powerful. Fast. Seamless.</span>
                 </motion.div>
 
-                <h1 className="text-[2.75rem] sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter text-slate-900 mb-6 md:mb-8 leading-[0.95] md:leading-[0.9] drop-shadow-sm relative z-20">
+                <motion.h1 
+                    initial={{ opacity: 0, y: 40, filter: "blur(4px)" }}
+                    animate={isLoaded ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 40, filter: "blur(4px)" }}
+                    transition={{ duration: 0.9, delay: 0.15, ease: EASE_PREMIUM }}
+                    className="text-[2.75rem] sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter text-slate-900 mb-6 md:mb-8 leading-[0.95] md:leading-[0.9] drop-shadow-sm relative z-20"
+                >
                     Speed is a <br className="hidden sm:block" />
                     <span className="relative inline-block text-slate-900">
                         Superpower<span className="text-emerald-500">.</span>
@@ -767,19 +876,29 @@ function Hero() {
                                 strokeLinecap="round"
                                 variants={drawVariant}
                                 initial="hidden"
-                                animate="visible"
+                                animate={isLoaded ? "visible" : "hidden"}
                                 className="opacity-80"
                             />
                         </svg>
                     </span>
-                </h1>
+                </motion.h1>
 
-                <motion.p variants={fadeUpVariant} initial="hidden" animate="visible" custom={0.2} className="text-base sm:text-lg md:text-2xl text-slate-500 font-medium leading-relaxed max-w-2xl mb-8 md:mb-12 px-2">
+                <motion.p 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                    transition={{ duration: 0.9, delay: 0.25, ease: EASE_PREMIUM }}
+                    className="text-base sm:text-lg md:text-2xl text-slate-500 font-medium leading-relaxed max-w-2xl mb-8 md:mb-12 px-2"
+                >
                     The <span className="text-slate-900 font-bold">web-based</span> operating system for high-volume restaurants in Nepal.
                     Syncs menus, orders, and inventory in real-time.
                 </motion.p>
 
-                <motion.div variants={fadeUpVariant} initial="hidden" animate="visible" custom={0.3} className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-16 md:mb-24 w-full sm:w-auto justify-center px-4">
+                <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                    transition={{ duration: 0.9, delay: 0.35, ease: EASE_PREMIUM }}
+                    className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-16 md:mb-24 w-full sm:w-auto justify-center px-4"
+                >
                     <Link href="/signup" className="w-full sm:w-auto shrink-0">
                         <MagneticButton className="h-14 md:h-16 px-8 md:px-12 text-base md:text-lg w-full bg-slate-900 text-white rounded-full">
                             Start Free Trial <ArrowRight className="w-4 h-4 md:w-5 md:h-5 ml-1 md:ml-2 group-hover:translate-x-1 transition-transform shrink-0" />
@@ -802,11 +921,27 @@ function Hero() {
 // --- 7. MAIN PAGE COMPONENT ---
 export default function Home() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const { scrollYProgress } = useScroll();
     const pathLength = useSpring(scrollYProgress, { stiffness: 400, damping: 90 });
 
+    useEffect(() => {
+        // Check if we've already shown the loader in this session
+        const hasLoaded = sessionStorage.getItem("gecko_rms_loaded");
+        if (hasLoaded) {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const handlePreloaderComplete = () => {
+        setIsLoading(false);
+        sessionStorage.setItem("gecko_rms_loaded", "true");
+    };
+
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
+            
+            {isLoading && <Preloader onComplete={handlePreloaderComplete} />}
 
             {/* SCROLL BEAM (Desktop) */}
             <div className="fixed left-6 md:left-12 top-0 bottom-0 w-px z-0 hidden xl:block pointer-events-none transform-gpu">
@@ -860,7 +995,7 @@ export default function Home() {
             </nav>
 
             {/* 1. HERO */}
-            <Hero />
+            <Hero isLoaded={!isLoading} />
 
             {/* 2. PARTNERS MARQUEE */}
             <section className="py-6 md:py-10 bg-white border-y border-slate-100 overflow-hidden transform-gpu">

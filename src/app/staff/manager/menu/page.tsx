@@ -56,7 +56,7 @@ export default function ManagerMenuPage() {
   const [activeTabId, setActiveTabId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterStation, setFilterStation] = useState<"all" | "kitchen" | "bar" | "coffee">("all");
+  const [filterStation, setFilterStation] = useState<"all" | "kitchen" | "bar">("all");
 
   // MODAL & FORM STATE
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -216,9 +216,8 @@ export default function ManagerMenuPage() {
             <div className="flex flex-col md:flex-row gap-2 items-center w-full xl:w-auto">
                 <div className="flex p-1 bg-slate-100 rounded-xl w-full md:w-auto">
                     <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>All</button>
-                    <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "kitchen" ? "bg-white shadow text-orange-600" : "text-slate-500"}`}>Kitchen</button>
-                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "bar" ? "bg-white shadow text-violet-600" : "text-slate-500"}`}>Bar</button>
-                    <button onClick={() => setFilterStation("coffee")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "coffee" ? "bg-white shadow text-amber-700" : "text-slate-500"}`}>Coffee</button>
+                    <button onClick={() => setFilterStation("kitchen")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "kitchen" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>Kitchen</button>
+                    <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStation === "bar" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>Bar</button>
                 </div>
                 <div className="relative group flex-1 w-full md:w-56"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="w-full h-10 pl-10 pr-4 bg-slate-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></div>
                 <button onClick={openNew} disabled={!activeTabId} className="w-full md:w-auto h-10 px-4 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"><Plus className="w-4 h-4" /> Add Dish</button>
@@ -321,7 +320,7 @@ export default function ManagerMenuPage() {
 
                             <div className="flex gap-3">
                                 <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Type</label><select value={formDietary} onChange={e => setFormDietary(e.target.value)} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"><option value="non-veg">Non-Veg</option><option value="veg">Veg</option><option value="drinks">Drinks</option></select></div>
-                                <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Station</label><select value={formStation} onChange={e => setFormStation(e.target.value)} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"><option value="kitchen">Kitchen</option><option value="bar">Bar</option><option value="coffee">Coffee</option></select></div>
+                                <div className="flex-1"><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Station</label><select value={formStation} onChange={e => setFormStation(e.target.value)} className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none"><option value="kitchen">Kitchen</option><option value="bar">Bar</option></select></div>
                             </div>
 
                             {/* VARIANT BUILDER */}

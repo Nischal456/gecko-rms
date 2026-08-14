@@ -109,7 +109,7 @@ export async function getKitchenTickets() {
             }
 
             return {
-                id: order.id,
+                id: order.id || order.invoice_no || `temp-${order.tbl || 'tbl'}-${order.timestamp || Date.now()}`,
                 table_name: order.tbl || order.table_name || "Unknown",
                 status: kitOnlyStatus, 
                 created_at: order.timestamp || order.created_at || new Date().toISOString(),
@@ -139,6 +139,8 @@ export async function getKitchenTickets() {
             if (orderStatus === 'cancelled') {
                 const cancelledTime = order.timestamp || order.created_at || new Date().toISOString();
                 if (new Date(cancelledTime).getTime() > twoHoursAgo) {
+                    const hasKitchenItems = items.some((item: any) => !isSplitActive || !isItemForBar(item));
+                    if (hasKitchenItems) {
                     cancellations.push({
                         type: 'order',
                         orderId: order.id,
@@ -148,6 +150,7 @@ export async function getKitchenTickets() {
                         by: order.cancelled_by || 'Waiter',
                         itemsCount: items.length
                     });
+                    }
                 }
             } else {
                 // Check for individual cancelled items
@@ -155,7 +158,8 @@ export async function getKitchenTickets() {
                     const itemStatus = (item.status || '').toLowerCase().trim();
                     if (itemStatus === 'cancelled' && item.cancelled_at) {
                         if (new Date(item.cancelled_at).getTime() > twoHoursAgo) {
-                            cancellations.push({
+                            if (!isSplitActive || !isItemForBar(item)) {
+                                cancellations.push({
                                 type: 'item',
                                 orderId: order.id,
                                 itemId: item.unique_id || item.cartId || item.id,
@@ -168,6 +172,7 @@ export async function getKitchenTickets() {
                                 reason: item.cancel_reason || 'No reason provided',
                                 by: item.cancelled_by || 'Waiter'
                             });
+                            }
                         }
                     }
                 });
@@ -445,7 +450,7 @@ export async function getKitchenStats() {
             .sort((a,b) => new Date(b.timestamp || b.created_at || 0).getTime() - new Date(a.timestamp || a.created_at || 0).getTime())
             .slice(0, 100)
             .map((order: any) => ({
-                id: order.id,
+                id: order.id || order.invoice_no || `temp-${order.tbl || 'tbl'}-${order.timestamp || Date.now()}`,
                 table_name: order.tbl || order.table_name || "Unknown",
                 created_at: order.timestamp || order.created_at || new Date().toISOString(),
                 status: order.status,

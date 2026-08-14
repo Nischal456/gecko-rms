@@ -169,6 +169,7 @@ export async function getDashboardData() {
 
         // Flatten recent orders for the Feed
         const recentOrders = [...todayActive, ...todayPaid]
+            .filter((o: any) => o.type !== 'waiter_call' && !['waiter_call_active', 'waiter_call_resolved'].includes(o.status))
             .sort((a: any, b: any) => new Date(b.created_at || b.timestamp || b.date).getTime() - new Date(a.created_at || a.timestamp || a.date).getTime())
             .slice(0, 10)
             .map((o: any) => ({

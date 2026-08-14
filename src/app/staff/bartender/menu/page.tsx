@@ -522,7 +522,6 @@ export default function BartenderMenuPage() {
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Prep Station</label>
                                     <select value={formStation} onChange={e => setFormStation(e.target.value)} className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100">
                                         <option value="bar">🍷 Bar</option>
-                                        <option value="coffee">☕ Coffee</option>
                                     </select>
                                 </div>
                             </div>

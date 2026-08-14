@@ -64,11 +64,11 @@ export async function getPOSStats() {
               .maybeSingle();
 
           const orders = logs && Array.isArray(logs.orders_data) ? logs.orders_data : [];
-          const paidOrders = logs && Array.isArray(logs.paid_history) ? logs.paid_history : [];
+          const paidOrders = logs && Array.isArray(logs.paid_history) ? logs.paid_history.map(po => ({...po, status: 'paid', time: po.time || (po.paid_at ? new Date(po.paid_at).toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }) : '')})) : [];
           const allOrders = [...orders, ...paidOrders];
           
           const activeOrders = orders.filter((o: any) => 
-              !['cancelled', 'completed', 'paid'].includes(o.status)
+              o.type !== 'waiter_call' && !['cancelled', 'completed', 'paid'].includes(o.status)
           );
           
           const activeTableLabels = new Set(activeOrders.map((o: any) => o.tbl));

@@ -7,7 +7,7 @@ import {
   Plus, Save, Trash2, Move, Users, Square, Circle, LayoutGrid, 
   Loader2, MonitorSmartphone, Layers, Minus, RotateCw, Maximize2, Type, 
   ZoomIn, ZoomOut, Compass, Receipt, Clock, CheckCircle2, X, ChevronRight,
-  ChefHat, CheckCheck
+  ChefHat, CheckCheck, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import { getTables, saveTableLayout, deleteTable } from "@/app/actions/floor";
@@ -43,6 +43,7 @@ export default function FloorPlanPage() {
   const [currentSection, setCurrentSection] = useState("Main Hall");
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
+  const [renameModal, setRenameModal] = useState<{isOpen: boolean, oldName: string, newName: string}>({ isOpen: false, oldName: "", newName: "" });
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export default function FloorPlanPage() {
             // Merge & Sync Status
             const liveTables = rawTables.map((t: any) => {
                 const hasActiveOrder = ordersList.some((o: any) => 
-                    o.tbl === t.label && !['cancelled', 'paid', 'completed'].includes(o.status)
+                    o.tbl === t.label && o.type !== 'waiter_call' && !['cancelled', 'paid', 'completed'].includes(o.status)
                 );
 
                 let visualStatus = t.status === 'free' ? 'available' : t.status;
@@ -185,6 +186,32 @@ export default function FloorPlanPage() {
       setIsAddingSection(false);
       setNewSectionName("");
       toast.success(`Created ${newSectionName}`);
+  };
+
+  const openRenameModal = (oldName: string) => {
+      setRenameModal({ isOpen: true, oldName, newName: oldName });
+  };
+
+  const confirmRenameSection = () => {
+      const { oldName, newName } = renameModal;
+      if (!newName || newName.trim() === "" || newName === oldName) {
+          setRenameModal({ isOpen: false, oldName: "", newName: "" });
+          return;
+      }
+      if (sections.includes(newName)) {
+          toast.error("A floor with this name already exists");
+          return;
+      }
+      
+      setSections(prev => prev.map(s => s === oldName ? newName : s));
+      setTables(prev => prev.map(t => t.section === oldName ? { ...t, section: newName } : t));
+      
+      if (currentSection === oldName) {
+          setCurrentSection(newName);
+      }
+      
+      toast.success(`Renamed to "${newName}". Save layout to apply changes.`);
+      setRenameModal({ isOpen: false, oldName: "", newName: "" });
   };
 
   const handleDeleteSection = (sectionToDelete: string) => {
@@ -317,7 +344,7 @@ export default function FloorPlanPage() {
                                     setViewTable(null); 
                                 }} 
                                 className={`whitespace-nowrap pl-4 py-2 rounded-xl text-sm font-bold transition-all border ${
-                                    isEditMode ? 'pr-9' : 'pr-4'
+                                    isEditMode ? 'pr-16' : 'pr-4'
                                 } ${
                                     currentSection === section 
                                         ? 'bg-slate-900 text-white border-slate-900 shadow-md transform scale-105' 
@@ -327,19 +354,34 @@ export default function FloorPlanPage() {
                                 {section}
                             </button>
                             {isEditMode && (
-                                <button 
-                                    onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        handleDeleteSection(section); 
-                                    }}
-                                    className={`absolute right-2 p-1 rounded-lg transition-colors ${
-                                        currentSection === section 
-                                            ? 'text-white/70 hover:text-white hover:bg-white/10' 
-                                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
-                                    }`}
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="absolute right-1 flex items-center">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openRenameModal(section);
+                                        }}
+                                        className={`p-1 rounded-lg transition-colors ${
+                                            currentSection === section 
+                                                ? 'text-white/70 hover:text-white hover:bg-white/10' 
+                                                : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
+                                        }`}
+                                    >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            handleDeleteSection(section); 
+                                        }}
+                                        className={`p-1 rounded-lg transition-colors ${
+                                            currentSection === section 
+                                                ? 'text-white/70 hover:text-white hover:bg-white/10' 
+                                                : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+                                        }`}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
                             )}
                         </div>
                     ))}
@@ -448,6 +490,38 @@ export default function FloorPlanPage() {
                     </div>
                 </motion.div>
             </motion.div>
+
+            {/* --- RENAME MODAL --- */}
+            <AnimatePresence>
+                {renameModal.isOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRenameModal({ isOpen: false, oldName: "", newName: "" })} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100"
+                        >
+                            <div className="p-6">
+                                <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Rename Floor</h3>
+                                <p className="text-sm text-slate-500 mb-6">Enter a new name for this section.</p>
+                                <input 
+                                    autoFocus
+                                    value={renameModal.newName} 
+                                    onChange={(e) => setRenameModal(prev => ({ ...prev, newName: e.target.value }))}
+                                    onKeyDown={(e) => e.key === 'Enter' && confirmRenameSection()}
+                                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all font-bold text-slate-800"
+                                    placeholder="e.g. Balcony"
+                                />
+                                <div className="flex gap-3 mt-6">
+                                    <button onClick={() => setRenameModal({ isOpen: false, oldName: "", newName: "" })} className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-colors">Cancel</button>
+                                    <button onClick={confirmRenameSection} className="flex-1 px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/25 transition-colors">Save Name</button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* --- ORDER DETAILS MODAL --- */}
             <AnimatePresence>

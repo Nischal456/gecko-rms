@@ -115,7 +115,7 @@ export async function getBartenderTickets() {
             }
 
             return {
-                id: order.id,
+                id: order.id || order.invoice_no || `temp-${order.tbl || 'tbl'}-${order.timestamp || Date.now()}`,
                 table_name: order.tbl || order.table_name || "Unknown",
                 status: barOnlyStatus, 
                 created_at: order.timestamp || order.created_at || new Date().toISOString(),
@@ -400,7 +400,7 @@ export async function getBartenderStats() {
                 }
 
                 return {
-                    id: order.id,
+                    id: order.id || order.invoice_no || `temp-${order.tbl || 'tbl'}-${order.timestamp || Date.now()}`,
                     table_name: order.tbl || order.table_name || "Unknown",
                     created_at: order.timestamp || order.created_at || new Date().toISOString(),
                     status: displayStatus,

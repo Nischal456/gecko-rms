@@ -81,7 +81,7 @@ export async function getManagerDashboard() {
     });
 
     const totalOrders = paidBills.length + activeOrders.length;
-    const openOrders = activeOrders.filter((o: any) => !['cancelled', 'paid', 'completed'].includes(o.status)).length;
+    const openOrders = activeOrders.filter((o: any) => o.type !== 'waiter_call' && !['cancelled', 'paid', 'completed'].includes(o.status)).length;
 
     // 2. FETCH EXPENSES AND MANUAL INCOME (Today's Real Data)
     let totalExpense = 0;
@@ -147,7 +147,7 @@ export async function getManagerDashboard() {
 
     // 7. FETCH RECENT ACTIVITY (Merge Paid & Active)
     const allActivity = [
-        ...activeOrders.map((o: any) => ({
+        ...activeOrders.filter((o: any) => o.type !== 'waiter_call' && !['waiter_call_active', 'waiter_call_resolved'].includes(o.status)).map((o: any) => ({
             id: o.id,
             table_name: o.tbl || o.table_no,
             status: o.status,

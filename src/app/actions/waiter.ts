@@ -179,8 +179,7 @@ export async function getWaiterDashboardData() {
             });
 
             const current = activeTableStatus.get(tableName);
-            const displayStatus = order.status;
-            if (!current) activeTableStatus.set(tableName, displayStatus === 'payment_pending' ? 'payment' : 'occupied');
+            if (!current) activeTableStatus.set(tableName, 'occupied');
         }
     });
 

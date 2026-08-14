@@ -478,7 +478,7 @@ export async function cancelOrder(orderId: string | number, tableLabel: string, 
         await supabaseAdmin.from("daily_order_logs").update({ orders_data: modifiedOrders }).eq("tenant_id", tenantId).eq("date", foundDate);
         
         if (!tableLabel.startsWith("TAKEAWAY")) {
-            const remainingActive = modifiedOrders.some((o:any) => o.tbl === tableLabel && !['cancelled', 'paid', 'completed'].includes(o.status));
+            const remainingActive = modifiedOrders.some((o:any) => o.tbl === tableLabel && o.type !== 'waiter_call' && !['cancelled', 'paid', 'completed'].includes(o.status));
             if(!remainingActive) {
                 await supabaseAdmin.from("restaurant_tables").update({ status: 'free' }).eq("label", tableLabel).eq("tenant_id", tenantId);
             }

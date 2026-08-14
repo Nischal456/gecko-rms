@@ -183,7 +183,14 @@ export default function SettingsView({ data, onSave }: any) {
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Phone Number</label>
-                            <input value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full p-4 bg-slate-50 text-slate-900 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all shadow-sm" placeholder="e.g., +977 9800000000"/>
+                            <input 
+                                type="tel"
+                                maxLength={10}
+                                value={profile.phone} 
+                                onChange={e => setProfile({...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
+                                className="w-full p-4 bg-slate-50 text-slate-900 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all shadow-sm" 
+                                placeholder="e.g., 9800000000"
+                            />
                         </div>
                     </div>
                 </motion.div>

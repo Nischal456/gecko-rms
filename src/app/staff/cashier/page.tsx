@@ -858,7 +858,7 @@ function CloseDayModal({ activeOrders, onClose, onConfirm }: { activeOrders: any
     const pendingOrders = activeOrders?.filter((o: any) => {
         if (o.id === "DAY_CLOSE_META") return false;
         const s = (o.status || '').toLowerCase().trim();
-        return !['cancelled', 'paid', 'completed'].includes(s);
+        return o.type !== 'waiter_call' && !['cancelled', 'paid', 'completed'].includes(s);
     }) || [];
 
     const hasPending = pendingOrders.length > 0;

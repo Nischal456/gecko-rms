@@ -273,11 +273,42 @@ export default function KitchenMenuPage() {
     setIsSubmitting(false);
   }
 
-  async function handleDeleteCategory(catId: string) {
-      if(!window.confirm("Delete this category and all its items?")) return;
-      await deleteKitchenCategory(catId);
-      loadData();
-      toast.success("Category Deleted");
+  function handleDeleteCategory(catId: string) {
+      toast.custom((t) => (
+          <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
+              <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                      <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div className="pt-0.5">
+                      <h4 className="font-black text-slate-900 text-sm tracking-tight">Delete Category?</h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                          Are you sure you want to delete this category and all its items? This action cannot be undone.
+                      </p>
+                  </div>
+              </div>
+              <div className="flex gap-2 mt-1">
+                  <button 
+                      onClick={() => toast.dismiss(t)} 
+                      className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                  >
+                      Cancel
+                  </button>
+                  <button 
+                      onClick={async () => {
+                          toast.dismiss(t);
+                          toast.loading("Deleting category...");
+                          await deleteKitchenCategory(catId);
+                          loadData();
+                          toast.success("Category Deleted");
+                      }} 
+                      className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                  >
+                      Yes, Delete
+                  </button>
+              </div>
+          </div>
+      ), { duration: 8000, id: `delete-category-${catId}` });
   }
 
   async function handleSaveItem(e: React.FormEvent) {
@@ -307,15 +338,46 @@ export default function KitchenMenuPage() {
     setIsSubmitting(false);
   }
 
-  async function handleDeleteItem(itemId: string) {
-      if(!confirm("Delete dish?")) return;
-      const res = await deleteKitchenItem(activeTabId, itemId); 
-      if (res.success) {
-          await loadData();
-          toast.success("Deleted");
-      } else {
-          toast.error("Failed to delete dish: " + (res.error || "Unknown error"));
-      }
+  function handleDeleteItem(itemId: string) {
+      toast.custom((t) => (
+          <div className="bg-white p-5 rounded-[1.5rem] shadow-2xl border border-slate-100 flex flex-col gap-4 w-full sm:w-[320px] pointer-events-auto transform-gpu">
+              <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                      <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div className="pt-0.5">
+                      <h4 className="font-black text-slate-900 text-sm tracking-tight">Delete Dish?</h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                          Are you sure you want to delete this dish? This action cannot be undone.
+                      </p>
+                  </div>
+              </div>
+              <div className="flex gap-2 mt-1">
+                  <button 
+                      onClick={() => toast.dismiss(t)} 
+                      className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-colors"
+                  >
+                      Cancel
+                  </button>
+                  <button 
+                      onClick={async () => {
+                          toast.dismiss(t);
+                          toast.loading("Deleting dish...");
+                          const res = await deleteKitchenItem(activeTabId, itemId); 
+                          if (res.success) {
+                              await loadData();
+                              toast.success("Dish deleted successfully");
+                          } else {
+                              toast.error("Failed to delete dish: " + (res.error || "Unknown error"));
+                          }
+                      }} 
+                      className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
+                  >
+                      Yes, Delete
+                  </button>
+              </div>
+          </div>
+      ), { duration: 8000, id: `delete-dish-${itemId}` });
   }
 
   async function handleQuickToggle(item: MenuItem) {

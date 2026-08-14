@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/app/staff/waiter/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Clock, CheckCircle2, ChefHat, Search, RefreshCcw,
-  Coffee, DollarSign, Receipt, ShoppingBag, Utensils,
-  AlertCircle, Loader2, Lock, Edit3, ChevronDown, Check, Sparkles, Layers, StickyNote, Trash2, XCircle, ArrowUpRight
+import {
+    Clock, CheckCircle2, ChefHat, Search, RefreshCcw,
+    Coffee, DollarSign, Receipt, ShoppingBag, Utensils,
+    AlertCircle, Loader2, Lock, Edit3, ChevronDown, Check, Sparkles, Layers, StickyNote, Trash2, XCircle, ArrowUpRight
 } from "lucide-react";
 import { markOrderServed, cancelOrder, getWaiterDashboardData } from "@/app/actions/waiter"; // FIX: Imported the correct action!
 import { toast } from "sonner";
@@ -22,8 +22,8 @@ interface OrderItem {
     name: string;
     qty: number;
     price: number;
-    status: string; 
-    previous_status?: string; 
+    status: string;
+    previous_status?: string;
     variant?: string;
     note?: string;
     cancel_reason?: string;
@@ -34,7 +34,7 @@ interface OrderItem {
 interface Order {
     id: string;
     tbl: string;
-    status: string; 
+    status: string;
     items: OrderItem[];
     total: number;
     time: string;
@@ -44,7 +44,7 @@ interface Order {
 
 interface GroupedTableOrder {
     tableId: string;
-    orders: Order[]; 
+    orders: Order[];
     totalAmount: number;
     lastActiveTime: string;
     isTakeaway: boolean;
@@ -60,7 +60,7 @@ const formatRs = (amount: number) => {
 const renderItemStatus = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'ready') return <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase tracking-widest animate-pulse border border-emerald-200 shadow-sm shrink-0">Ready</span>;
-    if (s === 'served') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 shrink-0"><Check className="w-2.5 h-2.5"/> Served</span>;
+    if (s === 'served') return <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 shrink-0"><Check className="w-2.5 h-2.5" /> Served</span>;
     if (s === 'cooking') return <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded uppercase tracking-widest border border-orange-200 shrink-0">Cooking</span>;
     if (['cancelled', 'void'].includes(s)) return <span className="text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase tracking-widest border border-red-200 shrink-0 flex items-center gap-1"><XCircle className="w-2.5 h-2.5" /> Cancelled</span>;
     return <span className="text-[9px] font-black bg-blue-50 text-blue-500 px-2 py-0.5 rounded uppercase tracking-widest border border-blue-100 shrink-0">Pending</span>;
@@ -101,7 +101,7 @@ function RoundStatusBadge({ status }: { status: string }) {
 }
 
 function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilter }: { order: Order, isLast: boolean, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => void, onEdit: (orderId: string, tableLabel: string) => void, currentFilter: string }) {
-    
+
     // Only Active & Completed Tabs use this block now
     const displayItems = (order.items || []).filter(item => {
         if (!item) return false;
@@ -109,7 +109,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
         return !['cancelled', 'void'].includes(s) && item.qty > 0;
     });
 
-    if (displayItems.length === 0) return null; 
+    if (displayItems.length === 0) return null;
 
     const readyItems = displayItems.filter(i => i.status === 'ready');
     const hasReadyItems = readyItems.length > 0;
@@ -120,20 +120,20 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
 
     return (
         <div className={`relative pl-4 pb-6 ${!isLast ? 'border-l-2 border-slate-100 ml-2.5' : 'ml-2.5'}`}>
-            
+
             <div className={`absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-colors ${hasReadyItems ? 'bg-emerald-500 animate-ping' : allItemsServed ? 'bg-slate-300' : 'bg-orange-500'}`} />
             <div className={`absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm transition-colors ${hasReadyItems ? 'bg-emerald-500' : allItemsServed ? 'bg-slate-300' : 'bg-orange-500'}`} />
-            
+
             <div className="flex flex-col gap-3 mb-4">
                 <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-xs font-black text-slate-900 uppercase tracking-widest shrink-0">#{String(order.id || '').slice(-6)}</span>
                     <RoundStatusBadge status={hasReadyItems ? 'ready' : order.status} />
-                    <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 shrink-0 ml-auto"><Clock className="w-3 h-3"/> {order.time}</span>
+                    <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 shrink-0 ml-auto"><Clock className="w-3 h-3" /> {order.time}</span>
                 </div>
-                
+
                 <div className="flex flex-wrap items-center gap-2 w-full">
                     {hasReadyItems ? (
-                        <button 
+                        <button
                             onClick={() => onServe(order.id, order.tbl, order.items)}
                             className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/30 active:scale-95 border border-emerald-400"
                         >
@@ -148,7 +148,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
                     ) : (
                         <>
                             {hasPendingItems && (
-                                <button 
+                                <button
                                     onClick={() => onEdit(order.id, order.tbl)}
                                     className="flex-1 min-w-[80px] flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider border-2 border-slate-200 hover:border-emerald-200 hover:text-emerald-600 transition-colors shadow-sm active:scale-95"
                                 >
@@ -157,7 +157,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
                                 </button>
                             )}
                             {isFullyPending && (
-                                <button 
+                                <button
                                     onClick={() => onCancel(order.id, order.tbl)}
                                     className="flex-1 min-w-[80px] flex items-center justify-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-wider border border-red-100 hover:bg-red-100 hover:border-red-200 transition-colors shadow-sm active:scale-95"
                                 >
@@ -188,7 +188,7 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
                                         <div className="flex items-center gap-1.5 shrink-0 mt-0.5 sm:mt-0">
                                             {renderItemStatus(item.status)}
                                             {['pending', 'cooking', 'ready'].includes(item.status) && (
-                                                <button 
+                                                <button
                                                     onClick={() => {
                                                         const sig = item.unique_id || item.id || `${item.name}||${item.variant || ''}`;
                                                         onCancel(order.id, order.tbl, sig, item.status);
@@ -202,8 +202,8 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                        {item.variant && <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm"><Layers className="w-2.5 h-2.5"/> {item.variant}</span>}
-                                        {item.note && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 italic shadow-sm"><StickyNote className="w-2.5 h-2.5"/> {item.note}</span>}
+                                        {item.variant && <span className="text-[9px] font-bold bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm"><Layers className="w-2.5 h-2.5" /> {item.variant}</span>}
+                                        {item.note && <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 italic shadow-sm"><StickyNote className="w-2.5 h-2.5" /> {item.note}</span>}
                                     </div>
                                 </div>
                             </div>
@@ -219,16 +219,13 @@ function OrderRoundBlock({ order, isLast, onServe, onCancel, onEdit, currentFilt
 function TableCard({ group, currentFilter, onServe, onCancel, onEdit }: { group: GroupedTableOrder, currentFilter: string, onServe: (orderId: string, tableLabel: string, rawItems: any[]) => void, onCancel: (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => void, onEdit: (orderId: string, tableLabel: string) => void }) {
     const { tableId, orders, isTakeaway } = group;
     const DisplayIcon = isTakeaway ? ShoppingBag : Utensils;
-    
-    const hasReadyItems = orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
 
-    // Only render Active and Completed via TableCard
+    const hasReadyItems = orders.some(o => (o.items || []).some((i: any) => i && i.status === 'ready'));
+
+    // Only render Active via TableCard
     const validOrdersForTab = orders.filter(order => {
         if (!order) return false;
         const items = order.items || [];
-        if (currentFilter === 'completed') {
-            return ['paid', 'completed'].includes(order.status) && items.some((i:any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
-        }
         return !['paid', 'completed', 'cancelled'].includes(order.status) && items.some((i:any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
     });
 
@@ -277,10 +274,10 @@ function TableCard({ group, currentFilter, onServe, onCancel, onEdit }: { group:
 
             <div className="p-4 flex-1 bg-white">
                 {validOrdersForTab.map((order, index) => (
-                    <OrderRoundBlock 
-                        key={order.id || index} 
-                        order={order} 
-                        isLast={index === validOrdersForTab.length - 1} 
+                    <OrderRoundBlock
+                        key={order.id || index}
+                        order={order}
+                        isLast={index === validOrdersForTab.length - 1}
                         onServe={onServe}
                         onCancel={onCancel}
                         onEdit={onEdit}
@@ -310,24 +307,24 @@ export default function OrdersPage() {
     const [filter, setFilter] = useState<'active' | 'completed' | 'cancelled'>('active');
     const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'cooking' | 'pending' | 'served'>('all'); // NEW SECONDARY FILTER
     const [search, setSearch] = useState("");
-    
+
     // Notification State
-    const [topAlert, setTopAlert] = useState<{msg: string} | null>(null);
+    const [topAlert, setTopAlert] = useState<{ msg: string } | null>(null);
     const notifiedReadyIds = useRef(new Set<string>());
 
     // State for the advanced Reason-Based Cancellation Modal
-    const [cancelFlow, setCancelFlow] = useState<{orderId: string, tableLabel: string, itemId?: string, requiresReason: boolean} | null>(null);
+    const [cancelFlow, setCancelFlow] = useState<{ orderId: string, tableLabel: string, itemId?: string, requiresReason: boolean } | null>(null);
     const [cancelReason, setCancelReason] = useState("");
 
     useEffect(() => {
         loadOrders();
-        const interval = setInterval(loadOrders, 4000); 
+        const interval = setInterval(loadOrders, 4000);
         return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        if(topAlert) {
-            const timer = setTimeout(() => setTopAlert(null), 5000); 
+        if (topAlert) {
+            const timer = setTimeout(() => setTopAlert(null), 5000);
             return () => clearTimeout(timer);
         }
     }, [topAlert]);
@@ -348,9 +345,9 @@ export default function OrdersPage() {
 
                 rawOrders.forEach(order => {
                     if (!order) return;
-                    const validItems = (order.items || []).filter((i:any) => i && !['cancelled', 'void'].includes(i.status) && i.qty > 0);
+                    const validItems = (order.items || []).filter((i: any) => i && !['cancelled', 'void'].includes(i.status) && i.qty > 0);
                     const itemsReady = validItems.filter((i: any) => i && i.status === 'ready').length;
-                    
+
                     if (itemsReady > 0 && order.status !== 'served' && order.status !== 'payment_pending') {
                         if (order.id && !notifiedReadyIds.current.has(order.id)) {
                             setTopAlert({ msg: `${itemsReady} Items Ready for Table ${order.tbl || 'Unknown'}` });
@@ -360,6 +357,8 @@ export default function OrdersPage() {
                     }
 
                     const tId = String(order.tbl || "").trim();
+                    if (!tId || tId.toLowerCase() === 'table') return; // Hide ghost orders with no table number
+
                     if (!groups[tId]) {
                         groups[tId] = {
                             tableId: tId,
@@ -371,11 +370,11 @@ export default function OrdersPage() {
                         };
                     }
                     groups[tId].orders.push(order);
-                    
+
                     const roundRealTotal = validItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
                     groups[tId].totalAmount += roundRealTotal;
-                    
-                    if (!['paid', 'completed', 'cancelled'].includes(order.status)) {
+
+                    if (!['payment_pending', 'paid', 'completed', 'cancelled'].includes(order.status)) {
                         groups[tId].hasActiveOrders = true;
                     }
                 });
@@ -391,11 +390,11 @@ export default function OrdersPage() {
                 });
 
                 const finalGroups = Object.values(groups).sort((a, b) => {
-                    const aHasReady = a.orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
-                    const bHasReady = b.orders.some(o => (o.items || []).some((i:any) => i && i.status === 'ready'));
+                    const aHasReady = a.orders.some(o => (o.items || []).some((i: any) => i && i.status === 'ready'));
+                    const bHasReady = b.orders.some(o => (o.items || []).some((i: any) => i && i.status === 'ready'));
                     if (aHasReady && !bHasReady) return -1;
                     if (!aHasReady && bHasReady) return 1;
-                    return 0; 
+                    return 0;
                 });
 
                 setGroupedTables(finalGroups);
@@ -428,7 +427,7 @@ export default function OrdersPage() {
                                 }
                                 return i;
                             });
-                            
+
                             const stillCooking = newItems.some(i => i && ['pending', 'cooking'].includes(i.status));
                             const stillReady = newItems.some(i => i && i.status === 'ready');
                             const newStatus = stillReady ? 'ready' : stillCooking ? 'cooking' : 'payment_pending';
@@ -445,35 +444,35 @@ export default function OrdersPage() {
         const res = await markOrderServed(orderId, tableLabel, readyItemIdentifiers);
         if (res.success) {
             toast.success(`Served ${readyItems.length} item(s) to Table ${tableLabel}!`);
-            loadOrders(); 
+            loadOrders();
         } else {
             toast.error("Failed to update status. Reverting...");
-            loadOrders(); 
+            loadOrders();
         }
     };
 
     const triggerCancel = (orderId: string, tableLabel: string, itemId?: string, itemStatus?: string) => {
         const requiresReason = ['cooking', 'ready'].includes(itemStatus || '');
         setCancelFlow({ orderId, tableLabel, itemId, requiresReason });
-        setCancelReason(""); 
+        setCancelReason("");
     };
 
     const confirmCancel = async () => {
         if (!cancelFlow) return;
-        
+
         if (cancelFlow.requiresReason && !cancelReason.trim()) {
-            toast.error("Reason required", { description: "Please provide a reason for cancelling prepared food."});
+            toast.error("Reason required", { description: "Please provide a reason for cancelling prepared food." });
             return;
         }
 
         const { orderId, tableLabel, itemId } = cancelFlow;
         const finalReason = cancelReason.trim();
-        
-        setCancelFlow(null); 
+
+        setCancelFlow(null);
         toast.loading(itemId ? "Cancelling item..." : "Cancelling round...");
-        
+
         const res = await cancelOrder(orderId, tableLabel, itemId, finalReason);
-        
+
         toast.dismiss();
         if (res.success) {
             toast.success(itemId ? "Item Cancelled Successfully" : "Round Cancelled Successfully");
@@ -490,28 +489,22 @@ export default function OrdersPage() {
     };
 
     // --- PARSE GROUPS FOR ACTIVE/COMPLETED TABS ---
-    const filteredGroups = groupedTables.map(group => {
-        let filteredOrders: Order[] = [];
-        const orders = group.orders || [];
-        if (filter === 'active') {
-            filteredOrders = orders.filter(o => {
+    let filteredGroups: any[] = [];
+
+    if (filter === 'active') {
+        filteredGroups = groupedTables.map(group => {
+            const filteredOrders = (group.orders || []).filter(o => {
                 if (!o || ['paid', 'completed', 'cancelled'].includes(o.status)) return false;
                 const items = o.items || [];
                 return items.some((i: any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
             });
-        } else if (filter === 'completed') {
-            filteredOrders = orders.filter(o => {
-                if (!o || !['paid', 'completed'].includes(o.status)) return false;
-                const items = o.items || [];
-                return items.some((i: any) => i && !['cancelled', 'void'].includes((i.status || '').toLowerCase().trim()));
-            });
-        }
-        return { ...group, orders: filteredOrders };
-    }).filter(group => {
-        const matchesSearch = String(group.tableId || "").toLowerCase().includes(search.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || (group.orders || []).some(o => (o.items || []).some(i => i && !['cancelled', 'void'].includes(i.status) && (i.status || '').toLowerCase().trim() === statusFilter));
-        return matchesSearch && matchesStatus && (group.orders || []).length > 0;
-    });
+            return { ...group, orders: filteredOrders, uniqueKey: group.tableId || `active-group-${Math.random()}` };
+        }).filter(group => {
+            const matchesSearch = String(group.tableId || "").toLowerCase().includes(search.toLowerCase());
+            const matchesStatus = statusFilter === 'all' || (group.orders || []).some(o => (o.items || []).some(i => i && !['cancelled', 'void'].includes(i.status) && (i.status || '').toLowerCase().trim() === statusFilter));
+            return matchesSearch && matchesStatus && (group.orders || []).length > 0;
+        });
+    }
 
     const activeCount = groupedTables.filter(g => {
         if (!g) return false;
@@ -524,11 +517,11 @@ export default function OrdersPage() {
 
     return (
         <div className="flex h-[100dvh] bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden relative">
-            
+
             {/* LIVE ALERT BANNER */}
             <AnimatePresence>
                 {topAlert && (
-                    <motion.div 
+                    <motion.div
                         initial={{ y: -100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -100, opacity: 0 }}
                         className="absolute top-0 left-0 right-0 z-[100] flex justify-center pt-4 pointer-events-none px-4"
                     >
@@ -550,15 +543,15 @@ export default function OrdersPage() {
             <AnimatePresence>
                 {cancelFlow && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                        <motion.div 
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
-                            onClick={() => setCancelFlow(null)} 
-                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cursor-pointer" 
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={() => setCancelFlow(null)}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cursor-pointer"
                         />
-                        <motion.div 
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-                            animate={{ scale: 1, opacity: 1, y: 0 }} 
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }} 
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
                             className="bg-white w-full max-w-md rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative z-10 overflow-hidden transform-gpu"
                         >
                             <div className="flex items-start gap-4 mb-6">
@@ -570,8 +563,8 @@ export default function OrdersPage() {
                                         {cancelFlow.itemId ? "Cancel Item" : "Cancel Round"}
                                     </h3>
                                     <p className="text-xs font-bold text-slate-500 mt-1">
-                                        {cancelFlow.requiresReason 
-                                            ? "This item is already being prepared. Cancelling it will record waste. Please provide a reason below." 
+                                        {cancelFlow.requiresReason
+                                            ? "This item is already being prepared. Cancelling it will record waste. Please provide a reason below."
                                             : "Are you sure you want to cancel this? This action cannot be undone."}
                                     </p>
                                 </div>
@@ -580,25 +573,25 @@ export default function OrdersPage() {
                             {cancelFlow.requiresReason && (
                                 <div className="mb-6">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Cancellation Reason *</label>
-                                    <input 
+                                    <input
                                         autoFocus
-                                        type="text" 
-                                        value={cancelReason} 
-                                        onChange={e => setCancelReason(e.target.value)} 
-                                        placeholder="e.g. Customer changed mind, Spilled, etc." 
+                                        type="text"
+                                        value={cancelReason}
+                                        onChange={e => setCancelReason(e.target.value)}
+                                        placeholder="e.g. Customer changed mind, Spilled, etc."
                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-400 transition-all shadow-inner"
                                     />
                                 </div>
                             )}
 
                             <div className="flex gap-3">
-                                <button 
-                                    onClick={() => setCancelFlow(null)} 
+                                <button
+                                    onClick={() => setCancelFlow(null)}
                                     className="flex-1 py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-xl transition-colors border border-slate-200"
                                 >
                                     Keep It
                                 </button>
-                                <button 
+                                <button
                                     onClick={confirmCancel}
                                     disabled={cancelFlow.requiresReason && !cancelReason.trim()}
                                     className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95 flex items-center justify-center gap-2"
@@ -612,7 +605,7 @@ export default function OrdersPage() {
             </AnimatePresence>
 
             <Sidebar />
-            
+
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Fixed Header */}
                 <header className="px-5 md:px-10 py-5 md:py-6 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-20 shadow-sm shrink-0">
@@ -628,28 +621,22 @@ export default function OrdersPage() {
                             <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                                 <div className="relative w-full md:w-64 group">
                                     <Search className="w-4 h-4 md:w-5 md:h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-                                    <input 
+                                    <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
-                                        placeholder="Search Table..." 
-                                        className="w-full pl-11 pr-4 py-3 md:py-3.5 bg-white border-2 border-slate-100 rounded-xl md:rounded-2xl text-sm font-bold outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm" 
+                                        placeholder="Search Table..."
+                                        className="w-full pl-11 pr-4 py-3 md:py-3.5 bg-white border-2 border-slate-100 rounded-xl md:rounded-2xl text-sm font-bold outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm"
                                     />
                                 </div>
-                                
+
                                 <div className="bg-slate-100 p-1.5 rounded-xl md:rounded-2xl flex border border-slate-200 w-full md:w-auto shrink-0 overflow-x-auto no-scrollbar">
-                                    <button 
+                                    <button
                                         onClick={() => setFilter('active')}
                                         className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'active' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
                                         Active <span className={`px-2 py-0.5 rounded-md ${filter === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{activeCount}</span>
                                     </button>
-                                    <button 
-                                        onClick={() => setFilter('completed')}
-                                        className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'completed' ? 'bg-white text-slate-900 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        History
-                                    </button>
-                                    <button 
+                                    <button
                                         onClick={() => setFilter('cancelled')}
                                         className={`flex-1 md:flex-none px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all flex justify-center items-center gap-2 whitespace-nowrap ${filter === 'cancelled' ? 'bg-red-50 text-red-600 shadow-md transform scale-105 border border-red-100' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
@@ -670,16 +657,15 @@ export default function OrdersPage() {
                                     { id: 'served', label: 'Served', active: 'bg-slate-500 text-white border-slate-600 shadow-md shadow-slate-500/20', inactive: 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' },
                                 ].map((tab) => {
                                     const isActive = statusFilter === tab.id;
-                                    
+
                                     return (
                                         <button
                                             key={tab.id}
                                             onClick={() => setStatusFilter(tab.id as any)}
-                                            className={`px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
-                                                isActive 
-                                                ? (tab.id === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-md' : tab.active) 
+                                            className={`px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border ${isActive
+                                                ? (tab.id === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-md' : tab.active)
                                                 : (tab.id === 'all' ? 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50' : tab.inactive)
-                                            }`}
+                                                }`}
                                         >
                                             {tab.label}
                                         </button>
@@ -702,7 +688,7 @@ export default function OrdersPage() {
                             cancelledItemsGlobal.length === 0 ? (
                                 <div className="h-[50vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-red-200/50 rounded-[3rem] bg-red-50/30 mt-4">
                                     <div className="w-20 h-20 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-red-100">
-                                        <Receipt className="w-8 h-8 md:w-10 md:h-10 opacity-40 text-red-500"/>
+                                        <Receipt className="w-8 h-8 md:w-10 md:h-10 opacity-40 text-red-500" />
                                     </div>
                                     <p className="font-black text-base md:text-lg text-red-400 uppercase tracking-widest">No Waste</p>
                                     <p className="text-[10px] md:text-xs font-bold text-slate-500 opacity-60 mt-1">No prepared food was cancelled in the last 24h.</p>
@@ -716,7 +702,7 @@ export default function OrdersPage() {
 
                                             return (
                                                 <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={idx} className="bg-white p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] border border-red-100 shadow-sm flex flex-col h-full hover:shadow-lg transition-all">
-                                                    
+
                                                     <div className="flex items-center gap-3 md:gap-4 mb-4 pb-4 border-b border-red-50">
                                                         <div className="w-10 h-10 md:w-12 md:h-12 bg-red-50 text-red-500 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 border border-red-100 shadow-inner">
                                                             <DisplayIcon className="w-5 h-5" />
@@ -739,7 +725,7 @@ export default function OrdersPage() {
                                                                 <div>
                                                                     <h5 className="font-bold text-slate-900 text-xs md:text-sm leading-tight">{item.name}</h5>
                                                                     <div className="flex flex-wrap gap-1 mt-1.5">
-                                                                        {item.variant && <span className="text-[9px] font-bold bg-slate-50 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-1"><Layers className="w-2.5 h-2.5"/> {item.variant}</span>}
+                                                                        {item.variant && <span className="text-[9px] font-bold bg-slate-50 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-1"><Layers className="w-2.5 h-2.5" /> {item.variant}</span>}
                                                                         <span className="text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider">
                                                                             Was {item.previous_status || 'Unknown'}
                                                                         </span>
@@ -777,12 +763,12 @@ export default function OrdersPage() {
                         ) : (
                             <div className="columns-1 lg:columns-2 xl:columns-3 gap-6 md:gap-8 space-y-6 md:space-y-8 mt-2">
                                 <AnimatePresence mode="popLayout">
-                                    {filteredGroups.map((group) => (
-                                        <div key={group.tableId} className="break-inside-avoid">
-                                            <TableCard 
-                                                group={group} 
+                                    {filteredGroups.map((group, idx) => (
+                                        <div key={group.uniqueKey || `table-group-${idx}`} className="break-inside-avoid">
+                                            <TableCard
+                                                group={group}
                                                 currentFilter={filter}
-                                                onServe={handleServeOrder} 
+                                                onServe={handleServeOrder}
                                                 onCancel={triggerCancel}
                                                 onEdit={handleEditOrder}
                                             />

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "@/app/staff/manager/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Sparkles, Loader2, Star, CheckCircle2, ChevronRight, X, AlertCircle
+  Loader2, Star, CheckCircle2, ChevronRight, X, AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardData } from "@/app/actions/dashboard";
@@ -67,7 +67,7 @@ export default function ManagerSpecialsPage() {
         <header className="flex-shrink-0 px-4 md:px-8 py-4 bg-white border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 z-20 pt-16 lg:pt-4">
             <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-                    <Sparkles className="w-6 h-6 text-white" />
+                    <Star className="w-6 h-6 text-white" fill="currentColor" />
                 </div>
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">Today's Specials</h1>
@@ -142,7 +142,7 @@ export default function ManagerSpecialsPage() {
                                         </div>
                                         <div className="min-w-0 pr-2">
                                             <p className="font-black text-slate-900 text-sm truncate">{item.name}</p>
-                                            {item.is_special && <span className="inline-block mt-0.5 text-[9px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit"><Sparkles className="w-2.5 h-2.5"/> Featured</span>}
+                                            {item.is_special && <span className="inline-block mt-0.5 text-[9px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit"><Star className="w-2.5 h-2.5" fill="currentColor"/> Featured</span>}
                                         </div>
                                     </div>
 
