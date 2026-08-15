@@ -746,16 +746,13 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
     useEffect(() => {
         // Prevent scrolling while loading
         document.body.style.overflow = "hidden";
-        
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        const speed = isMobile ? 0.3 : 0.6; // Snappy load on mobile
 
-        const t1 = setTimeout(() => setStep(1), Math.round(700 * speed)); 
-        const t2 = setTimeout(() => setStep(2), Math.round(1500 * speed)); 
+        const t1 = setTimeout(() => setStep(1), 1600); // Show "Gecko RMS" logo cleanly
+        const t2 = setTimeout(() => setStep(2), 3200); // Trigger smooth curtain exit animation
         const t3 = setTimeout(() => {
             document.body.style.overflow = ""; // Restore scrolling
             onComplete();
-        }, Math.round(2100 * speed)); 
+        }, 4400); // Unmount
 
         return () => {
             clearTimeout(t1);
@@ -771,7 +768,7 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
                 <motion.div
                     initial={{ y: "0%" }}
                     exit={{ y: "-100%" }}
-                    transition={{ duration: 0.8, ease: EASE_PREMIUM }}
+                    transition={{ duration: 1.2, ease: EASE_PREMIUM }}
                     className="fixed inset-0 z-[99999] bg-white flex flex-col items-center justify-center transform-gpu origin-top shadow-2xl pointer-events-auto"
                 >
                     <AnimatePresence mode="wait">
