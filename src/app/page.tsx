@@ -11,6 +11,8 @@ import {
     , Banknote
 } from "lucide-react";
 import AIChatWidget from "@/components/landing/AIChatWidget";
+import NepaliDate from "nepali-date-converter";
+import { toast } from "sonner";
 
 // --- 1. CONFIG & UTILS ---
 function cn(...classes: (string | undefined | null | false)[]) {
@@ -167,6 +169,77 @@ function SpotlightCard({ children, className = "", delay = 0 }: { children: Reac
 // --- 4. THE "QUAD-OS" DASHBOARD SIMULATION ---
 function TrinityDashboardShowcase() {
     const [activeTab, setActiveTab] = useState<"admin" | "pos" | "kitchen" | "waiter">("admin");
+    const [adminSubTab, setAdminSubTab] = useState<"Overview" | "Floor Plan" | "Menu Engine" | "Inventory" | "Staff">("Overview");
+    const [posCart, setPosCart] = useState<{ name: string; price: number; icon: string; qty: number }[]>([]);
+    const [cookingTickets, setCookingTickets] = useState<{ id: number; table: string; time: string; items: string[] }[]>([
+        { id: 1, table: "Table M-2", time: "04:21 PM", items: ["1x Chicken Momo", "2x Coke"] },
+        { id: 2, table: "Table R-1", time: "04:23 PM", items: ["2x Signature Burger", "1x Mojito"] }
+    ]);
+    const [readyTickets, setReadyTickets] = useState<{ id: number; table: string; items: string[] }[]>([]);
+    const [waiterFilter, setWaiterFilter] = useState("All");
+    const [currentTime, setCurrentTime] = useState<string>("");
+    const [todayNepaliDate, setTodayNepaliDate] = useState<string>("");
+
+    useEffect(() => {
+        const updateTimeAndDate = () => {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString("en-US", {
+                timeZone: "Asia/Kathmandu",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true
+            });
+            setCurrentTime(timeStr);
+
+            try {
+                const nepDate = new NepaliDate(now);
+                const months = ["Baishakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+                const monthName = months[nepDate.getMonth()];
+                const day = nepDate.getDate();
+                const year = nepDate.getYear();
+                setTodayNepaliDate(`${monthName} ${day}, ${year}`);
+            } catch {
+                setTodayNepaliDate("Bhadra 1, 2082");
+            }
+        };
+
+        updateTimeAndDate();
+        const interval = setInterval(updateTimeAndDate, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const addToPosCart = (item: { name: string; price: number; icon: string }) => {
+        setPosCart((prev) => {
+            const existing = prev.find((i) => i.name === item.name);
+            if (existing) {
+                return prev.map((i) => (i.name === item.name ? { ...i, qty: i.qty + 1 } : i));
+            }
+            return [...prev, { ...item, qty: 1 }];
+        });
+        toast.success(`Added ${item.name} to order`, { duration: 2000, icon: <ShoppingBag className="w-4 h-4 text-emerald-500" /> });
+    };
+
+    const placePosOrder = () => {
+        if (posCart.length === 0) return;
+        toast.success("Order Placed for Table M-1!", { duration: 3000, icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> });
+        setPosCart([]);
+    };
+
+    const markKitchenReady = (id: number) => {
+        const ticket = cookingTickets.find((t) => t.id === id);
+        if (ticket) {
+            setCookingTickets((prev) => prev.filter((t) => t.id !== id));
+            setReadyTickets((prev) => [...prev, { id: ticket.id, table: ticket.table, items: ticket.items }]);
+            toast.success(`${ticket.table} Order Marked Ready!`, { duration: 3000, icon: <ChefHat className="w-5 h-5 text-emerald-500" /> });
+        }
+    };
+
+    const handleExportCSV = () => {
+        toast.success("Sales Report (CSV) Exported Successfully!", { duration: 3000, icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> });
+    };
+
+    const posSubtotal = posCart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
     return (
         <section className="py-24 bg-slate-50 relative overflow-hidden">
@@ -236,9 +309,16 @@ function TrinityDashboardShowcase() {
                                         </div>
                                     </div>
                                     <div className="space-y-1">
-                                        {["Overview", "Floor Plan", "Menu Engine", "Inventory", "Staff"].map((item, i) => (
-                                            <div key={item} className={cn("px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 cursor-pointer transition-all", i === 0 ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20" : "text-slate-500 hover:bg-slate-50 hover:pl-6")}>
-                                                <div className={cn("w-2 h-2 rounded-full shrink-0", i === 0 ? "bg-emerald-400" : "bg-slate-300")} />
+                                        {(["Overview", "Floor Plan", "Menu Engine", "Inventory", "Staff"] as const).map((item) => (
+                                            <div
+                                                key={item}
+                                                onClick={() => setAdminSubTab(item)}
+                                                className={cn(
+                                                    "px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 cursor-pointer transition-all active:scale-95",
+                                                    adminSubTab === item ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20" : "text-slate-500 hover:bg-slate-50 hover:pl-6"
+                                                )}
+                                            >
+                                                <div className={cn("w-2 h-2 rounded-full shrink-0", adminSubTab === item ? "bg-emerald-400" : "bg-slate-300")} />
                                                 {item}
                                             </div>
                                         ))}
@@ -246,7 +326,7 @@ function TrinityDashboardShowcase() {
                                     <div className="mt-auto bg-slate-900 text-white p-4 rounded-2xl relative overflow-hidden group cursor-pointer">
                                         <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                                         <div className="text-[10px] opacity-60 font-bold uppercase">Local Time</div>
-                                        <div className="text-2xl font-mono font-bold">01:14 AM</div>
+                                        <div className="text-2xl font-mono font-bold">{currentTime || "01:14 AM"}</div>
                                     </div>
                                 </div>
 
@@ -255,84 +335,170 @@ function TrinityDashboardShowcase() {
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 gap-4">
                                         <div>
                                             <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Good Morning, Executive</p>
-                                            <h2 className="text-2xl md:text-3xl font-black text-slate-900">Gecko RMS</h2>
+                                            <h2 className="text-2xl md:text-3xl font-black text-slate-900">Gecko RMS • {adminSubTab}</h2>
                                         </div>
                                         <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2">
-                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" /> Falgun 7, 2082
+                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" /> {todayNepaliDate || "Falgun 7, 2082"}
                                         </div>
                                     </div>
 
-                                    {/* Stats Grid */}
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-                                        {[
-                                            { label: "Revenue", val: "Rs 4,070", icon: Banknote, color: "text-emerald-600", bg: "bg-emerald-50", up: "109%" },
-                                            { label: "Orders", val: "10", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50", up: "233%" },
-                                            { label: "Kitchen Active", val: "7", icon: ChefHat, color: "text-orange-600", bg: "bg-orange-50", up: null },
-                                            { label: "Avg Ticket", val: "Rs 407", icon: Activity, color: "text-purple-600", bg: "bg-purple-50", up: null },
-                                        ].map((stat, i) => (
-                                            <div key={i} className="bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between h-28 md:h-32">
-                                                <div className="flex justify-between items-start">
-                                                    <div className={cn("w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center shrink-0", stat.bg)}>
-                                                        <stat.icon className={cn("w-4 h-4 md:w-5 md:h-5", stat.color)} />
+                                    {/* DYNAMIC ADMIN SUB-TAB CONTENT */}
+                                    {adminSubTab === "Overview" && (
+                                        <>
+                                            {/* Stats Grid */}
+                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+                                                {[
+                                                    { label: "Revenue", val: "Rs 4,070", icon: Banknote, color: "text-emerald-600", bg: "bg-emerald-50", up: "109%" },
+                                                    { label: "Orders", val: "10", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50", up: "233%" },
+                                                    { label: "Kitchen Active", val: `${cookingTickets.length}`, icon: ChefHat, color: "text-orange-600", bg: "bg-orange-50", up: null },
+                                                    { label: "Avg Ticket", val: "Rs 407", icon: Activity, color: "text-purple-600", bg: "bg-purple-50", up: null },
+                                                ].map((stat, i) => (
+                                                    <div key={i} className="bg-white p-4 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between h-28 md:h-32">
+                                                        <div className="flex justify-between items-start">
+                                                            <div className={cn("w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center shrink-0", stat.bg)}>
+                                                                <stat.icon className={cn("w-4 h-4 md:w-5 md:h-5", stat.color)} />
+                                                            </div>
+                                                            {stat.up && <span className="text-[9px] md:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full shrink-0">↗ {stat.up}</span>}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-xl md:text-2xl font-black text-slate-900 truncate">{stat.val}</div>
+                                                            <div className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase truncate">{stat.label}</div>
+                                                        </div>
                                                     </div>
-                                                    {stat.up && <span className="text-[9px] md:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full shrink-0">↗ {stat.up}</span>}
-                                                </div>
-                                                <div>
-                                                    <div className="text-xl md:text-2xl font-black text-slate-900 truncate">{stat.val}</div>
-                                                    <div className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase truncate">{stat.label}</div>
-                                                </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                                        <div className="col-span-1 lg:col-span-2 bg-white rounded-2xl md:rounded-3xl border border-slate-100 p-4 md:p-6 shadow-sm overflow-hidden flex flex-col">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-emerald-50 rounded-lg shrink-0"><Activity className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" /></div>
-                                                    <div>
-                                                        <h3 className="font-bold text-slate-900 text-sm md:text-base">Live Monitor</h3>
-                                                        <p className="text-[10px] md:text-xs text-slate-400">Real-time transactions</p>
-                                                    </div>
-                                                </div>
-                                                <button className="bg-slate-900 text-white text-[10px] md:text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors shrink-0">Export CSV</button>
-                                            </div>
-                                            <div className="space-y-2 md:space-y-4 flex-1 overflow-y-auto pr-1">
-                                                {[1, 2, 3].map((i) => (
-                                                    <div key={i} className="flex items-center justify-between p-2 md:p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100">
-                                                        <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                                                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 flex items-center justify-center text-[10px] md:text-xs font-bold text-slate-500 shrink-0">#{860 + i}</div>
-                                                            <div className="truncate">
-                                                                <div className="font-bold text-slate-900 text-xs md:text-sm truncate">{3 - i} Items Ordered</div>
-                                                                <div className="text-[9px] md:text-[10px] font-bold text-orange-400 truncate">SERVED • 01:06 PM</div>
+                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                                                <div className="col-span-1 lg:col-span-2 bg-white rounded-2xl md:rounded-3xl border border-slate-100 p-4 md:p-6 shadow-sm overflow-hidden flex flex-col">
+                                                    <div className="flex justify-between items-center mb-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-emerald-50 rounded-lg shrink-0"><Activity className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" /></div>
+                                                            <div>
+                                                                <h3 className="font-bold text-slate-900 text-sm md:text-base">Live Monitor</h3>
+                                                                <p className="text-[10px] md:text-xs text-slate-400">Real-time transactions</p>
                                                             </div>
                                                         </div>
-                                                        <div className="font-bold text-slate-900 text-xs md:text-sm shrink-0">Rs {1300 - (i * 200)}</div>
+                                                        <button onClick={handleExportCSV} className="bg-slate-900 hover:bg-slate-800 text-white text-[10px] md:text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95 shrink-0">Export CSV</button>
                                                     </div>
-                                                ))}
+                                                    <div className="space-y-2 md:space-y-4 flex-1 overflow-y-auto pr-1">
+                                                        {[1, 2, 3].map((i) => (
+                                                            <div key={i} className="flex items-center justify-between p-2 md:p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                                                                <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+                                                                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 flex items-center justify-center text-[10px] md:text-xs font-bold text-slate-500 shrink-0">#{860 + i}</div>
+                                                                    <div className="truncate">
+                                                                        <div className="font-bold text-slate-900 text-xs md:text-sm truncate">{3 - i} Items Ordered</div>
+                                                                        <div className="text-[9px] md:text-[10px] font-bold text-orange-400 truncate">SERVED • 01:06 PM</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="font-bold text-slate-900 text-xs md:text-sm shrink-0">Rs {1300 - (i * 200)}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-1 bg-[#0B1120] rounded-2xl md:rounded-3xl p-5 md:p-6 text-white relative overflow-hidden shadow-2xl">
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl animate-pulse" />
+                                                    <h3 className="font-bold mb-6 relative z-10 flex items-center gap-2 text-sm md:text-base"><div className="w-1 h-4 bg-emerald-500 rounded-full shrink-0" /> Top Movers</h3>
+                                                    <div className="space-y-3 md:space-y-4 relative z-10">
+                                                        {[
+                                                            { n: "Chicken Momo", q: 5, bg: "bg-emerald-500" },
+                                                            { n: "Mojito", q: 4, bg: "bg-blue-500" },
+                                                            { n: "Fried Momo", q: 3, bg: "bg-orange-500" }
+                                                        ].map((item, i) => (
+                                                            <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                                                                <div className="flex items-center gap-2 md:gap-3 truncate pr-2">
+                                                                    <div className="text-emerald-400 font-bold text-[10px] md:text-xs shrink-0">0{i + 1}</div>
+                                                                    <div className="text-xs md:text-sm font-bold truncate">{item.n}</div>
+                                                                </div>
+                                                                <div className="text-[10px] md:text-xs font-mono text-slate-400 shrink-0">{item.q} SOLD</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="col-span-1 bg-[#0B1120] rounded-2xl md:rounded-3xl p-5 md:p-6 text-white relative overflow-hidden shadow-2xl">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl animate-pulse" />
-                                            <h3 className="font-bold mb-6 relative z-10 flex items-center gap-2 text-sm md:text-base"><div className="w-1 h-4 bg-emerald-500 rounded-full shrink-0" /> Top Movers</h3>
-                                            <div className="space-y-3 md:space-y-4 relative z-10">
+                                        </>
+                                    )}
+
+                                    {adminSubTab === "Floor Plan" && (
+                                        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4">Interactive Floor Layout (Main Hall & Terrace)</h3>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                                 {[
-                                                    { n: "Chicken Momo", q: 5, bg: "bg-emerald-500" },
-                                                    { n: "Mojito", q: 4, bg: "bg-blue-500" },
-                                                    { n: "Fried Momo", q: 3, bg: "bg-orange-500" }
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
-                                                        <div className="flex items-center gap-2 md:gap-3 truncate pr-2">
-                                                            <div className="text-emerald-400 font-bold text-[10px] md:text-xs shrink-0">0{i + 1}</div>
-                                                            <div className="text-xs md:text-sm font-bold truncate">{item.n}</div>
-                                                        </div>
-                                                        <div className="text-[10px] md:text-xs font-mono text-slate-400 shrink-0">{item.q} SOLD</div>
-                                                        <div className={cn("absolute bottom-0 left-0 h-0.5 rounded-full transition-all duration-1000", item.bg)} style={{ width: `${(item.q / 5) * 100}%` }} />
+                                                    { name: "Table M-1", status: "Occupied", seats: 4, color: "bg-red-50 text-red-600 border-red-200" },
+                                                    { name: "Table M-2", status: "Available", seats: 2, color: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+                                                    { name: "Table M-3", status: "Occupied", seats: 6, color: "bg-red-50 text-red-600 border-red-200" },
+                                                    { name: "Table T-1", status: "Available", seats: 4, color: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+                                                ].map((tbl, idx) => (
+                                                    <div key={idx} onClick={() => toast.info(`${tbl.name} selected (${tbl.seats} seats)`)} className={cn("p-4 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105", tbl.color)}>
+                                                        <Utensils className="w-6 h-6 mb-2" />
+                                                        <span className="font-bold text-sm">{tbl.name}</span>
+                                                        <span className="text-[10px] uppercase font-bold mt-1">{tbl.status}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
+
+                                    {adminSubTab === "Menu Engine" && (
+                                        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4">Live Menu Pricing Engine</h3>
+                                            <div className="space-y-3">
+                                                {[
+                                                    { name: "Chicken Momo", price: "Rs 350", cat: "Steamed", status: "Active" },
+                                                    { name: "Signature Burger", price: "Rs 650", cat: "Mains", status: "Active" },
+                                                    { name: "Fresh Mojito", price: "Rs 450", cat: "Beverages", status: "Active" }
+                                                ].map((m, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl hover:bg-slate-50">
+                                                        <span className="font-bold text-slate-900 text-sm">{m.name}</span>
+                                                        <span className="text-xs font-mono font-bold text-slate-600">{m.price}</span>
+                                                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{m.status}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {adminSubTab === "Inventory" && (
+                                        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4">Real-time Stock Monitor</h3>
+                                            <div className="space-y-4">
+                                                {[
+                                                    { item: "Basmati Rice", level: "85%", color: "bg-emerald-500" },
+                                                    { item: "Fresh Chicken", level: "60%", color: "bg-emerald-500" },
+                                                    { item: "Espresso Beans", level: "25%", color: "bg-orange-500" }
+                                                ].map((inv, idx) => (
+                                                    <div key={idx} className="space-y-1">
+                                                        <div className="flex justify-between text-xs font-bold text-slate-700">
+                                                            <span>{inv.item}</span>
+                                                            <span>{inv.level}</span>
+                                                        </div>
+                                                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                            <div className={cn("h-full rounded-full", inv.color)} style={{ width: inv.level }} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {adminSubTab === "Staff" && (
+                                        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4">Staff Roster & Leave Tracking</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                {[
+                                                    { name: "Samir K.", role: "Head Waiter", status: "On Shift" },
+                                                    { name: "Bikash S.", role: "Executive Chef", status: "On Shift" }
+                                                ].map((st, idx) => (
+                                                    <div key={idx} className="p-3 border border-slate-100 rounded-xl bg-slate-50 flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-bold text-slate-900 text-sm">{st.name}</div>
+                                                            <div className="text-[10px] text-slate-500">{st.role}</div>
+                                                        </div>
+                                                        <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{st.status}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         )}
@@ -452,7 +618,7 @@ function TrinityDashboardShowcase() {
                                         <span className="font-black text-base md:text-xl text-slate-900 hidden sm:inline">Kitchen<span className="text-emerald-500">OS</span></span>
                                         <span className="text-[9px] md:text-[10px] font-bold bg-emerald-100 text-emerald-600 px-1.5 md:px-2 py-0.5 rounded-full ml-1 md:ml-2 flex items-center gap-1 shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> LIVE</span>
                                     </div>
-                                    <div className="text-base md:text-xl font-mono font-bold text-slate-900 shrink-0">01:14 AM</div>
+                                    <div className="text-base md:text-xl font-mono font-bold text-slate-900 shrink-0">{currentTime || "01:14 AM"}</div>
                                 </div>
                                 <div className="flex-1 p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 overflow-y-auto no-scrollbar pb-10">
                                     {/* New Orders Column */}
@@ -609,6 +775,65 @@ function TrinityDashboardShowcase() {
 
 // --- 5. QR & MOBILE SHOWCASE ---
 function QREcosystemShowcase() {
+    const [qrSearchQuery, setQrSearchQuery] = useState("");
+    const [phoneCart, setPhoneCart] = useState<{ [key: string]: number }>({
+        "Fresh Mojito": 1,
+        "Chicken Momo": 1
+    });
+    const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
+    const [orderSent, setOrderSent] = useState(false);
+
+    const dishPrices: { [key: string]: { price: number; icon: string; desc: string } } = {
+        "Signature Burger": { price: 650, icon: "🍔", desc: "Double patty with cheese." },
+        "Chicken Momo": { price: 350, icon: "🥟", desc: "Steam/Jhol nepali style." },
+        "Fresh Mojito": { price: 450, icon: "🍹", desc: "Fresh mint and lime." }
+    };
+
+    const handleCopyQR = () => {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText("https://rms.geckoworksnepal.com.np/menu/table-m1");
+        }
+        toast.success("Table M-1 QR Link Copied to Clipboard!", { duration: 2500, icon: <Copy className="w-4 h-4 text-emerald-500" /> });
+    };
+
+    const handleSaveQR = () => {
+        toast.success("Table M-1 QR Code Saved to Downloads!", { duration: 2500, icon: <Share className="w-4 h-4 text-emerald-500" /> });
+    };
+
+    const addPhoneItem = (name: string) => {
+        setPhoneCart((prev) => ({
+            ...prev,
+            [name]: (prev[name] || 0) + 1
+        }));
+        toast.success(`Added ${name} to cart`, { duration: 1500, icon: <ShoppingBag className="w-4 h-4 text-emerald-500" /> });
+    };
+
+    const removePhoneItem = (name: string) => {
+        setPhoneCart((prev) => {
+            const next = { ...prev };
+            if (next[name] > 1) {
+                next[name] -= 1;
+            } else {
+                delete next[name];
+            }
+            return next;
+        });
+    };
+
+    const phoneCartCount = Object.values(phoneCart).reduce((a, b) => a + b, 0);
+    const phoneTotal = Object.entries(phoneCart).reduce((sum, [name, qty]) => {
+        return sum + (dishPrices[name]?.price || 0) * qty;
+    }, 0);
+
+    const allDishes = Object.entries(dishPrices).map(([n, data]) => ({
+        n,
+        p: data.price,
+        d: data.desc,
+        i: data.icon
+    }));
+
+    const filteredDishes = allDishes.filter((d) => d.n.toLowerCase().includes(qrSearchQuery.toLowerCase()));
+
     return (
         <section className="py-20 md:py-24 bg-white overflow-hidden">
             <div className="container mx-auto px-4 md:px-6 max-w-7xl">
@@ -631,20 +856,20 @@ function QREcosystemShowcase() {
                                 <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full shadow-md flex items-center justify-center mb-4 md:mb-6 border border-slate-100 relative z-10 shrink-0">
                                     <Leaf className="w-5 h-5 md:w-6 md:h-6 text-emerald-500" />
                                 </div>
-                                <div className="p-3 md:p-4 bg-slate-900 rounded-xl md:rounded-2xl mb-3 md:mb-4 shrink-0">
+                                <div className="p-3 md:p-4 bg-slate-900 rounded-xl md:rounded-2xl mb-3 md:mb-4 shrink-0 shadow-lg cursor-pointer hover:scale-105 transition-transform" onClick={handleSaveQR}>
                                     <QrCode className="w-24 h-24 md:w-32 md:h-32 text-white" />
                                 </div>
                                 <h3 className="text-lg md:text-xl font-bold text-slate-900">Gecko RMS</h3>
                                 <div className="flex items-center gap-1.5 md:gap-2 mt-1 md:mt-2">
                                     <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-500 rounded-full animate-pulse shrink-0" />
-                                    <span className="text-[10px] md:text-xs font-bold text-emerald-600 uppercase">Active Menu</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-emerald-600 uppercase">ACTIVE MENU • TABLE M-1</span>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:gap-3 mt-6 md:mt-8">
-                                <button className="flex items-center justify-center gap-1 md:gap-2 py-2.5 md:py-3 bg-slate-50 hover:bg-slate-100 rounded-lg md:rounded-xl text-slate-600 text-[10px] md:text-xs font-bold transition-colors shrink-0">
+                                <button onClick={handleCopyQR} className="flex items-center justify-center gap-1 md:gap-2 py-2.5 md:py-3 bg-slate-50 hover:bg-slate-100 active:scale-95 rounded-lg md:rounded-xl text-slate-600 text-[10px] md:text-xs font-bold transition-all shrink-0">
                                     <Copy className="w-3 h-3 md:w-4 md:h-4" /> Copy
                                 </button>
-                                <button className="flex items-center justify-center gap-1 md:gap-2 py-2.5 md:py-3 bg-slate-900 text-white rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold shadow-lg shadow-slate-900/20 shrink-0">
+                                <button onClick={handleSaveQR} className="flex items-center justify-center gap-1 md:gap-2 py-2.5 md:py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold shadow-lg shadow-slate-900/20 transition-all shrink-0">
                                     <Share className="w-3 h-3 md:w-4 md:h-4" /> Save
                                 </button>
                             </div>
@@ -679,18 +904,25 @@ function QREcosystemShowcase() {
                                         </div>
                                         <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 shrink-0" />
                                     </div>
-                                    <div className="w-full h-8 md:h-10 bg-slate-100 rounded-lg md:rounded-xl flex items-center px-3 md:px-4 text-[10px] md:text-xs text-slate-400">Search for dishes...</div>
+                                    <div className="w-full h-8 md:h-10 bg-slate-100 rounded-lg md:rounded-xl flex items-center px-3 md:px-4 text-[10px] md:text-xs text-slate-900">
+                                        <input
+                                            type="text"
+                                            value={qrSearchQuery}
+                                            onChange={(e) => setQrSearchQuery(e.target.value)}
+                                            placeholder="Search for dishes..."
+                                            className="bg-transparent w-full focus:outline-none text-[10px] md:text-xs"
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Menu Items */}
                                 <div className="p-4 space-y-4 md:space-y-6">
                                     <div>
-                                        <h4 className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mb-2 md:mb-3 flex justify-between">Chef Specials <span className="text-slate-300">2</span></h4>
+                                        <h4 className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mb-2 md:mb-3 flex justify-between">
+                                            Menu Items <span className="text-slate-300">{filteredDishes.length}</span>
+                                        </h4>
                                         <div className="space-y-2 md:space-y-3">
-                                            {[
-                                                { n: "Signature Burger", p: 650, d: "Double patty.", i: "🍔" },
-                                                { n: "Chicken Momo", p: 350, d: "Steam/Jhol.", i: "🥟" }
-                                            ].map((item, i) => (
+                                            {filteredDishes.map((item, i) => (
                                                 <div key={i} className="bg-white p-2.5 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 flex gap-2.5 md:gap-3 shrink-0">
                                                     <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-50 rounded-lg md:rounded-xl flex items-center justify-center text-xl md:text-2xl shrink-0">{item.i}</div>
                                                     <div className="flex-1 min-w-0">
@@ -698,38 +930,133 @@ function QREcosystemShowcase() {
                                                         <p className="text-[9px] md:text-[10px] text-slate-400 mb-1.5 md:mb-2 truncate">{item.d}</p>
                                                         <div className="flex justify-between items-center">
                                                             <span className="font-bold text-[10px] md:text-xs text-slate-900 shrink-0">Rs {item.p}</span>
-                                                            <button className="w-5 h-5 md:w-6 md:h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs shrink-0">+</button>
+                                                            <button
+                                                                onClick={() => addPhoneItem(item.n)}
+                                                                className="w-5 h-5 md:w-6 md:h-6 bg-slate-900 hover:bg-emerald-600 active:scale-95 text-white rounded-full flex items-center justify-center text-xs transition-colors shrink-0"
+                                                            >
+                                                                +
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    <div>
-                                        <h4 className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mb-2 md:mb-3">Bar & Drinks</h4>
-                                        <div className="bg-white p-2.5 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 flex gap-2.5 md:gap-3 shrink-0">
-                                            <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-50 rounded-lg md:rounded-xl flex items-center justify-center text-xl md:text-2xl shrink-0">🍹</div>
-                                            <div className="flex-1 min-w-0">
-                                                <h5 className="font-bold text-slate-900 text-xs md:text-sm truncate">Mojito</h5>
-                                                <p className="text-[9px] md:text-[10px] text-slate-400 mb-1.5 md:mb-2 truncate">Fresh mint.</p>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="font-bold text-[10px] md:text-xs text-slate-900 shrink-0">Rs 450</span>
-                                                    <button className="w-5 h-5 md:w-6 md:h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs shrink-0">+</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
 
-                            {/* Bottom Bar */}
-                            <div className="absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4 bg-slate-900 text-white p-3 md:p-4 rounded-xl md:rounded-2xl shadow-2xl flex justify-between items-center z-30 cursor-pointer transform-gpu shrink-0">
+                            {/* View Order Floating Bar */}
+                            <div
+                                onClick={() => setIsCartSheetOpen(true)}
+                                className="absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4 bg-slate-900 hover:bg-slate-800 text-white p-3 md:p-4 rounded-xl md:rounded-2xl shadow-2xl flex justify-between items-center z-30 cursor-pointer transform-gpu shrink-0 transition-all active:scale-95"
+                            >
                                 <div className="flex items-center gap-2 md:gap-3">
-                                    <div className="w-6 h-6 md:w-8 md:h-8 bg-white/20 rounded-full flex items-center justify-center text-[10px] md:text-xs shrink-0">1</div>
+                                    <div className="w-6 h-6 md:w-8 md:h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">{phoneCartCount}</div>
                                     <div className="text-[10px] md:text-xs font-bold">View Order</div>
                                 </div>
-                                <span className="font-bold text-xs md:text-sm shrink-0">Rs 450</span>
+                                <span className="font-bold text-xs md:text-sm shrink-0 font-mono">Rs {phoneTotal}</span>
                             </div>
+
+                            {/* Slide-Up Order Bottom Sheet Modal */}
+                            <AnimatePresence>
+                                {isCartSheetOpen && (
+                                    <motion.div
+                                        initial={{ y: "100%" }}
+                                        animate={{ y: 0 }}
+                                        exit={{ y: "100%" }}
+                                        transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                                        className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl p-4 md:p-5 shadow-2xl z-40 border-t border-slate-200 flex flex-col max-h-[85%]"
+                                    >
+                                        {/* Sheet Handle Indicator */}
+                                        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-3 shrink-0" />
+
+                                        <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2 shrink-0">
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 text-xs md:text-sm">Table M-1 Order Summary</h4>
+                                                <p className="text-[9px] md:text-[10px] text-emerald-600 font-bold">● {phoneCartCount} Items Selected</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsCartSheetOpen(false)}
+                                                className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        {orderSent ? (
+                                            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                                                <div className="w-12 h-12 md:w-14 md:h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-3 shrink-0">
+                                                    <CheckCircle2 className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 animate-bounce" />
+                                                </div>
+                                                <h5 className="font-black text-slate-900 text-sm md:text-base mb-1">Order Sent to Kitchen!</h5>
+                                                <p className="text-[10px] text-slate-500 max-w-[200px] mb-4">Chef is preparing Table M-1 items in real-time.</p>
+                                                <button
+                                                    onClick={() => {
+                                                        setOrderSent(false);
+                                                        setIsCartSheetOpen(false);
+                                                        setPhoneCart({});
+                                                    }}
+                                                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-800 transition-colors"
+                                                >
+                                                    Close & New Order
+                                                </button>
+                                            </div>
+                                        ) : phoneCartCount === 0 ? (
+                                            <div className="py-8 text-center text-xs font-bold text-slate-400">
+                                                Your cart is empty. Add items from the menu above!
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* Items List with Quantity Controls */}
+                                                <div className="space-y-2.5 overflow-y-auto max-h-48 pr-1 mb-3">
+                                                    {Object.entries(phoneCart).map(([name, qty]) => (
+                                                        <div key={name} className="flex items-center justify-between p-2 md:p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                                                            <div className="flex items-center gap-2 overflow-hidden pr-2">
+                                                                <span className="text-base shrink-0">{dishPrices[name]?.icon}</span>
+                                                                <div className="truncate">
+                                                                    <div className="text-[11px] md:text-xs font-bold text-slate-900 truncate">{name}</div>
+                                                                    <div className="text-[9px] md:text-[10px] text-slate-500 font-mono">Rs {dishPrices[name]?.price} each</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shrink-0 shadow-sm">
+                                                                <button
+                                                                    onClick={() => removePhoneItem(name)}
+                                                                    className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                                                >
+                                                                    <Minus className="w-3 h-3" />
+                                                                </button>
+                                                                <span className="text-xs font-mono font-bold text-slate-900 w-4 text-center">{qty}</span>
+                                                                <button
+                                                                    onClick={() => addPhoneItem(name)}
+                                                                    className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                                                >
+                                                                    <Plus className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="pt-2 border-t border-slate-100 shrink-0">
+                                                    <div className="flex justify-between items-center mb-3 text-xs">
+                                                        <span className="text-slate-500 font-bold">Total Amount</span>
+                                                        <span className="font-black text-slate-900 text-sm font-mono">Rs {phoneTotal}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setOrderSent(true);
+                                                            toast.success("Order Dispatched to Kitchen!", { duration: 3000, icon: <ChefHat className="w-4 h-4 text-emerald-500" /> });
+                                                        }}
+                                                        className="w-full py-2.5 md:py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                                                    >
+                                                        <ChefHat className="w-4 h-4" /> Send Order to Kitchen
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
                         </motion.div>
                     </div>
@@ -843,20 +1170,191 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
     );
 }
 
+// --- 5.8 LAUNCH COUNTDOWN CARD ---
+function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
+    // Target Launch Date: August 17, 2026 00:00:00 NPT (Bhadra 1, 2082)
+    const targetDate = new Date("2026-08-17T00:00:00+05:45").getTime();
+    
+    const [timeLeft, setTimeLeft] = useState({
+        days: 2,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        isExpired: false
+    });
+
+    useEffect(() => {
+        const updateCountdown = () => {
+            const now = new Date().getTime();
+            const difference = targetDate - now;
+
+            if (difference <= 0) {
+                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true });
+            } else {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+                setTimeLeft({ days, hours, minutes, seconds, isExpired: false });
+            }
+        };
+
+        updateCountdown();
+        const timer = setInterval(updateCountdown, 1000);
+        return () => clearInterval(timer);
+    }, [targetDate]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={isLoaded ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ duration: 0.9, delay: 0.45, ease: EASE_PREMIUM }}
+            className="w-full max-w-3xl mx-auto mt-6 px-2 sm:px-4 transform-gpu"
+        >
+            <div className="relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8 md:p-10 bg-white/90 backdrop-blur-2xl text-slate-900 shadow-[0_25px_70px_-15px_rgba(16,185,129,0.15)] border border-emerald-100/90 ring-1 ring-emerald-500/20 group">
+                {/* Glowing subtle ambient lights */}
+                <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[90px] pointer-events-none transform-gpu animate-pulse" />
+                <div className="absolute -bottom-20 -left-20 w-70 h-70 bg-teal-400/10 rounded-full blur-[80px] pointer-events-none transform-gpu" />
+
+                <div className="relative z-10 flex flex-col items-center text-center">
+                    
+                    {/* Brand Logo Header */}
+                    <div className="flex items-center gap-3 mb-6 bg-slate-50/80 px-5 py-2 rounded-2xl border border-slate-200/60 shadow-sm">
+                        <img src="/rms.png" alt="Gecko RMS" className="h-7 sm:h-9 w-auto object-contain shrink-0" />
+                        <div className="h-4 w-px bg-slate-300 shrink-0" />
+                        <span className="text-[10px] sm:text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                            Grand Launch Reveal
+                        </span>
+                    </div>
+
+                    {/* Official Banner Headline */}
+                    <div className="flex items-baseline justify-center gap-2 sm:gap-3 mb-2 flex-wrap">
+                        <span className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 tracking-tighter">
+                            {timeLeft.days}
+                        </span>
+                        <span className="text-2xl sm:text-4xl md:text-5xl font-black text-emerald-600 tracking-tight italic uppercase">
+                            DAYS TO GO
+                        </span>
+                    </div>
+
+                    <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest mb-5">
+                        until the big reveal
+                    </p>
+
+                    {/* Poster Quote Banner Box */}
+                    <div className="w-full max-w-lg bg-emerald-50/60 border-2 border-emerald-500/30 rounded-2xl px-6 py-3 mb-8 shadow-sm">
+                        <h4 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight italic">
+                            “Smarter Dining Starts Soon”
+                        </h4>
+                    </div>
+
+                    {/* Light-Theme Futuristic Ticking Countdown Grid */}
+                    <div className="grid grid-cols-4 gap-2.5 sm:gap-4 w-full max-w-md mb-8">
+                        {[
+                            { label: "DAYS", value: timeLeft.days },
+                            { label: "HOURS", value: timeLeft.hours },
+                            { label: "MINS", value: timeLeft.minutes },
+                            { label: "SECS", value: timeLeft.seconds },
+                        ].map((item, idx) => (
+                            <div
+                                key={idx}
+                                className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center shadow-lg shadow-slate-200/50 group-hover:border-emerald-500/40 transition-all duration-300 transform-gpu hover:scale-105"
+                            >
+                                <span className="text-2xl sm:text-3xl md:text-4xl font-black font-mono text-emerald-600 tracking-tight">
+                                    {String(item.value).padStart(2, "0")}
+                                </span>
+                                <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider mt-1">
+                                    {item.label}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Poster Footer Info Badges */}
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
+                        <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                            🇳🇵 Bhadra 1, 2082 (August 17, 2026)
+                        </span>
+                        <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
+                            www.rms.geckoworksnepal.com.np
+                        </span>
+                        <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
+                            📞 +977 9761424028
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+    );
+}
+
+// --- 5.9 ROTATING LAUNCH HERO BADGE ---
+function RotatingLaunchBadge({ isLoaded }: { isLoaded: boolean }) {
+    const [badgeIndex, setBadgeIndex] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setBadgeIndex((prev) => (prev + 1) % 2);
+        }, 3500);
+        return () => clearInterval(interval);
+    }, []);
+
+    const badges = [
+        {
+            text: "POWERFUL. FAST. SEAMLESS.",
+            textColor: "text-slate-500 font-bold",
+            iconColor: "text-emerald-500",
+            borderColor: "border-slate-200"
+        },
+        {
+            text: "🚀 LAUNCHING BHADRA 1, 2082 • AUGUST 17, 2026",
+            textColor: "text-emerald-800 font-black",
+            iconColor: "text-emerald-500 animate-pulse",
+            borderColor: "border-emerald-300 shadow-emerald-500/10"
+        }
+    ];
+
+    const current = badges[badgeIndex];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 30 }}
+            animate={isLoaded ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 30 }}
+            transition={{ type: "spring", stiffness: 60, damping: 20, delay: 0.1 }}
+            onClick={() => setBadgeIndex((prev) => (prev + 1) % 2)}
+            className={cn(
+                "mb-6 md:mb-8 inline-flex items-center justify-center px-4 md:px-5 py-1.5 md:py-2 rounded-full bg-white/95 border shadow-sm hover:shadow-md transition-all duration-500 cursor-pointer transform-gpu shrink-0 overflow-hidden min-h-[38px]",
+                current.borderColor
+            )}
+        >
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={badgeIndex}
+                    initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+                    transition={{ duration: 0.35, ease: EASE_PREMIUM }}
+                    className="flex items-center gap-2 whitespace-nowrap"
+                >
+                    <CloudLightning className={cn("w-3.5 h-3.5 shrink-0", current.iconColor)} />
+                    <span className={cn("text-[10px] md:text-xs tracking-wider uppercase shrink-0", current.textColor)}>
+                        {current.text}
+                    </span>
+                </motion.div>
+            </AnimatePresence>
+        </motion.div>
+    );
+}
+
 // --- 6. HERO COMPONENT ---
 function Hero({ isLoaded }: { isLoaded: boolean }) {
     return (
         <section className="pt-28 sm:pt-32 md:pt-36 pb-12 md:pb-16 container mx-auto px-4 md:px-6 relative z-10 flex flex-col justify-center min-h-[80vh]">
             <div className="flex flex-col items-center text-center max-w-5xl mx-auto mt-0">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8, y: 30 }}
-                    animate={isLoaded ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 30 }}
-                    transition={{ type: "spring", stiffness: 60, damping: 20, delay: 0.1 }}
-                    className="mb-6 md:mb-8 inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-default transform-gpu shrink-0"
-                >
-                    <CloudLightning className="w-3 h-3 text-emerald-500 shrink-0" />
-                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">Powerful. Fast. Seamless.</span>
-                </motion.div>
+                
+                {/* ROTATING BADGE: POWERFUL. FAST. SEAMLESS. <-> LAUNCH DATE */}
+                <RotatingLaunchBadge isLoaded={isLoaded} />
 
                 <motion.h1 
                     initial={{ opacity: 0, y: 40, filter: "blur(4px)" }}
@@ -897,22 +1395,17 @@ function Hero({ isLoaded }: { isLoaded: boolean }) {
                     initial={{ opacity: 0, y: 30 }}
                     animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                     transition={{ duration: 0.9, delay: 0.35, ease: EASE_PREMIUM }}
-                    className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-16 md:mb-24 w-full sm:w-auto justify-center px-4"
+                    className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-10 md:mb-14 w-full sm:w-auto justify-center px-4"
                 >
                     <Link href="/signup" className="w-full sm:w-auto shrink-0">
                         <MagneticButton className="h-14 md:h-16 px-8 md:px-12 text-base md:text-lg w-full bg-slate-900 text-white rounded-full">
                             Start Free Trial <ArrowRight className="w-4 h-4 md:w-5 md:h-5 ml-1 md:ml-2 group-hover:translate-x-1 transition-transform shrink-0" />
                         </MagneticButton>
                     </Link>
-                    <div className="flex items-center gap-4">
-                        <Link
-                            href="/login"
-                            className="text-sm md:text-base font-semibold text-slate-600 hover:text-emerald-500 transition-colors"
-                        >
-
-                        </Link>
-                    </div>
                 </motion.div>
+
+                {/* FUTURISTIC LAUNCH COUNTDOWN CARD */}
+                <LaunchCountdownCard isLoaded={isLoaded} />
             </div>
         </section>
     )
