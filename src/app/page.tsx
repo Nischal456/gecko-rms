@@ -747,12 +747,15 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
         // Prevent scrolling while loading
         document.body.style.overflow = "hidden";
         
-        const t1 = setTimeout(() => setStep(1), 1600); // Show "Gecko RMS"
-        const t2 = setTimeout(() => setStep(2), 3200); // Trigger exit animation
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const speed = isMobile ? 0.3 : 0.6; // Snappy load on mobile
+
+        const t1 = setTimeout(() => setStep(1), Math.round(700 * speed)); 
+        const t2 = setTimeout(() => setStep(2), Math.round(1500 * speed)); 
         const t3 = setTimeout(() => {
             document.body.style.overflow = ""; // Restore scrolling
             onComplete();
-        }, 4400); // Unmount
+        }, Math.round(2100 * speed)); 
 
         return () => {
             clearTimeout(t1);
@@ -768,7 +771,7 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
                 <motion.div
                     initial={{ y: "0%" }}
                     exit={{ y: "-100%" }}
-                    transition={{ duration: 1.2, ease: EASE_PREMIUM }}
+                    transition={{ duration: 0.8, ease: EASE_PREMIUM }}
                     className="fixed inset-0 z-[99999] bg-white flex flex-col items-center justify-center transform-gpu origin-top shadow-2xl pointer-events-auto"
                 >
                     <AnimatePresence mode="wait">
@@ -846,8 +849,8 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
 // --- 6. HERO COMPONENT ---
 function Hero({ isLoaded }: { isLoaded: boolean }) {
     return (
-        <section className="pt-24 md:pt-28 pb-16 md:pb-20 container mx-auto px-4 md:px-6 relative z-10 min-h-[90vh] flex flex-col justify-center">
-            <div className="flex flex-col items-center text-center max-w-5xl mx-auto mt-[-4rem]">
+        <section className="pt-28 sm:pt-32 md:pt-36 pb-12 md:pb-16 container mx-auto px-4 md:px-6 relative z-10 flex flex-col justify-center min-h-[80vh]">
+            <div className="flex flex-col items-center text-center max-w-5xl mx-auto mt-0">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8, y: 30 }}
                     animate={isLoaded ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 30 }}

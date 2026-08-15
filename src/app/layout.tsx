@@ -95,14 +95,14 @@ export default function RootLayout({
       <body className={`
         ${jakarta.variable} font-sans antialiased bg-[#F8FAFC] text-slate-900 
         selection:bg-emerald-500 selection:text-white h-full overflow-x-hidden 
-        overscroll-none touch-pan-y relative
+        touch-pan-y relative custom-scrollbar
       `}>
         
         {/* --- GLOBAL AMBIENT ANIMATION (0 Lag, GPU Accelerated) --- */}
         {/* This runs silently in the background of your entire website giving it a premium "breathing" feel */}
         <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden flex items-center justify-center transform-gpu">
-          <div className="absolute w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] bg-emerald-500/5 rounded-full blur-[100px] md:blur-[140px] animate-[spin_25s_linear_infinite]" />
-          <div className="absolute w-[60vw] h-[60vw] max-w-[600px] max-h-[600px] bg-teal-400/5 rounded-full blur-[80px] md:blur-[120px] animate-[spin_20s_reverse_linear_infinite]" />
+          <div className="absolute w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] bg-emerald-500/5 rounded-full blur-[40px] md:blur-[140px] transform-gpu hidden sm:block md:animate-[spin_25s_linear_infinite]" />
+          <div className="absolute w-[60vw] h-[60vw] max-w-[600px] max-h-[600px] bg-teal-400/5 rounded-full blur-[30px] md:blur-[120px] transform-gpu hidden sm:block md:animate-[spin_20s_reverse_linear_infinite]" />
         </div>
 
         {children}

@@ -25,24 +25,49 @@
     --ring: 145 100% 39%; /* Gecko Ring */
     --radius: 1rem; /* Rounded-2xl look */
   }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 }
 
 @layer utilities {
-  /* The Premium Glass Effect */
+  /* The Premium Glass Effect (Optimized for Mobile GPU) */
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-glass;
+    @apply bg-white/80 border border-white/30 shadow-sm;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
   
-  /* Hide scrollbar but keep functionality */
+  /* Hide scrollbar but keep native momentum scrolling */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
-}
 
-body {
-  @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  /* GPU Hardware Acceleration for 120Hz/60Hz mobile smoothness */
+  .gpu-smooth {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    will-change: transform, opacity;
+  }
+
+  /* Native Mobile Touch & Scroll Feel */
+  .custom-scrollbar {
+    -webkit-overflow-scrolling: touch;
+  }
 }
