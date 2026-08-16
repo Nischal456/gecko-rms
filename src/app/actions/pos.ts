@@ -252,7 +252,16 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
             status: "pending",
             time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
             // Pass these through securely so the Server Actions (Kitchen/Bar) know where to route them!
-            station: dbItem.station || i.station || i.prep_station || "kitchen",
+            station: dbItem.station || i.station || i.prep_station || (
+                (() => {
+                    const itemName = String(i.name).toLowerCase();
+                    const catName = String(dbItem.category_name || dbItem.category || i.category || "").toLowerCase();
+                    if (catName.includes('beverage') || catName.includes('drink') || catName.includes('bar') || catName.includes('mocktail') || catName.includes('cocktail') || itemName.includes('tea') || itemName.includes('coffee') || itemName.includes('smoothie') || itemName.includes('shake') || itemName.includes('juice') || itemName.includes('lassi') || itemName.includes('mojito')) {
+                        return 'bar';
+                    }
+                    return 'kitchen';
+                })()
+            ),
             category: dbItem.category_name || dbItem.category || i.category || "",
             dietary: dbItem.dietary || i.dietary || ""
         };
@@ -420,7 +429,16 @@ export async function modifyOrder(orderId: string, updatedItems: any[], newTotal
                             unique_id: item.unique_id || item.cartId || `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
                             status: item.status || 'pending',
                             time_added: item.time_added || new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
-                            station: dbItem.station || item.station || item.prep_station || "kitchen",
+                            station: dbItem.station || item.station || item.prep_station || (
+                                (() => {
+                                    const itemName = String(item.name).toLowerCase();
+                                    const catName = String(dbItem.category_name || dbItem.category || item.category || "").toLowerCase();
+                                    if (catName.includes('beverage') || catName.includes('drink') || catName.includes('bar') || catName.includes('mocktail') || catName.includes('cocktail') || itemName.includes('tea') || itemName.includes('coffee') || itemName.includes('smoothie') || itemName.includes('shake') || itemName.includes('juice') || itemName.includes('lassi') || itemName.includes('mojito')) {
+                                        return 'bar';
+                                    }
+                                    return 'kitchen';
+                                })()
+                            ),
                             category: dbItem.category_name || dbItem.category || item.category || "",
                             dietary: dbItem.dietary || item.dietary || ""
                         };

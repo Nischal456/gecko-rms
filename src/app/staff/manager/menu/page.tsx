@@ -147,6 +147,11 @@ export default function ManagerMenuPage() {
     const [formAvailable, setFormAvailable] = useState(true);
   const [variants, setVariants] = useState<Variant[]>([]);
 
+  // DELETE MODAL STATE
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -168,15 +173,24 @@ export default function ManagerMenuPage() {
       toast.success(item.is_available ? "Disabled" : "Enabled");
   }
 
-  async function handleDelete(itemId: string) {
-      if(!confirm("Remove this dish from the menu?")) return;
-      const res = await deleteMenuItem(activeTabId, itemId);
+  function handleDeleteClick(itemId: string) {
+      setItemToDelete(itemId);
+      setIsDeleteModalOpen(true);
+  }
+
+  async function confirmDelete() {
+      if(!itemToDelete) return;
+      setIsDeleting(true);
+      const res = await deleteMenuItem(activeTabId, itemToDelete);
       if (res.success) {
           await loadData();
           toast.success("Dish Removed");
+          setIsDeleteModalOpen(false);
+          setItemToDelete(null);
       } else {
           toast.error("Failed to remove dish: " + (res.error || "Unknown error"));
       }
+      setIsDeleting(false);
   }
 
   async function handleSaveItem(e: React.FormEvent) {
@@ -365,7 +379,7 @@ export default function ManagerMenuPage() {
                                         
                                         <div className="flex gap-1.5 md:gap-2 border-t border-slate-50 pt-2 mt-2">
                                             <button onClick={() => openEdit(item)} className="flex-1 h-7 md:h-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-900 hover:text-white font-bold text-[9px] md:text-[10px] uppercase transition-colors">Edit</button>
-                                            <button onClick={() => handleDelete(item.id)} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => handleDeleteClick(item.id)} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                                         </div>
                                     </motion.div>
                                 );
@@ -474,6 +488,46 @@ export default function ManagerMenuPage() {
                                 </button>
                             </div>
                         </form>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+
+        {/* --- DELETE CONFIRMATION MODAL --- */}
+        <AnimatePresence>
+            {isDeleteModalOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setIsDeleteModalOpen(false)} />
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+                        animate={{ opacity: 1, scale: 1, y: 0 }} 
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }} 
+                        className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 p-6 flex flex-col items-center text-center overflow-hidden"
+                    >
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
+                            <Trash2 className="w-8 h-8 text-red-500" />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 mb-2">Remove Dish?</h2>
+                        <p className="text-sm font-medium text-slate-500 mb-8 px-4">
+                            Are you sure you want to delete this dish from the menu? This action cannot be undone.
+                        </p>
+                        
+                        <div className="flex gap-3 w-full">
+                            <button 
+                                onClick={() => setIsDeleteModalOpen(false)} 
+                                disabled={isDeleting}
+                                className="flex-1 h-12 rounded-xl border-2 border-slate-200 font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmDelete} 
+                                disabled={isDeleting}
+                                className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-lg shadow-red-500/30 transition-all flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Delete"}
+                            </button>
+                        </div>
                     </motion.div>
                 </div>
             )}

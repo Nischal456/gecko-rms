@@ -298,10 +298,10 @@ export default function KitchenMenuPage() {
                   <button 
                       onClick={async () => {
                           toast.dismiss(t);
-                          toast.loading("Deleting category...");
+                          const loadingId = toast.loading("Deleting category...");
                           await deleteKitchenCategory(catId);
                           loadData();
-                          toast.success("Category Deleted");
+                          toast.success("Category Deleted", { id: loadingId });
                       }} 
                       className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
                   >
@@ -372,13 +372,13 @@ export default function KitchenMenuPage() {
                   <button 
                       onClick={async () => {
                           toast.dismiss(t);
-                          toast.loading("Deleting dish...");
+                          const loadingId = toast.loading("Deleting dish...");
                           const res = await deleteKitchenItem(activeTabId, itemId); 
                           if (res.success) {
                               await loadData();
-                              toast.success("Dish deleted successfully");
+                              toast.success("Dish deleted successfully", { id: loadingId });
                           } else {
-                              toast.error("Failed to delete dish: " + (res.error || "Unknown error"));
+                              toast.error("Failed to delete dish: " + (res.error || "Unknown error"), { id: loadingId });
                           }
                       }} 
                       className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/25 active:scale-95"
