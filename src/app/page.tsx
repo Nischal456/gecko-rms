@@ -7,12 +7,14 @@ import {
 import Link from "next/link";
 import {
     Menu, X, Server, LayoutGrid, Activity, QrCode, Globe,
-    RefreshCw, Users, DollarSign, Bell, TrendingUp, ArrowRight, Zap, ChevronRight, Leaf, Clock, MapPin, Wifi, Laptop, Smartphone, ChefHat, Search, ShoppingBag, CheckCircle2, AlertCircle, LogOut, Grid, List, Moon, Sun, Utensils, Plus, Minus, Trash2, Copy, Share, ExternalLink, CloudLightning, MessageSquare
+    RefreshCw, Users, Bell, TrendingUp, ArrowRight, Zap, ChevronRight, Leaf, Clock, MapPin, Wifi, Laptop, Smartphone, ChefHat, Search, ShoppingBag, CheckCircle2, AlertCircle, LogOut, Grid, List, Moon, Sun, Utensils, Plus, Minus, Trash2, Copy, Share, ExternalLink, CloudLightning, MessageSquare
     , Banknote
 } from "lucide-react";
 import AIChatWidget from "@/components/landing/AIChatWidget";
 import NepaliDate from "nepali-date-converter";
 import { toast } from "sonner";
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
+
 
 // --- 1. CONFIG & UTILS ---
 function cn(...classes: (string | undefined | null | false)[]) {

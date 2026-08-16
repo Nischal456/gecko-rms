@@ -153,13 +153,14 @@ export default function BartenderMenuPage() {
   
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [formName, setFormName] = useState("");
+  const [formPrice, setFormPrice] = useState<number>(0);
   const [formSubCat, setFormSubCat] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formImage, setFormImage] = useState("");
   const [formDietary, setFormDietary] = useState("drinks");
   const [formStation, setFormStation] = useState("bar");
   const [formAvailable, setFormAvailable] = useState(true);
-  const [variants, setVariants] = useState<Variant[]>([{ name: "", price: 0 }]);
+  const [variants, setVariants] = useState<Variant[]>([]);
 
   const catInputRef = useRef<HTMLInputElement>(null);
 
@@ -282,7 +283,16 @@ export default function BartenderMenuPage() {
     setIsSubmitting(true);
     
     const validVariants = variants.filter(v => v.name.trim() !== "");
-    const basePrice = validVariants.length > 0 ? Math.min(...validVariants.map(v => v.price)) : 0;
+    const basePrice = validVariants.length > 0 ? Math.min(...validVariants.map(v => v.price)) : (Number(formPrice) || 0);
+
+    if (validVariants.length === 0 && basePrice <= 0) {
+        setIsSubmitting(false);
+        return toast.error("Please enter a valid price for the drink.");
+    }
+    if (validVariants.length > 0 && validVariants.some(v => (Number(v.price) || 0) <= 0)) {
+        setIsSubmitting(false);
+        return toast.error("Please enter a valid price for all variants.");
+    }
 
     const payload = {
         id: editingItem?.id,
@@ -338,13 +348,14 @@ export default function BartenderMenuPage() {
   const openEdit = (item: MenuItem) => {
       setEditingItem(item);
       setFormName(item.name);
+      setFormPrice(item.price || 0);
       setFormSubCat(item.sub_category || "");
       setFormDesc(item.description);
       setFormImage(item.image_url);
       setFormDietary(item.dietary || "drinks");
       setFormStation(item.station || "bar");
       setFormAvailable(item.is_available);
-      setVariants(item.variants && item.variants.length > 0 ? item.variants : [{ name: "", price: 0 }]);
+      setVariants(item.variants && item.variants.length > 0 ? item.variants : []);
       setIsItemModalOpen(true);
   };
 
@@ -426,7 +437,7 @@ export default function BartenderMenuPage() {
                     <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search drinks..." className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 shadow-[0_2px_10px_rgb(0,0,0,0.02)] rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all outline-none" />
                 </div>
                 
-                <button onClick={() => { setEditingItem(null); setFormName(""); setFormDesc(""); setFormImage(""); setFormDietary("drinks"); setFormStation("bar"); setFormAvailable(true); setVariants([{name:"", price:0}]); setIsItemModalOpen(true); }} disabled={!activeTabId} className="w-full md:w-auto h-11 px-5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap">
+                <button onClick={() => { setEditingItem(null); setFormName(""); setFormPrice(0); setFormDesc(""); setFormImage(""); setFormDietary("drinks"); setFormStation("bar"); setFormAvailable(true); setVariants([]); setIsItemModalOpen(true); }} disabled={!activeTabId} className="w-full md:w-auto h-11 px-5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap">
                     <Plus className="w-4 h-4" /> <span className="hidden md:inline">New Drink</span>
                 </button>
             </div>
@@ -506,7 +517,24 @@ export default function BartenderMenuPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">Name</label>
-                                    <input value={formName} onChange={e => setFormName(e.target.value)} required placeholder="e.g. Classic Mojito" className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all" />
+                                    <input value={formName} onChange={e => setFormName(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))} required placeholder="e.g. Classic Mojito" className="w-full h-12 px-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all" />
+                                </div>
+                                
+                                <div className={`col-span-2 ${variants.length > 0 ? "opacity-50 pointer-events-none" : ""}`}>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-1.5 block">
+                                        {variants.length > 0 ? "Price (Derived)" : "Base Price (Rs)"}
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">Rs</span>
+                                        <input 
+                                            type="number" 
+                                            value={formPrice || ""} 
+                                            onChange={e => setFormPrice(Math.max(0, Number(e.target.value)))} 
+                                            disabled={variants.length > 0}
+                                            placeholder="0" 
+                                            className="w-full h-12 pl-10 pr-4 bg-white border border-slate-200 shadow-sm rounded-xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400 transition-all" 
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             
@@ -534,10 +562,10 @@ export default function BartenderMenuPage() {
                                 <div className="space-y-3">
                                     {variants.map((v, i) => (
                                         <div key={i} className="flex gap-2">
-                                            <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value)} placeholder="Type (e.g. Pitcher, Glass)" className="flex-1 h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold outline-none focus:border-indigo-400" />
+                                            <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))} placeholder="Type (e.g. Pitcher, Glass)" className="flex-1 h-11 px-4 rounded-xl border border-slate-200 text-sm font-bold outline-none focus:border-indigo-400" />
                                             <div className="relative w-28">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rs</span>
-                                                <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", e.target.value)} placeholder="0" className="w-full h-11 pl-8 pr-3 rounded-xl border border-slate-200 text-sm font-black text-slate-900 outline-none focus:border-indigo-400" />
+                                                <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", Math.max(0, Number(e.target.value)))} placeholder="0" className="w-full h-11 pl-8 pr-3 rounded-xl border border-slate-200 text-sm font-black text-slate-900 outline-none focus:border-indigo-400" />
                                             </div>
                                             {variants.length > 1 && <button type="button" onClick={() => removeVariant(i)} className="w-11 h-11 flex items-center justify-center text-red-400 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-colors"><X className="w-4 h-4" /></button>}
                                         </div>
@@ -582,7 +610,7 @@ function ItemCard({ item, onEdit, onDelete, onToggle }: { item: MenuItem; onEdit
     else if(item.name.toLowerCase().includes('wine')) { BadgeIcon = Wine; badgeColor = 'bg-purple-100 text-purple-700'; }
 
     const prices: number[] = item.variants?.map((v: Variant) => v.price) || [];
-    const priceDisplay = prices.length > 1 ? `Rs ${Math.min(...prices)} - ${Math.max(...prices)}` : `Rs ${item.price}`;
+    const priceDisplay = prices.length > 0 ? (Math.min(...prices) === Math.max(...prices) ? `Rs ${Math.min(...prices)}` : `Rs ${Math.min(...prices)} - ${Math.max(...prices)}`) : `Rs ${item.price}`;
 
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} 

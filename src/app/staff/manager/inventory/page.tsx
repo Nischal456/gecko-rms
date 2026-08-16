@@ -5,12 +5,12 @@ import Sidebar from "@/app/staff/manager/Sidebar"; // ROUTED TO MANAGER SIDEBAR
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Minus, Search, Package, Trash2, X, Loader2, 
-  Wine, Cigarette, Droplets, Box, Lock, Sparkles,
+  Wine, Cigarette, Droplets, Box, Lock, Sparkles, ShieldCheck,
   ChevronDown, Receipt, CreditCard, Layers, Link2, Clock, 
   ArrowDownRight, ArrowUpRight, TrendingUp, TrendingDown, AlertTriangle, Edit3
 } from "lucide-react";
 import { toast } from "sonner";
-import { getInventory, addInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
+import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
 import { getDashboardData } from "@/app/actions/dashboard";
 
 export default function ManagerInventoryPage() {
@@ -25,6 +25,7 @@ export default function ManagerInventoryPage() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'expenses'>('inventory');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
   
   // Premium Delete Modal State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string, type: 'inventory' | 'expense', title: string } | null>(null);
@@ -124,6 +125,14 @@ export default function ManagerInventoryPage() {
       loadData(true); 
   }
 
+  const openEditModal = (item: any) => {
+      setEditingItem(item);
+      setSelectedCategory(item.category || 'packaged');
+      setIsAdvancedUnit(item.volume_per_unit > 1);
+      setSelectedMenuLink(item.linked_menu_item || '');
+      setIsModalOpen(true);
+  };
+
   async function handleSaveItem(e: React.FormEvent) {
       e.preventDefault();
       setIsSubmitting(true);
@@ -142,13 +151,14 @@ export default function ManagerInventoryPage() {
           linked_menu_item: selectedMenuLink || ""
       };
 
-      const res = await addInventoryItem(data);
+      const res = editingItem ? await updateInventoryItem(editingItem.id, data) : await addInventoryItem(data);
       if(res.success) {
           setIsModalOpen(false);
+          setEditingItem(null);
           setSelectedMenuLink(""); 
           await loadData(false);
-          toast.success("Inventory Item Added!", { description: `${data.name} is now tracked.` });
-      } else toast.error(res.error || "Failed to add inventory item.");
+          toast.success(`Inventory Item ${editingItem ? 'Updated' : 'Added'}!`, { description: `${data.name} is now tracked.` });
+      } else toast.error(res.error || `Failed to ${editingItem ? 'update' : 'add'} inventory item.`);
       setIsSubmitting(false);
   }
 
@@ -263,7 +273,7 @@ export default function ManagerInventoryPage() {
             <header className="flex flex-col gap-6 mb-8">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">Vault & Ledger</h1>
-                    <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Premium Control Center</p>
+                    <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-500" /> Premium Control Center</p>
                 </div>
                 
                 <div className="flex flex-col lg:flex-row gap-3 w-full mt-2">
@@ -328,7 +338,10 @@ export default function ManagerInventoryPage() {
                                         </div>
                                     </td>
                                     <td className="p-6 text-right">
-                                        <button onClick={() => triggerDelete(item.id, 'inventory', item.name)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => openEditModal(item)} className="p-3 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all"><Edit3 className="w-5 h-5" /></button>
+                                            <button onClick={() => triggerDelete(item.id, 'inventory', item.name)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                        </div>
                                     </td>
                                 </tr>
                             )) : filteredExpenses.map((exp) => {
@@ -339,6 +352,17 @@ export default function ManagerInventoryPage() {
                                 const cleanTitle = exp.category.replace(/\[INC\]|\[EXP\]/gi, '').replace(/_/g, ' ').trim();
 
                                 const d = new Date(exp.created_at || exp.date);
+                                
+                                let displayNote = exp.description || '--';
+                                try {
+                                    const parsed = JSON.parse(exp.description);
+                                    if (parsed && typeof parsed === 'object') {
+                                        displayNote = parsed.note || parsed.description || '--';
+                                    }
+                                } catch(e) {
+                                    // Not JSON, use as-is
+                                }
+
                                 return (
                                     <tr key={exp.id} className="hover:bg-slate-50/30 transition-colors group">
                                         <td className="p-6">
@@ -351,7 +375,7 @@ export default function ManagerInventoryPage() {
                                                 {cleanTitle}
                                             </div>
                                         </td>
-                                        <td className="p-6 font-medium text-slate-600 max-w-[200px] truncate">{exp.description || '--'}</td>
+                                        <td className="p-6 font-medium text-slate-600 max-w-[200px] truncate">{displayNote}</td>
                                         <td className="p-6 font-black text-lg whitespace-nowrap">
                                             <span className={isInc ? 'text-emerald-600' : 'text-slate-900'}>{isInc ? '+' : '-'} Rs {Math.abs(exp.amount)}</span>
                                         </td>
@@ -479,15 +503,15 @@ export default function ManagerInventoryPage() {
         <AnimatePresence>
             {isModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { setIsModalOpen(false); setEditingItem(null); }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
                     <motion.div initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }} className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-[2.5rem] shadow-2xl p-6 md:p-8 border border-slate-100 custom-scrollbar z-10">
                         <div className="flex justify-between items-center mb-8">
-                            <h2 className="text-2xl font-black">Register New Stock</h2>
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
+                            <h2 className="text-2xl font-black">{editingItem ? "Edit Item" : "Register New Stock"}</h2>
+                            <button type="button" onClick={() => { setIsModalOpen(false); setEditingItem(null); }} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
                         </div>
-                        <form onSubmit={handleSaveItem} className="space-y-6">
+                        <form key={editingItem?.id || 'new'} onSubmit={handleSaveItem} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Item Name</label><input name="name" required placeholder="e.g. Jack Daniels" className="w-full h-14 px-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-slate-900 transition-all" /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Item Name</label><input name="name" defaultValue={editingItem?.name || ""} required placeholder="e.g. Jack Daniels" className="w-full h-14 px-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-slate-900 transition-all" /></div>
                                 <div className="relative" ref={catDropdownRef}>
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Category</label>
                                     <div onClick={() => setIsCatOpen(!isCatOpen)} className="w-full h-14 px-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold flex items-center justify-between cursor-pointer focus-within:bg-white focus-within:border-slate-900 transition-all">
@@ -520,24 +544,24 @@ export default function ManagerInventoryPage() {
                             
                             <AnimatePresence>{isAdvancedUnit ? (
                                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="grid grid-cols-1 sm:grid-cols-3 gap-4 overflow-hidden pt-2">
-                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Buying Unit</label><input name="unit" defaultValue="Bottle" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Sub Unit</label><input name="base_unit" defaultValue="ml" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Sub Count</label><input name="volume_per_unit" type="number" defaultValue="750" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Buying Unit</label><input name="unit" defaultValue={editingItem?.unit || "Bottle"} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Sub Unit</label><input name="base_unit" defaultValue={editingItem?.base_unit || "ml"} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Sub Count</label><input name="volume_per_unit" type="number" defaultValue={editingItem?.volume_per_unit || "750"} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
                                 </motion.div>
                             ) : (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden"><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Stock Unit</label><input name="unit" defaultValue="pcs" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></motion.div>
+                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden"><label className="text-[10px] font-black text-slate-400 ml-1 mb-1 block uppercase">Stock Unit</label><input name="unit" defaultValue={editingItem?.unit || "pcs"} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></motion.div>
                             )}</AnimatePresence>
 
                             <div className="grid grid-cols-3 gap-4">
-                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Initial Qty</label><input name="stock" type="number" required placeholder="0" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
-                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Cost Price</label><input name="cost_price" type="number" required placeholder="0" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
-                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Sale Price</label><input name="price" type="number" required placeholder="0" className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Initial Qty</label><input name="stock" type="number" required placeholder="0" defaultValue={editingItem ? Math.floor(editingItem.stock / (editingItem.volume_per_unit || 1)) : ""} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Cost Price</label><input name="cost_price" type="number" required placeholder="0" defaultValue={editingItem?.cost_price || ""} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
+                                <div><label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Sale Price</label><input name="price" type="number" required placeholder="0" defaultValue={editingItem?.price || ""} className="w-full h-14 px-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 focus:bg-white" /></div>
                             </div>
 
                             <div className="pt-4 flex flex-col-reverse sm:flex-row gap-3">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="w-full sm:w-1/3 h-14 rounded-2xl border border-slate-200 font-bold text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
+                                <button type="button" onClick={() => { setIsModalOpen(false); setEditingItem(null); }} className="w-full sm:w-1/3 h-14 rounded-2xl border border-slate-200 font-bold text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
                                 <button type="submit" disabled={isSubmitting} className="w-full sm:flex-1 h-14 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2">
-                                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : "Save to Vault"}
+                                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : (editingItem ? "Update Item" : "Save to Vault")}
                                 </button>
                             </div>
                         </form>

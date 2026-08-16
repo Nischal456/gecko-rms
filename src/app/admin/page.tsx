@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/app/admin/Sidebar";
 import { 
-  TrendingUp, Users, ShoppingBag, DollarSign, Clock, 
+  TrendingUp, Users, ShoppingBag, Clock, 
   ArrowUpRight, ArrowDownRight, Calendar, CreditCard, Sun, 
   Zap, Crown, Box, ShieldCheck, Activity, IndianRupee, Star, 
   Bell, Info, AlertTriangle, CheckCircle, Check, X, CheckCheck, 
@@ -14,6 +14,8 @@ import { getDashboardData, markNotificationRead } from "@/app/actions/dashboard"
 import { useRouter } from "next/navigation";
 import NepaliDate from 'nepali-date-converter'; 
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
+
 
 // --- 0. NEPALI UTILS ---
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];

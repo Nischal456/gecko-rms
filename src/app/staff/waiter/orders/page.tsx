@@ -5,12 +5,14 @@ import Sidebar from "@/app/staff/waiter/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Clock, CheckCircle2, ChefHat, Search, RefreshCcw,
-    Coffee, DollarSign, Receipt, ShoppingBag, Utensils,
+    Coffee, Receipt, ShoppingBag, Utensils,
     AlertCircle, Loader2, Lock, Edit3, ChevronDown, Check, Sparkles, Layers, StickyNote, Trash2, XCircle, ArrowUpRight
 } from "lucide-react";
 import { markOrderServed, cancelOrder, getWaiterDashboardData } from "@/app/actions/waiter"; // FIX: Imported the correct action!
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
 
 // --- SOUND CONSTANTS ---
 const SOUND_NOTIFICATION = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
@@ -84,8 +86,8 @@ function RoundStatusBadge({ status }: { status: string }) {
         ready: Utensils,
         payment_pending: CheckCircle2,
         served: CheckCircle2,
-        paid: DollarSign,
-        completed: DollarSign,
+        paid: RsIcon,
+        completed: RsIcon,
         cancelled: AlertCircle
     };
 

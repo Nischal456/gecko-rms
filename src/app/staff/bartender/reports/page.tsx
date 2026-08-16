@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { 
-  FileText, Calendar, DollarSign, CheckCircle2, Bell, Clock, 
+  FileText, Calendar, CheckCircle2, Bell, Clock, 
   ChevronDown, ChevronUp, Check, AlertTriangle, Wine, GlassWater, History, Wallet2,
   LayoutGrid, Package, LogOut, FileBarChart, Plus, Send, X, Loader2, XCircle
 } from "lucide-react";
@@ -43,6 +43,11 @@ function LeaveModal({ isOpen, onClose }: any) {
 
     const handleSubmit = async () => {
         if(!formData.from || !formData.to || !formData.reason) return toast.error("Please fill all fields");
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (formData.from < todayStr) return toast.error("Cannot apply for leave in the past.");
+        if (formData.to < formData.from) return toast.error("'To' date cannot be before 'From' date.");
+
         setSubmitting(true);
         const res = await submitLeaveRequest(formData);
         setSubmitting(false);
@@ -74,11 +79,11 @@ function LeaveModal({ isOpen, onClose }: any) {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">From</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
+                            <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">To</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
+                            <input type="date" min={formData.from || new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
                         </div>
                     </div>
 
@@ -151,7 +156,7 @@ export default function BartenderReportsPage() {
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 w-full md:w-auto">
                         <TabButton label="Daily Log" icon={<FileText className="w-4 h-4" />} active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} />
                         <TabButton label="Leave Status" icon={<Calendar className="w-4 h-4" />} active={activeTab === 'leaves'} onClick={() => setActiveTab('leaves')} />
-                        <TabButton label="Payroll" icon={<DollarSign className="w-4 h-4" />} active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
+                        <TabButton label="Payroll" icon={<span className="font-bold text-[14px]">Rs</span>} active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
                     </div>
                 </div>
             </header>
@@ -364,12 +369,12 @@ export default function BartenderReportsPage() {
                                             </div>
                                             <div className="text-right">
                                                 <p className="font-black text-xl text-emerald-600">{formatRs(pay.amount)}</p>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Base Salary</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{pay.type || "Base Salary"}</p>
                                             </div>
                                         </div>
                                     )) : (
                                         <div className="p-16 flex flex-col items-center justify-center text-slate-300 bg-white">
-                                            <DollarSign className="w-16 h-16 mb-4 opacity-20" />
+                                            <span className="text-6xl font-black mb-4 opacity-20">Rs</span>
                                             <p className="font-bold uppercase tracking-widest text-xs">No payroll records found.</p>
                                         </div>
                                     )}

@@ -7,10 +7,12 @@ import {
   Search, ArrowLeft, Plus, Minus, Trash2, ChefHat, 
   Utensils, Coffee, Beer, IceCream, SearchX, 
   ShoppingBag, Send, AlertCircle, Loader2, X, Layers, MessageSquare,
-  LayoutGrid, Users, ClipboardList, DollarSign, Edit, CheckCircle2
+  LayoutGrid, Users, ClipboardList, Edit, CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
-import { getPOSMenu, submitOrder, getPOSStats, modifyOrder } from "@/app/actions/pos"; 
+import { getPOSMenu, submitOrder, getPOSStats, modifyOrder } from "@/app/actions/pos";
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
+ 
 
 // --- TYPES ---
 interface Variant { name: string; price: string | number; }
@@ -56,7 +58,7 @@ function MenuCard({ item, onAdd }: { item: MenuItem, onAdd: (variant?: Variant) 
     let priceDisplay = formatRs(item.price);
     if (hasVariants) {
         const prices = item.variants!.map(v => Number(v.price));
-        priceDisplay = `Rs ${Math.min(...prices)} - ${Math.max(...prices)}`;
+        priceDisplay = Math.min(...prices) === Math.max(...prices) ? `Rs ${Math.min(...prices)}` : `Rs ${Math.min(...prices)} - ${Math.max(...prices)}`;
     }
     
     const ItemIcon = getCategoryIcon(item.category);

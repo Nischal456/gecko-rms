@@ -52,6 +52,11 @@ function LeaveModal({ isOpen, onClose }: any) {
 
     const handleSubmit = async () => {
         if(!formData.from || !formData.to || !formData.reason) return toast.error("Please fill all fields");
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (formData.from < todayStr) return toast.error("Cannot apply for leave in the past.");
+        if (formData.to < formData.from) return toast.error("'To' date cannot be before 'From' date.");
+
         setSubmitting(true);
         const res = await submitLeaveRequest(formData);
         setSubmitting(false);
@@ -83,11 +88,11 @@ function LeaveModal({ isOpen, onClose }: any) {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">From</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
+                            <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">To</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
+                            <input type="date" min={formData.from || new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
                         </div>
                     </div>
 
@@ -127,9 +132,27 @@ export default function ReportsPage() {
     const { stats, payroll, leaves } = data;
 
     // Calculate Avg Order Value (Avoid division by zero)
-    const avgOrderValue = stats.tablesServed > 0 
+    const avgOrderValue = stats?.tablesServed > 0 
         ? (stats.totalSales / stats.tablesServed) 
         : 0;
+
+    const handleDownloadSlip = () => {
+        if (!payroll || payroll.length === 0) return toast.error("No salary data to download");
+        
+        let csv = "Month,Payment Date,Amount (Rs),Status\n";
+        payroll.forEach((pay: any) => {
+            csv += `${pay.month},${pay.date},${pay.amount},Paid\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Salary_History.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+        toast.success("Slip downloaded!");
+    };
 
     return (
         <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900">
@@ -204,7 +227,7 @@ export default function ReportsPage() {
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                                 <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                                     <h3 className="font-black text-lg">Salary History</h3>
-                                    <button className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"><Download className="w-3 h-3" /> Download Slip</button>
+                                    <button onClick={handleDownloadSlip} className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"><Download className="w-3 h-3" /> Download Slip</button>
                                 </div>
                                 
                                 {payroll.length === 0 ? (
@@ -224,7 +247,7 @@ export default function ReportsPage() {
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="font-black text-slate-900">{formatRs(pay.amount)}</p>
-                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wide">Paid</span>
+                                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wide">{pay.type || 'Paid'}</span>
                                                 </div>
                                             </div>
                                         ))}

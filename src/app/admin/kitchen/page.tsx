@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getKitchenTickets, updateTicketStatus, updateItemStatus } from "@/app/actions/kitchen"; 
+import { getBartenderTickets, updateBartenderTicketStatus, updateBartenderItemStatus } from "@/app/actions/bartender";
 import { getDashboardData } from "@/app/actions/dashboard";
 import { motion, AnimatePresence } from "framer-motion";
 import NepaliDate from 'nepali-date-converter';
@@ -15,11 +16,13 @@ import NepaliDate from 'nepali-date-converter';
 // --- TYPES ---
 interface KitchenItem {
     id: string;
+    unique_id?: string;
     name: string;
     quantity: number;
     notes?: string;
     status: string;
     station: string;
+    category?: string;
 }
 
 interface KitchenTicket {
@@ -39,7 +42,7 @@ function toNepaliDigits(num: number | string): string {
 }
 
 // --- HEADER ---
-function KDSHeader({ count, businessDate }: { count: number, businessDate?: string }) {
+function KDSHeader({ count, businessDate, activeStation, setActiveStation }: { count: number, businessDate?: string, activeStation: 'kitchen'|'bar', setActiveStation: (s: 'kitchen'|'bar') => void }) {
     const [timeInfo, setTimeInfo] = useState({ time: "", date: "" });
 
     useEffect(() => {
@@ -65,13 +68,15 @@ function KDSHeader({ count, businessDate }: { count: number, businessDate?: stri
     }, [businessDate]);
 
     return (
-        <header className="flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-4 flex justify-between items-center z-20 shadow-sm">
+        <header className="flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-4 flex justify-between items-center z-20 shadow-sm relative">
             <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/20">
                     <ChefHat className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Kitchen Monitor</h1>
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+                        {activeStation === 'kitchen' ? 'Kitchen Monitor' : 'Bar Monitor'}
+                    </h1>
                     <div className="flex items-center gap-2 mt-1">
                         <span className="flex items-center gap-1 text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg border border-indigo-200">
                             <Flame className="w-3 h-3" /> {count} Active
@@ -80,6 +85,21 @@ function KDSHeader({ count, businessDate }: { count: number, businessDate?: stri
                     </div>
                 </div>
             </div>
+            <div className="absolute left-1/2 -translate-x-1/2 flex bg-slate-100 p-1 rounded-xl hidden md:flex">
+                <button 
+                    onClick={() => setActiveStation('kitchen')} 
+                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeStation === 'kitchen' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Kitchen
+                </button>
+                <button 
+                    onClick={() => setActiveStation('bar')} 
+                    className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeStation === 'bar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Bar
+                </button>
+            </div>
+            
             <div className="text-right hidden md:block">
                 <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">{timeInfo.time}</p>
                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Admin View</p>
@@ -91,7 +111,11 @@ function KDSHeader({ count, businessDate }: { count: number, businessDate?: stri
 // --- MAIN PAGE ---
 export default function AdminKitchenPage() {
   const [tenant, setTenant] = useState<any>(null);
-  const [tickets, setTickets] = useState<KitchenTicket[]>([]);
+  const [kitchenTickets, setKitchenTickets] = useState<KitchenTicket[]>([]);
+  const [barTickets, setBarTickets] = useState<KitchenTicket[]>([]);
+  const [activeStation, setActiveStation] = useState<'kitchen'|'bar'>('kitchen');
+  const tickets = activeStation === 'kitchen' ? kitchenTickets : barTickets;
+  const setTickets = activeStation === 'kitchen' ? setKitchenTickets : setBarTickets;
   const [loading, setLoading] = useState(true);
   const [businessDate, setBusinessDate] = useState<string>("");
   const [selectedTicket, setSelectedTicket] = useState<KitchenTicket | null>(null);
@@ -114,15 +138,45 @@ export default function AdminKitchenPage() {
   }, [tickets.length]);
 
   async function loadData() {
-    const [dashRes, kdsRes] = await Promise.all([getDashboardData(), getKitchenTickets()]);
+    const [dashRes, kdsRes, barRes] = await Promise.all([getDashboardData(), getKitchenTickets(), getBartenderTickets()]);
     if(dashRes) setTenant(dashRes.tenant);
+    
     if(kdsRes.success && Array.isArray(kdsRes.data)) {
-        if ((kdsRes as any).businessDate) {
-            setBusinessDate((kdsRes as any).businessDate);
-        }
-        const sorted = (kdsRes.data as KitchenTicket[]).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        setTickets(sorted);
+        if ((kdsRes as any).businessDate) setBusinessDate((kdsRes as any).businessDate);
+        
+        // Strict Kitchen Filtering to match staff/kitchen
+        const filteredKitchen = (kdsRes.data as any[]).map(t => {
+            const kitchenItems = (t.order_items || []).filter((item: KitchenItem) => {
+                const st = String(item.station || (item as any).prep_station || '').toLowerCase().trim();
+                const dietary = String(item.category || (item as any).dietary || '').toLowerCase().trim();
+                if (st === 'kitchen' || st === 'food' || st === 'main') return true;
+                if (st === 'bar' || st === 'coffee') return false;
+                if (st === '') return !['drinks', 'beverage', 'liquor', 'cocktail', 'mocktail'].includes(dietary);
+                return true; 
+            });
+            return { ...t, order_items: kitchenItems };
+        }).filter(t => t.order_items.length > 0 && t.status !== 'served');
+
+        setKitchenTickets(filteredKitchen.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
     }
+    
+    if(barRes && barRes.success && Array.isArray(barRes.data)) {
+        // Strict Bar Filtering to match staff/bartender
+        const filteredBar = (barRes.data as any[]).map(t => {
+            const barItems = (t.order_items || []).filter((item: KitchenItem) => {
+                const st = String(item.station || (item as any).prep_station || '').toLowerCase().trim();
+                const dietary = String(item.category || (item as any).dietary || '').toLowerCase().trim();
+                if (st === 'bar' || st === 'coffee') return true;
+                if (st === 'kitchen' || st === 'food' || st === 'main') return false; 
+                if (st === '') return ['drinks', 'beverage', 'liquor', 'cocktail', 'mocktail'].includes(dietary);
+                return false; 
+            });
+            return { ...t, order_items: barItems };
+        }).filter(t => t.order_items.length > 0 && t.status !== 'served');
+
+        setBarTickets(filteredBar.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+    }
+    
     setLoading(false);
   }
 
@@ -140,13 +194,14 @@ export default function AdminKitchenPage() {
           setSelectedTicket(prev => prev ? ({...prev, order_items: prev.order_items.map(i => i.id === item.id ? { ...i, status: nextStatus } : i)}) : null);
       }
 
-      await updateItemStatus(item.id, nextStatus, ticketId);
+      const targetItemId = item.unique_id || item.id;
+      await (activeStation === 'kitchen' ? updateItemStatus : updateBartenderItemStatus)(targetItemId, nextStatus, ticketId);
       loadData(); 
   };
 
   const handleDragDrop = async (ticketId: string, newStatus: string) => {
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus as any } : t));
-      await updateTicketStatus(ticketId, newStatus);
+      await (activeStation === 'kitchen' ? updateTicketStatus : updateBartenderTicketStatus)(ticketId, newStatus);
       loadData();
   };
 
@@ -162,7 +217,7 @@ export default function AdminKitchenPage() {
       
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         
-        <KDSHeader count={tickets.length} businessDate={businessDate} />
+        <KDSHeader count={tickets.length} businessDate={businessDate} activeStation={activeStation} setActiveStation={setActiveStation} />
 
         <div className="flex-1 overflow-x-auto p-6 pb-24">
             <div className="flex gap-6 h-full min-w-[1200px]">
@@ -221,7 +276,7 @@ export default function AdminKitchenPage() {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span className="text-[10px] font-black uppercase px-2 py-1 rounded-md bg-slate-100 text-slate-400">{item.status}</span>
-                                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors ${item.status === 'ready' || item.status === 'served' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-200 text-transparent'}`}><Check className="w-4 h-4" /></div>
+                                        <div onClick={() => handleItemClick(item, selectedTicket.id)} className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors cursor-pointer hover:scale-110 active:scale-95 ${item.status === 'ready' || item.status === 'served' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-200 text-transparent'}`}><Check className="w-4 h-4" /></div>
                                     </div>
                                 </div>
                             ))}

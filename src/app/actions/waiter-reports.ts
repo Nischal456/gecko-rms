@@ -103,7 +103,8 @@ export async function getWaiterReports() {
             payroll = dbPayments.map((pay: any) => ({
                 month: pay.salary_month || '',
                 date: pay.payment_date ? pay.payment_date.split('T')[0] : '',
-                amount: Number(pay.amount) || 0
+                amount: Number(pay.amount) || 0,
+                type: pay.type || ''
             }));
         }
 

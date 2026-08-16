@@ -33,7 +33,8 @@ export default function SettingsView({ data, onSave }: any) {
     const [profile, setProfile] = useState({ 
         name: data.restaurant?.name || "", 
         address: data.restaurant?.address || "", 
-        phone: data.restaurant?.phone || "" 
+        phone: data.restaurant?.phone || "",
+        pan: data.restaurant?.pan || "" 
     });
     
     const [accounts, setAccounts] = useState<any[]>(data.restaurant?.bank_accounts || []);
@@ -190,6 +191,15 @@ export default function SettingsView({ data, onSave }: any) {
                                 onChange={e => setProfile({...profile, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
                                 className="w-full p-4 bg-slate-50 text-slate-900 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all shadow-sm" 
                                 placeholder="e.g., 9800000000"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-2 mb-1 block">PAN Number</label>
+                            <input 
+                                value={profile.pan} 
+                                onChange={e => setProfile({...profile, pan: e.target.value})} 
+                                className="w-full p-4 bg-slate-50 text-slate-900 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all shadow-sm" 
+                                placeholder="e.g., 123456789"
                             />
                         </div>
                     </div>

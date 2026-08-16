@@ -142,6 +142,7 @@ const ThermalReceipt = ({ data, order, customerDetails, paymentDetails }: any) =
                 <div className="r-center r-bold" style={{ fontSize: '18px', textTransform: 'uppercase', marginBottom:'2px' }}>{data.name || "RESTAURANT"}</div>
                 <div className="r-center" style={{ fontSize: '11px' }}>{data.address}</div>
                 <div className="r-center" style={{ fontSize: '11px' }}>Tel: {data.phone}</div>
+                {data.pan && <div className="r-center" style={{ fontSize: '11px', fontWeight: 'bold' }}>PAN: {data.pan}</div>}
                 <div className="r-divider" />
                 <div className="r-flex">
                     <div>Date: {toBS(new Date().toISOString())}</div>
@@ -154,7 +155,11 @@ const ThermalReceipt = ({ data, order, customerDetails, paymentDetails }: any) =
                 {customerDetails?.name && (
                     <div style={{ marginTop: '4px', borderTop: '1px dotted #000', paddingTop: '2px' }}>
                         <div>To: {customerDetails.name}</div>
-                        {customerDetails.address && <div>Address: {customerDetails.address}</div>}
+                        {customerDetails.address && (
+                            <div>
+                                {/^\d/.test(customerDetails.address.trim()) ? 'Phone' : 'Address'}: {customerDetails.address}
+                            </div>
+                        )}
                     </div>
                 )}
                 <div className="r-divider" />
@@ -266,10 +271,10 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
     let discountAmt = 0;
     if (discountType === "percent") {
         const cappedVal = Math.min(100, Math.max(0, discountVal));
-        discountAmt = (cappedVal / 100) * subTotal;
+        discountAmt = Math.round((cappedVal / 100) * subTotal);
     } else {
         const cappedVal = Math.min(subTotal, Math.max(0, discountVal));
-        discountAmt = cappedVal;
+        discountAmt = Math.round(cappedVal);
     }
     const grandTotal = Math.max(0, subTotal - discountAmt);
     
@@ -808,7 +813,10 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
                             <input 
                                 list="credit-customers-list"
                                 value={customer.name} 
-                                onChange={e => setCustomer({...customer, name: e.target.value})} 
+                                onChange={e => {
+                                    const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                    setCustomer({...customer, name: val});
+                                }} 
                                 placeholder={method === 'Credit' || splits.some(s=>s.method==='Credit') ? "* Select or Type Customer Name" : "Customer Name (Optional)"} 
                                 className={`flex-1 p-3.5 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white outline-none transition-all ${method === 'Credit' || splits.some(s=>s.method==='Credit') ? 'border-blue-300 focus:ring-2 focus:ring-blue-100 bg-blue-50/30' : 'border-slate-200 focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400'}`}
                             />
@@ -818,7 +826,18 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
 
                             <input 
                                 value={customer.address} 
-                                onChange={e => setCustomer({...customer, address: e.target.value})} 
+                                onChange={e => {
+                                    let val = e.target.value;
+                                    if (val.length > 0) {
+                                        if (/^\d/.test(val)) {
+                                            val = val.replace(/\D/g, '');
+                                            if (val.length > 10) val = val.slice(0, 10);
+                                        } else {
+                                            val = val.replace(/[^a-zA-Z\s]/g, '');
+                                        }
+                                    }
+                                    setCustomer({...customer, address: val});
+                                }} 
                                 placeholder="Phone / Address (Optional)" 
                                 className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all outline-none"
                             />
@@ -1570,7 +1589,7 @@ export default function CashierDashboard() {
                             <div className="lg:col-span-2 relative bg-[#F1F5F9] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-inner flex flex-col min-h-[450px] lg:min-h-0 order-1 shrink-0">
                                 <div className="absolute top-4 left-4 z-20 flex gap-2 overflow-x-auto max-w-[70%] no-scrollbar p-1">{sections.map((s: any) => (<button key={s} onClick={() => setFilter(s)} className={`px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider shadow-sm transition-all whitespace-nowrap border ${filter === s ? 'bg-slate-900 text-white border-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border-slate-200'}`}>{s}</button>))}</div>
                                 <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 pointer-events-auto"><div className="bg-white/90 backdrop-blur rounded-xl shadow-lg border border-white/50 flex flex-col overflow-hidden"><button onClick={() => setScale(s => Math.min(3, s + 0.1))} className="p-3 hover:bg-slate-50 border-b border-slate-100"><ZoomIn className="w-5 h-5 text-slate-600" /></button><button onClick={() => setScale(s => Math.max(0.4, s - 0.1))} className="p-3 hover:bg-slate-50"><ZoomOut className="w-5 h-5 text-slate-600" /></button></div></div>
-                                <motion.div ref={canvasRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" drag dragMomentum={false} onDrag={(e, info) => setPan(p => ({ x: p.x + info.delta.x, y: p.y + info.delta.y }))}><motion.div className="absolute top-0 left-0 w-full h-full origin-center" style={{ x: pan.x, y: pan.y, scale: scale }}><div className="absolute inset-[-500%] bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />{filteredTables?.map((t: any) => { const s = (t.status || '').toLowerCase().trim(); const isPayable = ['served', 'payment_pending', 'ready'].includes(s); const isBusy = ['occupied', 'cooking'].includes(s); return (<motion.div key={t.id} style={{ x: t.x, y: t.y, width: t.width, height: t.height, rotate: t.rotation, borderRadius: t.shape === 'round' ? '50%' : '24px' }} onClick={() => isPayable && handleSettleClick(t)} className={`absolute border-2 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform shadow-lg ${isPayable ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-emerald-500/20' : isBusy ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-white border-slate-200 text-slate-400 opacity-80'}`}><span className="font-black text-xl leading-none">{t.label}</span>{isPayable && <span className="text-[9px] font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-md mt-1.5 animate-pulse tracking-widest">PAY</span>}{isBusy && !isPayable && <span className="text-[9px] font-black bg-orange-200 text-orange-800 px-2.5 py-0.5 rounded-md mt-1.5 tracking-widest">BUSY</span>}</motion.div>);})}</motion.div></motion.div>
+                                <motion.div ref={canvasRef} className="w-full h-full cursor-grab active:cursor-grabbing touch-none" drag dragMomentum={false} onDrag={(e, info) => setPan(p => ({ x: p.x + info.delta.x, y: p.y + info.delta.y }))}><motion.div className="absolute top-0 left-0 w-full h-full origin-center" style={{ x: pan.x, y: pan.y, scale: scale }}><div className="absolute inset-[-500%] bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />{filteredTables?.map((t: any) => { const s = (t.status || '').toLowerCase().trim(); const isPayable = ['served', 'payment_pending', 'ready'].includes(s); const isBusy = ['occupied', 'cooking'].includes(s); return (<motion.div key={t.id} style={{ x: t.x, y: t.y, width: t.width, height: t.height, rotate: t.rotation, borderRadius: t.shape === 'round' ? '50%' : '24px' }} onClick={() => isPayable && handleSettleClick(t)} className={`absolute border-2 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform shadow-lg ${isPayable ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-emerald-500/20' : isBusy ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-white border-slate-200 text-slate-400 opacity-80'}`}><div style={{ transform: `rotate(-${t.rotation || 0}deg)` }} className="flex flex-col items-center justify-center w-full h-full pointer-events-none"><span className="font-black text-xl leading-none">{t.label}</span>{isPayable && <span className="text-[9px] font-black bg-emerald-500 text-white px-2.5 py-0.5 rounded-md mt-1.5 animate-pulse tracking-widest">PAY</span>}{isBusy && !isPayable && <span className="text-[9px] font-black bg-orange-200 text-orange-800 px-2.5 py-0.5 rounded-md mt-1.5 tracking-widest">BUSY</span>}</div></motion.div>);})}</motion.div></motion.div>
                             </div>
                             <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col min-h-[400px] lg:min-h-0 order-2 shrink-0">
                                 <div className="p-6 border-b border-slate-50 flex justify-between items-center shrink-0"><h3 className="font-black text-xl text-slate-900 flex items-center gap-2"><Wallet className="w-5 h-5 text-emerald-500" /> Pending Bills</h3><span className="bg-slate-100 text-slate-500 px-2.5 py-1 rounded-lg text-xs font-bold">{data.activeOrders?.length || 0}</span></div>

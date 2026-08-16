@@ -269,6 +269,11 @@ export default function StaffPage() {
 
   async function handleManualLeave() {
       if(!leaveStart || !leaveEnd) return toast.error("Select dates");
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (leaveStart < todayStr) return toast.error("Cannot log leave in the past.");
+      if (leaveEnd < leaveStart) return toast.error("'To' date cannot be before 'From' date.");
+
       await createLeaveRequest(selectedStaff.id, leaveStart, leaveEnd, leaveReason || "Manual Entry by Manager");
       toast.success("Leave Logged");
       setLeaveStart(""); setLeaveEnd(""); setLeaveReason("");
@@ -557,8 +562,8 @@ export default function StaffPage() {
                                                         <h3 className="font-black text-slate-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">Log Manual Leave</h3>
                                                         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
                                                             <div className="flex gap-3">
-                                                                <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
-                                                                <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
+                                                                <input type="date" min={new Date().toISOString().split('T')[0]} value={leaveStart} onChange={e => setLeaveStart(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
+                                                                <input type="date" min={leaveStart || new Date().toISOString().split('T')[0]} value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} className="flex-1 h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
                                                             </div>
                                                             <input value={leaveReason} onChange={e => setLeaveReason(e.target.value)} placeholder="Reason" className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 outline-none text-xs font-bold" />
                                                             <button onClick={handleManualLeave} className="w-full h-10 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800">Log Leave</button>

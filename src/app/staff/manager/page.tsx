@@ -28,7 +28,7 @@ function toNepaliDigits(num: number | string): string {
 }
 
 const formatRs = (amount: number) => {
-    return "रु " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
+    return "Rs " + new Intl.NumberFormat('en-NP', { maximumFractionDigits: 0 }).format(amount || 0);
 };
 
 // --- 1. SYSTEM LOADER ---
@@ -400,11 +400,13 @@ export default function ManagerPage() {
 
                         <div className="mb-10">
                             <h3 className="text-lg font-black text-slate-900 mb-5 px-2">Quick Actions</h3>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                <ActionCard title="Floor Layout" desc="Edit Tables & Zones" icon={Map} onClick={() => router.push('/staff/manager/floor')} delay={0.7} />
-                                <ActionCard title="Staff Mgmt" desc="Add & Manage Staff" icon={Users} onClick={() => router.push('/staff/manager/staff')} delay={0.75} />
-                                <ActionCard title="Inventory" desc="Stock & Supplies" icon={Box} onClick={() => router.push('/staff/manager/inventory')} delay={0.8} />
+                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                                <ActionCard title="Floor Layout" desc="Edit Tables" icon={Map} onClick={() => router.push('/staff/manager/floor')} delay={0.7} />
+                                <ActionCard title="Staff Mgmt" desc="Manage Staff" icon={Users} onClick={() => router.push('/staff/manager/staff')} delay={0.75} />
+                                <ActionCard title="Inventory" desc="Supplies" icon={Box} onClick={() => router.push('/staff/manager/inventory')} delay={0.8} />
                                 <ActionCard title="Menu Items" desc="Update Prices" icon={Utensils} onClick={() => router.push('/staff/manager/menu')} delay={0.85} />
+                                <ActionCard title="Specials" desc="Manage Offers" icon={Star} onClick={() => router.push('/staff/manager/specials')} delay={0.9} />
+                                <ActionCard title="Reports" desc="Analytics" icon={FileBarChart} onClick={() => router.push('/staff/manager/reports')} delay={0.95} />
                             </div>
                         </div>
 

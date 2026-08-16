@@ -497,7 +497,8 @@ export async function getKitchenStats() {
                         id: pay.id,
                         staff_name: staffMember.full_name,
                         payment_date: pay.payment_date,
-                        amount: Number(pay.amount) || 0
+                        amount: Number(pay.amount) || 0,
+                        type: pay.type || ''
                     }));
                 }
 

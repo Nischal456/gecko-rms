@@ -219,6 +219,7 @@ export async function getCashierData(isPolling: boolean = false) {
       code: tenant?.code,
       address: tenant?.settings?.profile?.address || tenant?.address,
       phone: tenant?.settings?.profile?.phone || tenant?.phone,
+      pan: tenant?.settings?.profile?.pan || "",
       logo_url: tenant?.logo_url,
       bank_accounts: tenant?.settings?.bank_accounts || [] 
     } : null;

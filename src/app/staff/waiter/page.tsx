@@ -302,11 +302,13 @@ function ViewerTable({ data, onClick }: any) {
             onClick={(e) => { e.stopPropagation(); onClick(); }}
             className={`absolute flex flex-col items-center justify-center border-2 select-none cursor-pointer group touch-none backdrop-blur-sm transform-gpu will-change-transform ${containerStyle}`}
         >
-            <h3 className="font-black text-xl leading-none">{data.label}</h3>
-            {isReady && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-white text-emerald-600 shadow-md"><Utensils className="w-3 h-3" /><span className="text-[10px] font-bold">READY</span></div>}
-            {isPacked && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-red-500 text-white shadow-sm border border-red-400"><Users className="w-3 h-3" /><span className="text-[10px] font-bold uppercase tracking-wide">Occupied</span></div>}
-            {isToClean && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-amber-500 text-white shadow-sm border border-amber-400"><Trash2 className="w-3 h-3" /><span className="text-[10px] font-bold">CLEAN</span></div>}
-            {isFree && <div className="flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full border border-slate-200/50 opacity-50"><Users className="w-3 h-3" /><span className="text-[10px] font-bold">{data.seats}</span></div>}
+            <div style={{ transform: `rotate(-${data.rotation || 0}deg)` }} className="flex flex-col items-center justify-center w-full h-full pointer-events-none">
+                <h3 className="font-black text-xl leading-none">{data.label}</h3>
+                {isReady && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-white text-emerald-600 shadow-md"><Utensils className="w-3 h-3" /><span className="text-[10px] font-bold">READY</span></div>}
+                {isPacked && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-red-500 text-white shadow-sm border border-red-400"><Users className="w-3 h-3" /><span className="text-[10px] font-bold uppercase tracking-wide">Occupied</span></div>}
+                {isToClean && <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full bg-amber-500 text-white shadow-sm border border-amber-400"><Trash2 className="w-3 h-3" /><span className="text-[10px] font-bold">CLEAN</span></div>}
+                {isFree && <div className="flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full border border-slate-200/50 opacity-50"><Users className="w-3 h-3" /><span className="text-[10px] font-bold">{data.seats}</span></div>}
+            </div>
         </motion.div>
     );
 }

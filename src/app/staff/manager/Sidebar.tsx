@@ -111,8 +111,8 @@ export default function ManagerSidebar({ tenantName, tenantCode, logo }: any) {
         However, if you ever reuse this sidebar on other pages without the dock, 
         this sleek emerald version will show up. 
       */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-xl border-t border-emerald-100 z-40 flex justify-around py-2 pb-6 px-2 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        {MENU.slice(0, 5).map((item) => {
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-xl border-t border-emerald-100 z-40 flex overflow-x-auto no-scrollbar gap-8 py-3 pb-6 px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+        {MENU.map((item) => {
           const isActive = pathname === item.path;
           return (
             <Link 

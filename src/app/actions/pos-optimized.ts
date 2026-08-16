@@ -49,6 +49,7 @@ export async function createOrderJSON(orderData: any) {
           if (Array.isArray(cat.items)) {
               cat.items.forEach((m: any) => {
                   liveMenu.set(m.name, { ...m, category_name: cat.category_name });
+                  liveMenu.set(String(m.name).toLowerCase().trim(), { ...m, category_name: cat.category_name });
               });
           }
       });
@@ -62,7 +63,8 @@ export async function createOrderJSON(orderData: any) {
       total: orderData.total,
       items: orderData.items.map((i: any) => {
           const itemName = i.name || i.n;
-          const dbItem = liveMenu.get(itemName) || {};
+          const baseName = String(itemName).split(" (")[0];
+          const dbItem = liveMenu.get(itemName) || liveMenu.get(String(itemName).toLowerCase().trim()) || liveMenu.get(baseName) || liveMenu.get(String(baseName).toLowerCase().trim()) || {};
           
           return {
               id: i.id || dbItem.id || "",

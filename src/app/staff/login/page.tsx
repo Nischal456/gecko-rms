@@ -21,6 +21,8 @@ export default function StaffLoginPage() {
   const [pin, setPin] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(false);
 
   useEffect(() => { loadSystem(); }, []);
 
@@ -78,8 +80,8 @@ export default function StaffLoginPage() {
       }
   }
 
-  async function handleUnlink() {
-      if(!confirm("Unlink device from this restaurant?")) return;
+  async function confirmUnlink() {
+      setIsUnlinking(true);
       await unlinkDevice();
       window.location.reload();
   }
@@ -155,7 +157,7 @@ export default function StaffLoginPage() {
                       </p>
                   </div>
               </div>
-              <button onClick={handleUnlink} className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-400 text-[10px] font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all shadow-sm ring-1 ring-slate-100 pointer-events-auto active:scale-95">
+              <button onClick={() => setShowDisconnectModal(true)} className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-400 text-[10px] font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all shadow-sm ring-1 ring-slate-100 pointer-events-auto active:scale-95">
                   Disconnect
               </button>
           </motion.div>
@@ -331,6 +333,36 @@ export default function StaffLoginPage() {
             </motion.div>
         )}
 
+      </AnimatePresence>
+
+      {/* DISCONNECT MODAL */}
+      <AnimatePresence>
+        {showDisconnectModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDisconnectModal(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+                <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                    animate={{ opacity: 1, scale: 1, y: 0 }} 
+                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                    className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100"
+                >
+                    <div className="p-6 text-center">
+                        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-sm">
+                            <LogOut className="w-8 h-8" />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Unlink Device</h3>
+                        <p className="text-sm text-slate-500 mb-6 font-medium">Are you sure you want to disconnect this terminal from the restaurant? You will need the restaurant code to reconnect.</p>
+                        
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowDisconnectModal(false)} disabled={isUnlinking} className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+                            <button onClick={confirmUnlink} disabled={isUnlinking} className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-500/25 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {isUnlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yes, Unlink'}
+                            </button>
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        )}
       </AnimatePresence>
     </div>
   );

@@ -183,9 +183,16 @@ export default function AdminMenuPage() {
     setIsSubmitting(true);
     
     const validVariants = variants.filter(v => v.name.trim() !== "");
-    const basePrice = validVariants.length > 0 
-        ? Math.min(...validVariants.map(v => v.price)) 
-        : Number(formPrice);
+    const basePrice = validVariants.length > 0 ? Math.min(...validVariants.map(v => v.price)) : (Number(formPrice) || 0);
+
+    if (validVariants.length === 0 && basePrice <= 0) {
+        setIsSubmitting(false);
+        return toast.error("Please enter a valid price for the dish.");
+    }
+    if (validVariants.length > 0 && validVariants.some(v => (Number(v.price) || 0) <= 0)) {
+        setIsSubmitting(false);
+        return toast.error("Please enter a valid price for all variants.");
+    }
 
     const payload = {
         id: editingItem?.id,
@@ -278,8 +285,7 @@ export default function AdminMenuPage() {
 
   const stationOptions = [
       { value: "kitchen", label: "Kitchen", emoji: "👨‍🍳" },
-      { value: "bar", label: "Bar", emoji: "🍷" },
-      { value: "coffee", label: "Coffee", emoji: "☕" },
+      { value: "bar", label: "Bar", emoji: "🍷" }
   ];
 
   return (
@@ -376,7 +382,7 @@ export default function AdminMenuPage() {
                             <div className="grid grid-cols-2 gap-4 relative z-0">
                                 <div className="col-span-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Name</label>
-                                    <input value={formName} onChange={e => setFormName(e.target.value)} required placeholder="Item Name" className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
+                                    <input value={formName} onChange={e => setFormName(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))} required placeholder="Item Name" className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all" />
                                 </div>
                                 
                                 <div className={variants.length > 0 ? "opacity-50 pointer-events-none" : ""}>
@@ -388,17 +394,17 @@ export default function AdminMenuPage() {
                                         <input 
                                             type="number" 
                                             value={formPrice || ""} 
-                                            onChange={e => setFormPrice(Number(e.target.value))} 
+                                            onChange={e => setFormPrice(Math.max(0, Number(e.target.value)))} 
                                             disabled={variants.length > 0}
                                             placeholder="0" 
-                                            className="w-full h-12 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" 
+                                            className="w-full h-12 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all" 
                                         />
                                     </div>
                                 </div>
 
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1 mb-1 block">Sub-Category</label>
-                                    <input value={formSubCat} onChange={e => setFormSubCat(e.target.value)} placeholder="e.g. Spicy" className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
+                                    <input value={formSubCat} onChange={e => setFormSubCat(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))} placeholder="e.g. Spicy" className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all" />
                                 </div>
                             </div>
                             
@@ -426,10 +432,10 @@ export default function AdminMenuPage() {
                                 </div>
                                 {variants.map((v, i) => (
                                     <div key={i} className="flex gap-2 mb-2">
-                                        <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value)} placeholder="Type (e.g. Steam)" className="flex-1 h-11 px-3 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none" />
+                                        <input value={v.name} onChange={e => updateVariant(i, "name", e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''))} placeholder="Type (e.g. Steam)" className="flex-1 h-11 px-3 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
                                         <div className="relative w-28">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">Rs</span>
-                                            <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", e.target.value)} placeholder="0" className="w-full h-11 pl-8 pr-2 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none" />
+                                            <input type="number" value={v.price || ""} onChange={e => updateVariant(i, "price", Math.max(0, Number(e.target.value)))} placeholder="0" className="w-full h-11 pl-8 pr-2 rounded-xl border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
                                         </div>
                                         {variants.length > 0 && <button type="button" onClick={() => removeVariant(i)} className="w-11 h-11 flex items-center justify-center text-red-400 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 transition-colors shrink-0"><X className="w-4 h-4" /></button>}
                                     </div>
@@ -475,7 +481,7 @@ function ItemCard({ item, onEdit, onDelete, onToggle }: any) {
     else if(dietaryType === 'tobacco') { BadgeIcon = Cigarette; badgeColor = 'bg-slate-200 text-slate-700 border-slate-300'; }
 
     const prices = item.variants?.map((v:any) => v.price) || [];
-    const priceDisplay = prices.length > 1 ? `Rs ${Math.min(...prices)} - ${Math.max(...prices)}` : `Rs ${item.price}`;
+    const priceDisplay = prices.length > 0 ? (Math.min(...prices) === Math.max(...prices) ? `Rs ${Math.min(...prices)}` : `Rs ${Math.min(...prices)} - ${Math.max(...prices)}`) : `Rs ${item.price}`;
 
     return (
         <motion.div layout className={`bg-white p-3 rounded-[1.5rem] border shadow-sm hover:shadow-xl transition-all group flex flex-col h-full relative overflow-hidden ${item.is_available ? 'border-slate-100' : 'border-red-100 opacity-80'}`}>

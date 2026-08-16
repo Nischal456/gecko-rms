@@ -215,6 +215,7 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
             if (Array.isArray(cat.items)) {
                 cat.items.forEach((m: any) => {
                     liveMenu.set(m.name, m);
+                    liveMenu.set(String(m.name).toLowerCase().trim(), m);
                     if (m.id) liveMenu.set(m.id.toString(), m);
                 });
             }
@@ -227,8 +228,8 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
         if (itemQty <= 0 || itemQty > 99) {
             return { success: false, msg: `Quantity for "${item.name}" exceeds the maximum allowed limit of 99.` };
         }
-        const baseName = item.name.split(" (")[0]; 
-        const dbItem = (item.id ? liveMenu.get(item.id.toString()) : null) || liveMenu.get(item.name) || liveMenu.get(baseName);
+        const baseName = String(item.name).split(" (")[0]; 
+        const dbItem = (item.id ? liveMenu.get(item.id.toString()) : null) || liveMenu.get(item.name) || liveMenu.get(String(item.name).toLowerCase().trim()) || liveMenu.get(baseName) || liveMenu.get(String(baseName).toLowerCase().trim());
         if (!dbItem) {
             return { success: false, msg: `"${item.name}" has been deleted from the menu.` };
         }
@@ -238,7 +239,8 @@ export async function submitOrder(tableId: string, cartItems: any[], total: numb
     }
 
     const compactItems = cartItems.map((i: any) => {
-        const dbItem = (i.id ? liveMenu.get(i.id.toString()) : null) || liveMenu.get(i.name) || liveMenu.get(i.name.split(" (")[0]) || {};
+        const baseName = String(i.name).split(" (")[0];
+        const dbItem = (i.id ? liveMenu.get(i.id.toString()) : null) || liveMenu.get(i.name) || liveMenu.get(String(i.name).toLowerCase().trim()) || liveMenu.get(baseName) || liveMenu.get(String(baseName).toLowerCase().trim()) || {};
         return {
             id: i.id || dbItem.id || "",
             unique_id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,

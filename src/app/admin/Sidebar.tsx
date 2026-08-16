@@ -221,7 +221,7 @@ export default function Sidebar({ tenantName, tenantCode, logo }: { tenantName: 
 
                         <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-4 rounded-[1.2rem] bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors font-bold text-sm active:scale-95">
                             <LogOut className="w-4 h-4" />
-                            <span>Disconnect</span>
+                            <span>Sign Out</span>
                         </button>
                     </div>
                 </div>

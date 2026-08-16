@@ -159,6 +159,34 @@ export async function addInventoryItem(data: any) {
   return { success: !error, error: error?.message };
 }
 
+export async function updateInventoryItem(id: string, data: any) {
+  const tenantId = await getTenantId();
+  if (!tenantId) return { success: false };
+
+  const volumePerUnit = Number(data.volume_per_unit) || 1;
+  const initialBottles = Number(data.stock) || 0;
+  const totalBaseStock = initialBottles * volumePerUnit;
+
+  const { error } = await supabaseAdmin.from("inventory").update({
+    name: data.name,
+    category: data.category || 'packaged',
+    stock: totalBaseStock, 
+    quantity: totalBaseStock, 
+    max_stock: (Number(data.max_stock) || 100) * volumePerUnit,
+    unit: data.unit || 'pc',
+    base_unit: data.base_unit || 'pc',
+    volume_per_unit: volumePerUnit,
+    cost_price: Number(data.cost_price) || 0,
+    price: Number(data.price) || 0,
+    linked_menu_item: data.linked_menu_item || null
+  }).eq("id", id).eq("tenant_id", tenantId);
+
+  revalidateTag(`inventory-${tenantId}`, undefined as any);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/staff/manager/inventory");
+  return { success: !error, error: error?.message };
+}
+
 export async function deleteInventoryItem(id: string) {
   const tenantId = await getTenantId();
   await supabaseAdmin.from("inventory").delete().eq("id", id);

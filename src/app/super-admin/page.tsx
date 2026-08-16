@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Plus, MoreHorizontal, Loader2, Zap, Server, Users, DollarSign, Globe, Wifi, 
+  Plus, MoreHorizontal, Loader2, Zap, Server, Users, Globe, Wifi, 
   CheckCircle2, LayoutTemplate, Box, Rocket, Check, X, 
   ExternalLink, Trash2, Send, ShieldAlert, RefreshCw, MessageSquare, Lock, LogOut, Key,
   Search, ArrowRight, Edit3, Save, Crown, CalendarDays, Radio, Target, 
@@ -19,6 +19,8 @@ import { impersonateTenant } from "@/app/actions/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
+
 
 // ==========================================
 // 1. PREMIUM NETWORK MESH VISUALIZER
@@ -477,7 +479,7 @@ export default function SuperAdminDashboard() {
                                 ))
                             ) : (
                                 <div className="p-10 flex flex-col items-center justify-center text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                                    <DollarSign className="w-8 h-8 text-slate-300 mb-2" />
+                                    <RsIcon className="w-8 h-8 text-slate-300 mb-2" />
                                     <p className="text-sm font-bold text-slate-400">No Payments Recorded Yet</p>
                                 </div>
                             )}
@@ -572,7 +574,7 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"><MetricCard label="Projected Revenue (MRR)" value={`Rs ${stats.mrr.toLocaleString()}`} sub="Monthly Recurring" icon={DollarSign} color="emerald" /><MetricCard label="Active Staff" value={stats.activeStaff} sub="Users Online" icon={Users} color="blue" /><MetricCard label="System Load" value={`1%`} sub="Stable" icon={Server} color="amber" /><MetricCard label="Restaurants Active" value={`${tenants.length}`} sub="100% Uptime" icon={Globe} color="violet" /></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"><MetricCard label="Projected Revenue (MRR)" value={`Rs ${stats.mrr.toLocaleString()}`} sub="Monthly Recurring" icon={RsIcon} color="emerald" /><MetricCard label="Active Staff" value={stats.activeStaff} sub="Users Online" icon={Users} color="blue" /><MetricCard label="System Load" value={`1%`} sub="Stable" icon={Server} color="amber" /><MetricCard label="Restaurants Active" value={`${tenants.length}`} sub="100% Uptime" icon={Globe} color="violet" /></div>
 
         <div className="flex items-center gap-3 pt-6"><div className="h-8 w-1 bg-gecko-500 rounded-full" /><h2 className="text-2xl font-black text-slate-900">Active Deployments</h2></div>
         {loading ? <div className="h-64 flex items-center justify-center"><Loader2 className="w-10 h-10 text-gecko-500 animate-spin" /></div> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">{tenants.map((t, i) => (<TenantCard key={t.id} t={t} i={i} onEditPrice={openPriceEdit} onEditPlan={openPlanEdit} onEditValidity={openValidityEdit} onManage={renderSheet} />))}</div>}

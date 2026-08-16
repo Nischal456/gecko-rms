@@ -4,8 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ChefHat, History, FileText, Calendar, DollarSign, 
-  LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ChevronDown, ChevronUp, Check, AlertTriangle, Utensils,
+  ChefHat, History, FileText, Calendar, LogOut, LayoutGrid, CheckCircle2, Bell, Clock, ChevronDown, ChevronUp, Check, AlertTriangle, Utensils,
   Plus, Send, X, Loader2, XCircle
 } from "lucide-react";
 import { getKitchenStats, getKitchenTickets } from "@/app/actions/kitchen";
@@ -14,6 +13,8 @@ import { submitLeaveRequest } from "@/app/actions/waiter-reports";
 import { toast } from "sonner";
 import React from "react";
 import NepaliDate from 'nepali-date-converter';
+const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
+
 
 // --- CONFIG ---
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
@@ -123,6 +124,11 @@ function LeaveModal({ isOpen, onClose }: any) {
 
     const handleSubmit = async () => {
         if(!formData.from || !formData.to || !formData.reason) return toast.error("Please fill all fields");
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (formData.from < todayStr) return toast.error("Cannot apply for leave in the past.");
+        if (formData.to < formData.from) return toast.error("'To' date cannot be before 'From' date.");
+
         setSubmitting(true);
         const res = await submitLeaveRequest(formData);
         setSubmitting(false);
@@ -154,11 +160,11 @@ function LeaveModal({ isOpen, onClose }: any) {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">From</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
+                            <input type="date" min={new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, from: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">To</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
+                            <input type="date" min={formData.from || new Date().toISOString().split('T')[0]} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500" onChange={(e) => setFormData({...formData, to: e.target.value})} />
                         </div>
                     </div>
 
@@ -222,7 +228,7 @@ export default function KitchenReportsPage() {
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 w-full md:w-auto">
                         <TabButton label="Daily Log" icon={<FileText className="w-4 h-4" />} active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} />
                         <TabButton label="Leave Status" icon={<Calendar className="w-4 h-4" />} active={activeTab === 'leaves'} onClick={() => setActiveTab('leaves')} />
-                        <TabButton label="Payroll" icon={<DollarSign className="w-4 h-4" />} active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
+                        <TabButton label="Payroll" icon={<RsIcon className="w-4 h-4" />} active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
                     </div>
                 </div>
             </header>
@@ -237,7 +243,7 @@ export default function KitchenReportsPage() {
                             <motion.div variants={itemVariants}><StatCard label="Total Orders" value={data?.stats?.total || 0} color="bg-blue-50 text-blue-600 border-blue-100" icon={<ChefHat className="w-5 h-5"/>} /></motion.div>
                             <motion.div variants={itemVariants}><StatCard label="Completed" value={data?.stats?.completed || 0} color="bg-emerald-50 text-emerald-600 border-emerald-100" icon={<CheckCircle2 className="w-5 h-5"/>} /></motion.div>
                             <motion.div variants={itemVariants}><StatCard label="Pending" value={data?.stats?.pending || 0} color="bg-orange-50 text-orange-600 border-orange-100" icon={<Clock className="w-5 h-5"/>} /></motion.div>
-                            <motion.div variants={itemVariants}><StatCard label="Est. Revenue" value={formatRs(data?.stats?.revenue || 0)} color="bg-slate-900 text-white border-slate-800" icon={<DollarSign className="w-5 h-5 text-emerald-400"/>} /></motion.div>
+                            <motion.div variants={itemVariants}><StatCard label="Est. Revenue" value={formatRs(data?.stats?.revenue || 0)} color="bg-slate-900 text-white border-slate-800" icon={<RsIcon className="w-5 h-5 text-emerald-400"/>} /></motion.div>
                         </div>
 
                         <motion.div variants={itemVariants} className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
@@ -436,12 +442,12 @@ export default function KitchenReportsPage() {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-black text-xl text-emerald-600">{formatRs(pay.amount)}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Base Salary</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{pay.type || 'Base Salary'}</p>
                                         </div>
                                     </div>
                                 )) : (
                                     <div className="p-16 flex flex-col items-center justify-center text-slate-300">
-                                        <DollarSign className="w-16 h-16 mb-4 opacity-20" />
+                                        <RsIcon className="w-16 h-16 mb-4 opacity-20" />
                                         <p className="font-bold uppercase tracking-widest text-xs">No payroll records found.</p>
                                     </div>
                                 )}
