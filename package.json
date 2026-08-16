@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "deploy": "npm run build && rsync -avz --exclude='cache' .next gecko-rms@135.181.199.110:~/htdocs/rms.geckoworksnepal.com.np/",
     "start": "next start",
     "lint": "eslint"
   },
