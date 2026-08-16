@@ -200,9 +200,9 @@ function TenantCard({ t, i, onEditPrice, onEditPlan, onEditValidity, onManage }:
     } else {
         expireDate = new Date(t.created_at || new Date());
         if (t.plan === 'trial') {
-            expireDate.setDate(expireDate.getDate() + 10);
-            cycleText = "10-Day Free Trial";
-            totalDays = 10;
+            expireDate.setDate(expireDate.getDate() + 15);
+            cycleText = "15-Day Free Trial";
+            totalDays = 15;
         } else {
             expireDate.setDate(expireDate.getDate() + 30);
         }
@@ -389,7 +389,7 @@ export default function SuperAdminDashboard() {
       let currentEnd = tenant.feature_flags?.valid_until;
       if (!currentEnd) {
           const baseDate = new Date(tenant.created_at || Date.now());
-          baseDate.setDate(baseDate.getDate() + (tenant.plan === 'trial' ? 10 : 30));
+          baseDate.setDate(baseDate.getDate() + (tenant.plan === 'trial' ? 15 : 30));
           currentEnd = baseDate.toISOString();
       }
       setNewValidityDate(currentEnd.split('T')[0]); // Extract YYYY-MM-DD
