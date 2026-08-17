@@ -1250,7 +1250,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                         </div>
 
                     <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest mb-5">
-                        until today's grand reveal
+                        until today&apos;s grand reveal
                     </p>
 
                         {/* Poster Quote Banner Box */}
@@ -1297,6 +1297,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                 </div>
             </div>
         </motion.div>
+        </>
     );
 }
 
