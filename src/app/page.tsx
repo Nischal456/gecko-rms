@@ -13,6 +13,8 @@ import {
 import AIChatWidget from "@/components/landing/AIChatWidget";
 import NepaliDate from "nepali-date-converter";
 import { toast } from "sonner";
+import confetti from "canvas-confetti";
+import { createPortal } from "react-dom";
 const RsIcon = ({ className, ...props }: any) => <span className={"font-black flex items-center justify-center " + (className || "")} {...props}>Rs</span>;
 
 
@@ -1117,7 +1119,7 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
                                     A product of
                                 </motion.span>
                                 <div className="flex overflow-hidden pb-2">
-                                    {"Gecko Work".split("").map((char, i) => (
+                                    {"Gecko Works".split("").map((char, i) => (
                                         <motion.span
                                             key={i}
                                             initial={{ opacity: 0, y: 40 }}
@@ -1174,19 +1176,33 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
 
 // --- 5.8 LAUNCH COUNTDOWN CARD & CELEBRATION POPUP ---
 function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
-    // Target Launch Date: Tomorrow 6:00 PM NPT (August 17, 2026 18:00:00+05:45 • Bhadra 1, 2083)
-    const targetDate = new Date("2026-08-17T18:00:00+05:45").getTime();
+    // Target Launch Date: Today at 6:00 PM NPT
+    const [targetDate, setTargetDate] = useState(() => new Date("2026-08-17T18:00:00+05:45").getTime());
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
-        hours: 21,
-        minutes: 17,
-        seconds: 38,
+        hours: 0,
+        minutes: 0,
+        seconds: 2,
         isExpired: false
     });
 
     const [isCelebrationModalOpen, setIsCelebrationModalOpen] = useState(false);
     const [hasTriggeredPopper, setHasTriggeredPopper] = useState(false);
+    const popperIntervalRef = useRef<any>(null);
+
+    const handleCloseModal = () => {
+        setIsCelebrationModalOpen(false);
+        if (popperIntervalRef.current) {
+            clearInterval(popperIntervalRef.current);
+        }
+        confetti.reset();
+    };
 
     useEffect(() => {
         const updateCountdown = () => {
@@ -1199,6 +1215,23 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                     setIsCelebrationModalOpen(true);
                     setHasTriggeredPopper(true);
                     toast.success("🎉 Gecko RMS is Officially Live Worldwide!", { duration: 5000, icon: <Rocket className="w-5 h-5 text-emerald-500 animate-bounce" /> });
+                    
+                    const defaults = { startVelocity: 55, spread: 360, ticks: 100, zIndex: 1000, scalar: 1.8, colors: ['#10b981', '#3b82f6', '#f43f5e', '#fbbf24', '#a855f7', '#ffffff', '#ec4899', '#14b8a6'] };
+
+                    popperIntervalRef.current = setInterval(function() {
+                        const particleCount = 60;
+                        confetti({ ...defaults, particleCount, origin: { x: -0.1, y: Math.random() - 0.2 } });
+                        confetti({ ...defaults, particleCount, origin: { x: 1.1, y: Math.random() - 0.2 } });
+                    }, 250);
+
+                    try {
+                        let audio = (window as any).__celebrationAudio;
+                        if (!audio) {
+                            audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3");
+                        }
+                        audio.volume = 1.0;
+                        audio.play().catch((e: any) => console.log("Audio prevented", e));
+                    } catch(e: any) {}
                 }
             } else {
                 const days = Math.floor(difference / (1000 * 60 * 60 * 24));
@@ -1216,6 +1249,90 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
 
     return (
         <>
+            {mounted && typeof document !== "undefined" && createPortal(
+                <AnimatePresence>
+                    {isCelebrationModalOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0, y: 30 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 300, delay: 0.1 }}
+                                className="bg-white/95 backdrop-blur-2xl rounded-[3rem] p-10 md:p-14 text-center max-w-lg w-full mx-4 shadow-[0_30px_80px_-15px_rgba(16,185,129,0.3)] relative overflow-hidden ring-1 ring-emerald-100"
+                            >
+                                <button 
+                                    onClick={handleCloseModal}
+                                    className="absolute top-6 right-6 w-12 h-12 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all z-50 ring-1 ring-slate-200 active:scale-95 shadow-sm"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+
+                                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+                                <div className="absolute -top-32 -left-32 w-80 h-80 bg-emerald-400/20 rounded-full blur-[80px] pointer-events-none" />
+                                <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-teal-400/20 rounded-full blur-[80px] pointer-events-none" />
+                                
+                                <div className="relative z-10 flex flex-col items-center">
+                                    <div className="w-56 sm:w-72 mx-auto mb-10 flex items-center justify-center transform-gpu transition-all duration-500 hover:scale-105 group">
+                                        <motion.img 
+                                            src="/rms.png" 
+                                            alt="Gecko RMS" 
+                                            animate={{ opacity: [1, 0.3, 1] }}
+                                            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                                            className="w-full h-auto object-contain drop-shadow-2xl group-hover:drop-shadow-[0_20px_40px_rgba(16,185,129,0.3)] transition-all duration-500" 
+                                        />
+                                    </div>
+                                    <motion.h2 
+                                        initial="hidden"
+                                        animate="visible"
+                                        variants={{
+                                            hidden: { opacity: 0 },
+                                            visible: { opacity: 1, transition: { staggerChildren: 0.2 } }
+                                        }}
+                                        className="text-5xl sm:text-7xl font-black mb-6 tracking-tighter drop-shadow-sm pb-2 text-center flex items-center justify-center gap-3 sm:gap-4 flex-wrap"
+                                    >
+                                        <motion.span 
+                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
+                                            className="text-slate-900 inline-block"
+                                        >
+                                            We
+                                        </motion.span>
+                                        <motion.span 
+                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
+                                            className="text-slate-900 inline-block"
+                                        >
+                                            Are
+                                        </motion.span>
+                                        <motion.span 
+                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
+                                            className="text-emerald-600 inline-block"
+                                        >
+                                            <motion.span 
+                                                animate={{ scale: [1, 1.15, 1], y: [0, -5, 0] }}
+                                                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                                                className="inline-block origin-bottom drop-shadow-md"
+                                            >
+                                                Live!
+                                            </motion.span>
+                                        </motion.span>
+                                    </motion.h2>
+                                    <p className="text-slate-500 text-lg sm:text-xl mb-4 font-medium leading-relaxed max-w-sm mx-auto">
+                                        Gecko RMS is officially launched worldwide.
+                                    </p>
+                                    <p className="text-emerald-600 font-black text-xs sm:text-sm tracking-[0.2em] uppercase mt-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 shadow-sm">
+                                        Experience the ultimate speed
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+
             <motion.div
                 initial={{ opacity: 0, y: 40, scale: 0.95 }}
                 animate={isLoaded ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
@@ -1281,6 +1398,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                                 </div>
                             ))}
                         </div>
+
 
                     {/* Poster Footer Info Badges */}
                     <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
