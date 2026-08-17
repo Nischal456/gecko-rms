@@ -8,7 +8,7 @@ import Link from "next/link";
 import {
     Menu, X, Server, LayoutGrid, Activity, QrCode, Globe,
     RefreshCw, Users, Bell, TrendingUp, ArrowRight, Zap, ChevronRight, Leaf, Clock, MapPin, Wifi, Laptop, Smartphone, ChefHat, Search, ShoppingBag, CheckCircle2, AlertCircle, LogOut, Grid, List, Moon, Sun, Utensils, Plus, Minus, Trash2, Copy, Share, ExternalLink, CloudLightning, MessageSquare
-    , Banknote
+    , Banknote, Rocket
 } from "lucide-react";
 import AIChatWidget from "@/components/landing/AIChatWidget";
 import NepaliDate from "nepali-date-converter";
@@ -202,7 +202,7 @@ function TrinityDashboardShowcase() {
                 const year = nepDate.getYear();
                 setTodayNepaliDate(`${monthName} ${day}, ${year}`);
             } catch {
-                setTodayNepaliDate("Bhadra 1, 2082");
+                setTodayNepaliDate("Bhadra 1, 2083");
             }
         };
 
@@ -340,7 +340,7 @@ function TrinityDashboardShowcase() {
                                             <h2 className="text-2xl md:text-3xl font-black text-slate-900">Gecko RMS • {adminSubTab}</h2>
                                         </div>
                                         <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2">
-                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" /> {todayNepaliDate || "Falgun 7, 2082"}
+                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" /> {todayNepaliDate || "Bhadra 1, 2083"}
                                         </div>
                                     </div>
 
@@ -1108,24 +1108,24 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
                                 transition={{ duration: 0.6, ease: EASE_PREMIUM }}
                                 className="flex flex-col items-center gap-2 md:gap-3"
                             >
-                                <motion.span 
+                                <motion.span
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.8, ease: EASE_PREMIUM, delay: 0.2 }}
                                     className="text-slate-400 text-[10px] md:text-xs font-semibold tracking-[0.4em] uppercase"
                                 >
                                     A product of
-                                </motion.span> 
+                                </motion.span>
                                 <div className="flex overflow-hidden pb-2">
                                     {"Gecko Work".split("").map((char, i) => (
                                         <motion.span
                                             key={i}
                                             initial={{ opacity: 0, y: 40 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            transition={{ 
-                                                duration: 0.8, 
-                                                ease: EASE_PREMIUM, 
-                                                delay: 0.3 + (i * 0.04) 
+                                            transition={{
+                                                duration: 0.8,
+                                                ease: EASE_PREMIUM,
+                                                delay: 0.3 + (i * 0.04)
                                             }}
                                             className={cn(
                                                 "text-3xl md:text-5xl font-black tracking-tighter",
@@ -1151,10 +1151,10 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
                                 initial={{ opacity: 0, scale: 0.8, filter: "blur(15px)" }}
                                 animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                                 exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
-                                transition={{ 
-                                    duration: 0.8, 
+                                transition={{
+                                    duration: 0.8,
                                     ease: EASE_PREMIUM,
-                                    scale: { type: "spring", stiffness: 100, damping: 20 } 
+                                    scale: { type: "spring", stiffness: 100, damping: 20 }
                                 }}
                                 className="flex items-center justify-center drop-shadow-[0_20px_40px_rgba(0,0,0,0.08)]"
                             >
@@ -1172,18 +1172,21 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
     );
 }
 
-// --- 5.8 LAUNCH COUNTDOWN CARD ---
+// --- 5.8 LAUNCH COUNTDOWN CARD & CELEBRATION POPUP ---
 function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
-    // Target Launch Date: August 17, 2026 00:00:00 NPT (Bhadra 1, 2082)
-    const targetDate = new Date("2026-08-17T00:00:00+05:45").getTime();
-    
+    // Target Launch Date: Tomorrow 6:00 PM NPT (August 17, 2026 18:00:00+05:45 • Bhadra 1, 2083)
+    const targetDate = new Date("2026-08-17T18:00:00+05:45").getTime();
+
     const [timeLeft, setTimeLeft] = useState({
-        days: 2,
-        hours: 0,
-        minutes: 0,
-        seconds: 0,
+        days: 0,
+        hours: 21,
+        minutes: 17,
+        seconds: 38,
         isExpired: false
     });
+
+    const [isCelebrationModalOpen, setIsCelebrationModalOpen] = useState(false);
+    const [hasTriggeredPopper, setHasTriggeredPopper] = useState(false);
 
     useEffect(() => {
         const updateCountdown = () => {
@@ -1192,6 +1195,11 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
 
             if (difference <= 0) {
                 setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true });
+                if (!hasTriggeredPopper) {
+                    setIsCelebrationModalOpen(true);
+                    setHasTriggeredPopper(true);
+                    toast.success("🎉 Gecko RMS is Officially Live Worldwide!", { duration: 5000, icon: <Rocket className="w-5 h-5 text-emerald-500 animate-bounce" /> });
+                }
             } else {
                 const days = Math.floor(difference / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -1204,19 +1212,20 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
         updateCountdown();
         const timer = setInterval(updateCountdown, 1000);
         return () => clearInterval(timer);
-    }, [targetDate]);
+    }, [targetDate, hasTriggeredPopper]);
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={isLoaded ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
-            transition={{ duration: 0.9, delay: 0.45, ease: EASE_PREMIUM }}
-            className="w-full max-w-3xl mx-auto mt-6 px-2 sm:px-4 transform-gpu"
-        >
-            <div className="relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8 md:p-10 bg-white/90 backdrop-blur-2xl text-slate-900 shadow-[0_25px_70px_-15px_rgba(16,185,129,0.15)] border border-emerald-100/90 ring-1 ring-emerald-500/20 group">
-                {/* Glowing subtle ambient lights */}
-                <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[90px] pointer-events-none transform-gpu animate-pulse" />
-                <div className="absolute -bottom-20 -left-20 w-70 h-70 bg-teal-400/10 rounded-full blur-[80px] pointer-events-none transform-gpu" />
+        <>
+            <motion.div
+                initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                animate={isLoaded ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
+                transition={{ duration: 0.9, delay: 0.45, ease: EASE_PREMIUM }}
+                className="w-full max-w-3xl mx-auto mt-6 px-2 sm:px-4 transform-gpu"
+            >
+                <div className="relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8 md:p-10 bg-white/90 backdrop-blur-2xl text-slate-900 shadow-[0_25px_70px_-15px_rgba(16,185,129,0.15)] border border-emerald-100/90 ring-1 ring-emerald-500/20 group">
+                    {/* Glowing subtle ambient lights */}
+                    <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[90px] pointer-events-none transform-gpu animate-pulse" />
+                    <div className="absolute -bottom-20 -left-20 w-70 h-70 bg-teal-400/10 rounded-full blur-[80px] pointer-events-none transform-gpu" />
 
                 <div className="relative z-10 flex flex-col items-center text-center">
                     
@@ -1230,48 +1239,48 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                         </span>
                     </div>
 
-                    {/* Official Banner Headline */}
-                    <div className="flex items-baseline justify-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                        <span className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 tracking-tighter">
-                            {timeLeft.days}
-                        </span>
-                        <span className="text-2xl sm:text-4xl md:text-5xl font-black text-emerald-600 tracking-tight italic uppercase">
-                            DAYS TO GO
-                        </span>
-                    </div>
+                        {/* Official Banner Headline - Matching Pricing Page Font & Clean Typography */}
+                        <div className="flex items-baseline justify-center gap-2 sm:gap-4 mb-2 flex-wrap">
+                            <span className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 tracking-tighter">
+                                {timeLeft.days}
+                            </span>
+                            <span className="text-2xl sm:text-4xl md:text-5xl font-black text-emerald-600 tracking-tight uppercase">
+                                {timeLeft.isExpired ? "IS OFFICIALLY LIVE" : "DAYS TO GO"}
+                            </span>
+                        </div>
 
                     <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest mb-5">
                         until today's grand reveal
                     </p>
 
-                    {/* Poster Quote Banner Box */}
-                    <div className="w-full max-w-lg bg-emerald-50/60 border-2 border-emerald-500/30 rounded-2xl px-6 py-3 mb-8 shadow-sm">
-                        <h4 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight italic">
-                            “Smarter Dining Starts Soon”
-                        </h4>
-                    </div>
+                        {/* Poster Quote Banner Box */}
+                        <div className="w-full max-w-lg bg-emerald-50/70 border-2 border-emerald-500/30 rounded-2xl px-6 py-3.5 mb-8 shadow-sm">
+                            <h4 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                                “Smarter Dining Starts Soon”
+                            </h4>
+                        </div>
 
-                    {/* Light-Theme Futuristic Ticking Countdown Grid */}
-                    <div className="grid grid-cols-4 gap-2.5 sm:gap-4 w-full max-w-md mb-8">
-                        {[
-                            { label: "DAYS", value: timeLeft.days },
-                            { label: "HOURS", value: timeLeft.hours },
-                            { label: "MINS", value: timeLeft.minutes },
-                            { label: "SECS", value: timeLeft.seconds },
-                        ].map((item, idx) => (
-                            <div
-                                key={idx}
-                                className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center shadow-lg shadow-slate-200/50 group-hover:border-emerald-500/40 transition-all duration-300 transform-gpu hover:scale-105"
-                            >
-                                <span className="text-2xl sm:text-3xl md:text-4xl font-black font-mono text-emerald-600 tracking-tight">
-                                    {String(item.value).padStart(2, "0")}
-                                </span>
-                                <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider mt-1">
-                                    {item.label}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
+                        {/* Light-Theme Ticking Countdown Grid - Matching Pricing Typography */}
+                        <div className="grid grid-cols-4 gap-2.5 sm:gap-4 w-full max-w-md mb-8">
+                            {[
+                                { label: "DAYS", value: timeLeft.days },
+                                { label: "HOURS", value: timeLeft.hours },
+                                { label: "MINS", value: timeLeft.minutes },
+                                { label: "SECS", value: timeLeft.seconds },
+                            ].map((item, idx) => (
+                                <div
+                                    key={idx}
+                                    className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center shadow-lg shadow-slate-200/50 group-hover:border-emerald-500/40 transition-all duration-300 transform-gpu hover:scale-105"
+                                >
+                                    <span className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-600 tracking-tight font-sans">
+                                        {String(item.value).padStart(2, "0")}
+                                    </span>
+                                    <span className="text-[9px] md:text-[10px] font-black text-slate-400 tracking-wider mt-1 uppercase font-sans">
+                                        {item.label}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
 
                     {/* Poster Footer Info Badges */}
                     <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
@@ -1310,7 +1319,7 @@ function RotatingLaunchBadge({ isLoaded }: { isLoaded: boolean }) {
             borderColor: "border-slate-200"
         },
         {
-            text: "🚀 LAUNCHING BHADRA 1, 2082 • AUGUST 17, 2026",
+            text: "🚀 LAUNCHING BHADRA 1, 2083 • AUGUST 17, 2026",
             textColor: "text-emerald-800 font-black",
             iconColor: "text-emerald-500 animate-pulse",
             borderColor: "border-emerald-300 shadow-emerald-500/10"
@@ -1354,11 +1363,11 @@ function Hero({ isLoaded }: { isLoaded: boolean }) {
     return (
         <section className="pt-28 sm:pt-32 md:pt-36 pb-12 md:pb-16 container mx-auto px-4 md:px-6 relative z-10 flex flex-col justify-center min-h-[80vh]">
             <div className="flex flex-col items-center text-center max-w-5xl mx-auto mt-0">
-                
+
                 {/* ROTATING BADGE: POWERFUL. FAST. SEAMLESS. <-> LAUNCH DATE */}
                 <RotatingLaunchBadge isLoaded={isLoaded} />
 
-                <motion.h1 
+                <motion.h1
                     initial={{ opacity: 0, y: 40, filter: "blur(4px)" }}
                     animate={isLoaded ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 40, filter: "blur(4px)" }}
                     transition={{ duration: 0.9, delay: 0.15, ease: EASE_PREMIUM }}
@@ -1383,7 +1392,7 @@ function Hero({ isLoaded }: { isLoaded: boolean }) {
                     </span>
                 </motion.h1>
 
-                <motion.p 
+                <motion.p
                     initial={{ opacity: 0, y: 30 }}
                     animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                     transition={{ duration: 0.9, delay: 0.25, ease: EASE_PREMIUM }}
@@ -1393,7 +1402,7 @@ function Hero({ isLoaded }: { isLoaded: boolean }) {
                     Syncs menus, orders, and inventory in real-time.
                 </motion.p>
 
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                     transition={{ duration: 0.9, delay: 0.35, ease: EASE_PREMIUM }}
@@ -1435,7 +1444,7 @@ export default function Home() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
-            
+
             {isLoading && <Preloader onComplete={handlePreloaderComplete} />}
 
             {/* SCROLL BEAM (Desktop) */}
