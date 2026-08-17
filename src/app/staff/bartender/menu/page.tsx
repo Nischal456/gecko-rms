@@ -200,7 +200,8 @@ export default function BartenderMenuPage() {
       // STRICT BOT FILTERING: If split is active, BarOS ONLY sees 'bar' and 'coffee' station items.
       if (splitEnabled) {
           filteredCategories = res.categories.map((cat: any) => {
-              const safeItems = cat.items.filter((item: any) => {
+              const originalItemCount = cat.items?.length || 0;
+              const safeItems = (cat.items || []).filter((item: any) => {
                   const station = (item.station || '').toLowerCase();
                   
                   // Hide Kitchen food
@@ -209,8 +210,8 @@ export default function BartenderMenuPage() {
                   return true; 
               });
 
-              return { ...cat, items: safeItems };
-          }).filter((cat: any) => cat.items.length > 0); 
+              return { ...cat, items: safeItems, _originalCount: originalItemCount };
+          }).filter((cat: any) => cat.items.length > 0 || cat._originalCount === 0); 
       }
 
       setCategories(filteredCategories);
@@ -429,7 +430,6 @@ export default function BartenderMenuPage() {
                 <div className="flex p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
                     <button onClick={() => setFilterStation("all")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterStation === "all" ? "bg-white shadow text-slate-900 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}>All</button>
                     <button onClick={() => setFilterStation("bar")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "bar" ? "bg-white shadow text-indigo-600 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Wine className="w-3.5 h-3.5" /> Bar</button>
-                    <button onClick={() => setFilterStation("coffee")} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${filterStation === "coffee" ? "bg-white shadow text-amber-700 border border-slate-200" : "text-slate-500 hover:text-slate-700"}`}><Coffee className="w-3.5 h-3.5" /> Coffee</button>
                 </div>
 
                 <div className="relative group w-full md:w-64">

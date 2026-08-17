@@ -126,6 +126,7 @@ export default function SettingsView({ data, onSave }: any) {
     // --- SAVE CONFIGURATION ---
     const handleSave = async () => {
         if(!profile.name) return toast.error("Restaurant Name is required!");
+        if(profile.pan && profile.pan.length !== 9) return toast.error("PAN number must be exactly 9 digits!");
         
         setIsSaving(true);
         const toastId = toast.loading("Saving configuration...");
@@ -197,7 +198,10 @@ export default function SettingsView({ data, onSave }: any) {
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-2 mb-1 block">PAN Number</label>
                             <input 
                                 value={profile.pan} 
-                                onChange={e => setProfile({...profile, pan: e.target.value})} 
+                                onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    if (val.length <= 9) setProfile({...profile, pan: val});
+                                }} 
                                 className="w-full p-4 bg-slate-50 text-slate-900 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-emerald-500 focus:bg-white transition-all shadow-sm" 
                                 placeholder="e.g., 123456789"
                             />

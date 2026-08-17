@@ -1226,7 +1226,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                         <div className="h-4 w-px bg-slate-300 shrink-0" />
                         <span className="text-[10px] sm:text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                            Grand Launch Reveal
+                            Grand Launch Today
                         </span>
                     </div>
 
@@ -1241,7 +1241,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                     </div>
 
                     <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest mb-5">
-                        until the big reveal
+                        until today's grand reveal
                     </p>
 
                     {/* Poster Quote Banner Box */}
@@ -1276,7 +1276,7 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                     {/* Poster Footer Info Badges */}
                     <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
                         <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
-                            🇳🇵 Bhadra 1, 2082 (August 17, 2026)
+                            🇳🇵 Bhadra 1, 2082 (Today)
                         </span>
                         <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
                             www.rms.geckoworksnepal.com.np
