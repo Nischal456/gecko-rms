@@ -1176,163 +1176,29 @@ function Preloader({ onComplete }: { onComplete: () => void }) {
 
 // --- 5.8 LAUNCH COUNTDOWN CARD & CELEBRATION POPUP ---
 function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
-    // Target Launch Date: Today at 6:00 PM NPT
-    const [targetDate, setTargetDate] = useState(() => new Date("2026-08-17T18:00:00+05:45").getTime());
     const [mounted, setMounted] = useState(false);
+    const [currentDay, setCurrentDay] = useState(1);
+    const [isAnnual, setIsAnnual] = useState(true);
 
     useEffect(() => {
         setMounted(true);
-    }, []);
+        const launchDate = new Date("2026-08-17T00:00:00+05:45").getTime();
 
-    const [timeLeft, setTimeLeft] = useState({
-        days: 0,
-        hours: 0,
-        minutes: 0,
-        seconds: 2,
-        isExpired: false
-    });
-
-    const [isCelebrationModalOpen, setIsCelebrationModalOpen] = useState(false);
-    const [hasTriggeredPopper, setHasTriggeredPopper] = useState(false);
-    const popperIntervalRef = useRef<any>(null);
-
-    const handleCloseModal = () => {
-        setIsCelebrationModalOpen(false);
-        if (popperIntervalRef.current) {
-            clearInterval(popperIntervalRef.current);
-        }
-        confetti.reset();
-    };
-
-    useEffect(() => {
-        const updateCountdown = () => {
+        const updateDay = () => {
             const now = new Date().getTime();
-            const difference = targetDate - now;
-
-            if (difference <= 0) {
-                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isExpired: true });
-                if (!hasTriggeredPopper) {
-                    setIsCelebrationModalOpen(true);
-                    setHasTriggeredPopper(true);
-                    toast.success("🎉 Gecko RMS is Officially Live Worldwide!", { duration: 5000, icon: <Rocket className="w-5 h-5 text-emerald-500 animate-bounce" /> });
-                    
-                    const defaults = { startVelocity: 55, spread: 360, ticks: 100, zIndex: 1000, scalar: 1.8, colors: ['#10b981', '#3b82f6', '#f43f5e', '#fbbf24', '#a855f7', '#ffffff', '#ec4899', '#14b8a6'] };
-
-                    popperIntervalRef.current = setInterval(function() {
-                        const particleCount = 60;
-                        confetti({ ...defaults, particleCount, origin: { x: -0.1, y: Math.random() - 0.2 } });
-                        confetti({ ...defaults, particleCount, origin: { x: 1.1, y: Math.random() - 0.2 } });
-                    }, 250);
-
-                    try {
-                        let audio = (window as any).__celebrationAudio;
-                        if (!audio) {
-                            audio = new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3");
-                        }
-                        audio.volume = 1.0;
-                        audio.play().catch((e: any) => console.log("Audio prevented", e));
-                    } catch(e: any) {}
-                }
-            } else {
-                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-                setTimeLeft({ days, hours, minutes, seconds, isExpired: false });
-            }
+            const difference = now - launchDate;
+            const days = Math.floor(difference / (1000 * 60 * 60 * 24)) + 1;
+            setCurrentDay(days > 0 ? days : 1);
         };
 
-        updateCountdown();
-        const timer = setInterval(updateCountdown, 1000);
+        updateDay();
+        // Check every minute if the day has changed
+        const timer = setInterval(updateDay, 60000);
         return () => clearInterval(timer);
-    }, [targetDate, hasTriggeredPopper]);
+    }, []);
 
     return (
         <>
-            {mounted && typeof document !== "undefined" && createPortal(
-                <AnimatePresence>
-                    {isCelebrationModalOpen && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md"
-                        >
-                            <motion.div
-                                initial={{ scale: 0.8, opacity: 0, y: 30 }}
-                                animate={{ scale: 1, opacity: 1, y: 0 }}
-                                transition={{ type: "spring", damping: 25, stiffness: 300, delay: 0.1 }}
-                                className="bg-white/95 backdrop-blur-2xl rounded-[3rem] p-10 md:p-14 text-center max-w-lg w-full mx-4 shadow-[0_30px_80px_-15px_rgba(16,185,129,0.3)] relative overflow-hidden ring-1 ring-emerald-100"
-                            >
-                                <button 
-                                    onClick={handleCloseModal}
-                                    className="absolute top-6 right-6 w-12 h-12 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all z-50 ring-1 ring-slate-200 active:scale-95 shadow-sm"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-
-                                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
-                                <div className="absolute -top-32 -left-32 w-80 h-80 bg-emerald-400/20 rounded-full blur-[80px] pointer-events-none" />
-                                <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-teal-400/20 rounded-full blur-[80px] pointer-events-none" />
-                                
-                                <div className="relative z-10 flex flex-col items-center">
-                                    <div className="w-56 sm:w-72 mx-auto mb-10 flex items-center justify-center transform-gpu transition-all duration-500 hover:scale-105 group">
-                                        <motion.img 
-                                            src="/rms.png" 
-                                            alt="Gecko RMS" 
-                                            animate={{ opacity: [1, 0.3, 1] }}
-                                            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-                                            className="w-full h-auto object-contain drop-shadow-2xl group-hover:drop-shadow-[0_20px_40px_rgba(16,185,129,0.3)] transition-all duration-500" 
-                                        />
-                                    </div>
-                                    <motion.h2 
-                                        initial="hidden"
-                                        animate="visible"
-                                        variants={{
-                                            hidden: { opacity: 0 },
-                                            visible: { opacity: 1, transition: { staggerChildren: 0.2 } }
-                                        }}
-                                        className="text-5xl sm:text-7xl font-black mb-6 tracking-tighter drop-shadow-sm pb-2 text-center flex items-center justify-center gap-3 sm:gap-4 flex-wrap"
-                                    >
-                                        <motion.span 
-                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
-                                            className="text-slate-900 inline-block"
-                                        >
-                                            We
-                                        </motion.span>
-                                        <motion.span 
-                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
-                                            className="text-slate-900 inline-block"
-                                        >
-                                            Are
-                                        </motion.span>
-                                        <motion.span 
-                                            variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12 } } }}
-                                            className="text-emerald-600 inline-block"
-                                        >
-                                            <motion.span 
-                                                animate={{ scale: [1, 1.15, 1], y: [0, -5, 0] }}
-                                                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-                                                className="inline-block origin-bottom drop-shadow-md"
-                                            >
-                                                Live!
-                                            </motion.span>
-                                        </motion.span>
-                                    </motion.h2>
-                                    <p className="text-slate-500 text-lg sm:text-xl mb-4 font-medium leading-relaxed max-w-sm mx-auto">
-                                        Gecko RMS is officially launched worldwide.
-                                    </p>
-                                    <p className="text-emerald-600 font-black text-xs sm:text-sm tracking-[0.2em] uppercase mt-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 shadow-sm">
-                                        Experience the ultimate speed
-                                    </p>
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>,
-                document.body
-            )}
-
             <motion.div
                 initial={{ opacity: 0, y: 40, scale: 0.95 }}
                 animate={isLoaded ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
@@ -1344,77 +1210,160 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                     <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[90px] pointer-events-none transform-gpu animate-pulse" />
                     <div className="absolute -bottom-20 -left-20 w-70 h-70 bg-teal-400/10 rounded-full blur-[80px] pointer-events-none transform-gpu" />
 
-                <div className="relative z-10 flex flex-col items-center text-center">
-                    
-                    {/* Brand Logo Header */}
-                    <div className="flex items-center gap-3 mb-6 bg-slate-50/80 px-5 py-2 rounded-2xl border border-slate-200/60 shadow-sm">
-                        <img src="/rms.png" alt="Gecko RMS" className="h-7 sm:h-9 w-auto object-contain shrink-0" />
-                        <div className="h-4 w-px bg-slate-300 shrink-0" />
-                        <span className="text-[10px] sm:text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                            Grand Launch Today
-                        </span>
-                    </div>
+                    <div className="relative z-10 flex flex-col items-center text-center">
 
-                        {/* Official Banner Headline - Matching Pricing Page Font & Clean Typography */}
-                        <div className="flex items-baseline justify-center gap-2 sm:gap-4 mb-2 flex-wrap">
-                            <span className="text-4xl sm:text-6xl md:text-7xl font-black text-slate-900 tracking-tighter">
-                                {timeLeft.days}
-                            </span>
-                            <span className="text-2xl sm:text-4xl md:text-5xl font-black text-emerald-600 tracking-tight uppercase">
-                                {timeLeft.isExpired ? "IS OFFICIALLY LIVE" : "DAYS TO GO"}
+                        {/* Brand Logo Header */}
+                        <div className="flex items-center gap-3 mb-6 bg-slate-50/80 px-5 py-2 rounded-2xl border border-slate-200/60 shadow-sm">
+                            <img src="/rms.png" alt="Gecko RMS" className="h-7 sm:h-9 w-auto object-contain shrink-0" />
+                            <div className="h-4 w-px bg-slate-300 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                                Grand Launch Today
                             </span>
                         </div>
 
-                    <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest mb-5">
-                        until today&apos;s grand reveal
-                    </p>
+                        {/* Unified Modern Launch Card */}
+                        <div className="w-full max-w-2xl mx-auto flex flex-col items-center mb-8">
 
-                        {/* Poster Quote Banner Box */}
-                        <div className="w-full max-w-lg bg-emerald-50/70 border-2 border-emerald-500/30 rounded-2xl px-6 py-3.5 mb-8 shadow-sm">
-                            <h4 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                                “Smarter Dining Starts Soon”
-                            </h4>
-                        </div>
+                            {/* The Main Frame */}
+                            <div className="w-full bg-white rounded-[2rem] p-6 sm:p-10 shadow-2xl shadow-emerald-500/10 border border-slate-100 relative overflow-hidden group">
+                                {/* Ambient Glow */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+                                <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
 
-                        {/* Light-Theme Ticking Countdown Grid - Matching Pricing Typography */}
-                        <div className="grid grid-cols-4 gap-2.5 sm:gap-4 w-full max-w-md mb-8">
-                            {[
-                                { label: "DAYS", value: timeLeft.days },
-                                { label: "HOURS", value: timeLeft.hours },
-                                { label: "MINS", value: timeLeft.minutes },
-                                { label: "SECS", value: timeLeft.seconds },
-                            ].map((item, idx) => (
-                                <div
-                                    key={idx}
-                                    className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center shadow-lg shadow-slate-200/50 group-hover:border-emerald-500/40 transition-all duration-300 transform-gpu hover:scale-105"
-                                >
-                                    <span className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-600 tracking-tight font-sans">
-                                        {String(item.value).padStart(2, "0")}
-                                    </span>
-                                    <span className="text-[9px] md:text-[10px] font-black text-slate-400 tracking-wider mt-1 uppercase font-sans">
-                                        {item.label}
-                                    </span>
+                                <div className="relative z-10">
+                                    {/* Top Section: Live Status & Day Counter */}
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 sm:mb-12">
+                                        <div className="group relative inline-flex items-center justify-center">
+                                            <div className="absolute inset-0 bg-emerald-400/30 rounded-full blur-md group-hover:blur-lg transition-all duration-500" />
+                                            <div className="relative flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-2.5 rounded-full border border-emerald-200/60 shadow-sm transition-transform hover:scale-[1.02]">
+                                                <span className="relative flex h-3 w-3">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                                </span>
+                                                <span className="text-sm font-black text-emerald-700 tracking-widest uppercase">WE ARE LIVE</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="relative group cursor-default">
+                                            <div className="absolute inset-0 bg-slate-900/10 rounded-full blur-md group-hover:blur-lg transition-all duration-500" />
+                                            <div className="relative bg-gradient-to-r from-slate-900 to-slate-800 text-white px-6 py-2.5 rounded-full font-black text-sm tracking-widest shadow-md border border-slate-700 transition-transform hover:scale-[1.02]">
+                                                DAY {currentDay} OF OUR RMS
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Middle Section: Pricing KO Offer */}
+                                    <div className="flex flex-col items-center text-center mb-8 sm:mb-12 relative">
+                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-orange-50/50 to-transparent pointer-events-none blur-2xl -z-10" />
+
+                                        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 shadow-sm border border-orange-200/50 relative overflow-hidden group">
+                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
+                                            <Zap className="w-4 h-4 fill-orange-500 animate-pulse" />
+                                            <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">Pricing Offer</span>
+                                        </div>
+                                        {/* Toggle Switch */}
+                                        <div className="flex items-center justify-center p-1 bg-slate-100/80 rounded-full mb-6 border border-slate-200 backdrop-blur-sm shadow-inner">
+                                            <button
+                                                onClick={() => setIsAnnual(false)}
+                                                className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 ${!isAnnual ? "bg-white text-slate-800 shadow-md border border-slate-200/50" : "text-slate-500 hover:text-slate-700"}`}
+                                            >
+                                                Monthly
+                                            </button>
+                                            <button
+                                                onClick={() => setIsAnnual(true)}
+                                                className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 flex items-center gap-1.5 ${isAnnual ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30" : "text-slate-500 hover:text-slate-700"}`}
+                                            >
+                                                Yearly <span className={`text-[9px] px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-black ${isAnnual ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-600"}`}>Save 20%</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="flex flex-col items-center justify-center mb-6 relative group cursor-default w-full">
+                                            <div className="flex items-start justify-center">
+                                                <span className="text-2xl sm:text-3xl font-black text-slate-400 mt-2 mr-1">Rs</span>
+                                                <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-slate-900 via-slate-800 to-slate-600 tracking-tighter drop-shadow-sm group-hover:scale-105 transition-transform duration-300">
+                                                    1,499
+                                                </span>
+                                                <span className="text-lg sm:text-xl font-bold text-slate-400 mt-auto mb-2 ml-1">/mo</span>
+                                            </div>
+                                            {isAnnual ? (
+                                                <div className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-4 py-1.5 shadow-sm">
+                                                    Billed annually at Rs 17,988/year
+                                                </div>
+                                            ) : (
+                                                <div className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 shadow-sm">
+                                                    Billed monthly at Rs 1,499/month
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="text-sm sm:text-base text-slate-600 font-medium max-w-sm mx-auto leading-relaxed px-2 flex flex-col gap-2">
+                                            <div>
+                                                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md inline-block border border-emerald-100 shadow-sm">15-Day Free Trial</span>
+                                            </div>
+                                            {isAnnual ? (
+                                                <>
+                                                    <div className="text-slate-700 font-bold flex items-center justify-center gap-1.5">
+                                                        <span>Includes 3 Months Extra FREE</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-emerald-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shadow-sm">
+                                                            SECURITY DEPOSIT: Rs 0 (No Deposit)
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="text-slate-500 font-bold">
+                                                        Pay-as-you-go Flexibility
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-orange-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200 shadow-sm">
+                                                            Rs 3,000 Refundable Security Deposit
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom Section: Client Showcase */}
+                                    <div className="pt-8 border-t border-slate-100/80 flex flex-col items-center relative w-full">
+                                        <div className="absolute top-0 inset-x-20 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+
+                                        <div className="relative group cursor-pointer hover:-translate-y-1 transition-all duration-300">
+                                            <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 via-emerald-400/20 to-orange-400/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                            <div className="relative inline-flex items-center justify-center bg-white/80 backdrop-blur-md px-6 py-3 rounded-full border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] group-hover:border-slate-300 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all overflow-hidden">
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
+                                                <p className="text-xs sm:text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2.5">
+                                                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-indigo-50 to-blue-100 border border-blue-200 shadow-inner text-base">
+                                                        🚀
+                                                    </span>
+                                                    Trusted By <span className="bg-gradient-to-r from-slate-800 to-slate-900 bg-clip-text text-transparent drop-shadow-sm">3 Elite Partners</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            ))}
+                            </div>
                         </div>
 
 
-                    {/* Poster Footer Info Badges */}
-                    <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
-                        <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
-                            🇳🇵 Bhadra 1, 2082 (Today)
-                        </span>
-                        <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
-                            www.rms.geckoworksnepal.com.np
-                        </span>
-                        <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
-                            📞 +977 9761424028
-                        </span>
+                        {/* Poster Footer Info Badges */}
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
+                            <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                                🇳🇵 Bhadra 1, 2082 (Today)
+                            </span>
+                            <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
+                                www.rms.geckoworksnepal.com.np
+                            </span>
+                            <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
+                                📞 +977 9761424028
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </motion.div>
+            </motion.div>
         </>
     );
 }
