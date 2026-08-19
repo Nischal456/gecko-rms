@@ -4,20 +4,26 @@
   "description": "Intelligent Restaurant Management System",
   "start_url": "/staff/login",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "background_color": "#FFFFFF",
   "theme_color": "#10b981",
   "icons": [
     {
-      "src": "/paw.png",
-      "sizes": "192x192",
+      "src": "/favicon.ico",
+      "sizes": "192x192 512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/paw.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/paw.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }

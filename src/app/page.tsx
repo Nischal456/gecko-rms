@@ -8,7 +8,7 @@ import Link from "next/link";
 import {
     Menu, X, Server, LayoutGrid, Activity, QrCode, Globe,
     RefreshCw, Users, Bell, TrendingUp, ArrowRight, Zap, ChevronRight, Leaf, Clock, MapPin, Wifi, Laptop, Smartphone, ChefHat, Search, ShoppingBag, CheckCircle2, AlertCircle, LogOut, Grid, List, Moon, Sun, Utensils, Plus, Minus, Trash2, Copy, Share, ExternalLink, CloudLightning, MessageSquare
-    , Banknote, Rocket
+    , Banknote, Rocket, Mail, Phone
 } from "lucide-react";
 import AIChatWidget from "@/components/landing/AIChatWidget";
 import NepaliDate from "nepali-date-converter";
@@ -1218,148 +1218,206 @@ function LaunchCountdownCard({ isLoaded }: { isLoaded: boolean }) {
                             <div className="h-4 w-px bg-slate-300 shrink-0" />
                             <span className="text-[10px] sm:text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                                Grand Launch Today
+                                Grand Launched
                             </span>
                         </div>
 
                         {/* Unified Modern Launch Card */}
                         <div className="w-full max-w-2xl mx-auto flex flex-col items-center mb-8">
 
-                            {/* The Main Frame */}
-                            <div className="w-full bg-white rounded-[2rem] p-6 sm:p-10 shadow-2xl shadow-emerald-500/10 border border-slate-100 relative overflow-hidden group">
+                            {/* The Main Frame with Slow & Smooth Pop-Up Animation */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.82, y: 55 }}
+                                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                                viewport={{ once: true, margin: "-40px" }}
+                                transition={{
+                                    duration: 1.2,
+                                    ease: EASE_PREMIUM,
+                                    scale: { type: "spring", stiffness: 100, damping: 18, mass: 1.3 },
+                                    opacity: { duration: 0.9, ease: "easeOut" },
+                                    y: { type: "spring", stiffness: 100, damping: 18, mass: 1.3 }
+                                }}
+                                whileHover={{ y: -4, transition: { duration: 0.3 } }}
+                                className="w-full bg-white rounded-[2.5rem] p-5 sm:p-8 md:p-10 shadow-2xl shadow-emerald-500/10 border border-slate-200/80 relative overflow-hidden group"
+                            >
                                 {/* Ambient Glow */}
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
                                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
 
                                 <div className="relative z-10">
                                     {/* Top Section: Live Status & Day Counter */}
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 sm:mb-12">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
                                         <div className="group relative inline-flex items-center justify-center">
                                             <div className="absolute inset-0 bg-emerald-400/30 rounded-full blur-md group-hover:blur-lg transition-all duration-500" />
-                                            <div className="relative flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-2.5 rounded-full border border-emerald-200/60 shadow-sm transition-transform hover:scale-[1.02]">
-                                                <span className="relative flex h-3 w-3">
+                                            <div className="relative flex items-center gap-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full border border-emerald-200/80 shadow-sm transition-transform hover:scale-[1.02]">
+                                                <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
                                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-emerald-500"></span>
                                                 </span>
-                                                <span className="text-sm font-black text-emerald-700 tracking-widest uppercase">WE ARE LIVE</span>
+                                                <span className="text-xs sm:text-sm font-black text-emerald-700 tracking-widest uppercase">WE ARE LIVE</span>
                                             </div>
                                         </div>
 
                                         <div className="relative group cursor-default">
                                             <div className="absolute inset-0 bg-slate-900/10 rounded-full blur-md group-hover:blur-lg transition-all duration-500" />
-                                            <div className="relative bg-gradient-to-r from-slate-900 to-slate-800 text-white px-6 py-2.5 rounded-full font-black text-sm tracking-widest shadow-md border border-slate-700 transition-transform hover:scale-[1.02]">
+                                            <div className="relative bg-gradient-to-r from-slate-900 to-slate-800 text-white px-5 py-2 sm:px-6 sm:py-2.5 rounded-full font-black text-xs sm:text-sm tracking-widest shadow-md border border-slate-700 transition-transform hover:scale-[1.02]">
                                                 DAY {currentDay} OF OUR RMS
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Middle Section: Pricing KO Offer */}
-                                    <div className="flex flex-col items-center text-center mb-8 sm:mb-12 relative">
+                                    {/* Middle Section: Pricing KO Offer - Price Featured FIRST */}
+                                    <div className="flex flex-col items-center text-center mb-6 sm:mb-8 relative">
                                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-orange-50/50 to-transparent pointer-events-none blur-2xl -z-10" />
 
-                                        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 shadow-sm border border-orange-200/50 relative overflow-hidden group">
+                                        {/* 1. Badge */}
+                                        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-100 to-amber-50 text-orange-700 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-widest mb-3 shadow-sm border border-orange-200/60 relative overflow-hidden group">
                                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
-                                            <Zap className="w-4 h-4 fill-orange-500 animate-pulse" />
+                                            <Zap className="w-3.5 h-3.5 fill-orange-500 animate-pulse text-orange-500" />
                                             <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">Pricing Offer</span>
                                         </div>
-                                        {/* Toggle Switch */}
-                                        <div className="flex items-center justify-center p-1 bg-slate-100/80 rounded-full mb-6 border border-slate-200 backdrop-blur-sm shadow-inner">
-                                            <button
-                                                onClick={() => setIsAnnual(false)}
-                                                className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 ${!isAnnual ? "bg-white text-slate-800 shadow-md border border-slate-200/50" : "text-slate-500 hover:text-slate-700"}`}
-                                            >
-                                                Monthly
-                                            </button>
-                                            <button
-                                                onClick={() => setIsAnnual(true)}
-                                                className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 flex items-center gap-1.5 ${isAnnual ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30" : "text-slate-500 hover:text-slate-700"}`}
-                                            >
-                                                Yearly <span className={`text-[9px] px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-black ${isAnnual ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-600"}`}>Save 20%</span>
-                                            </button>
-                                        </div>
 
-                                        <div className="flex flex-col items-center justify-center mb-6 relative group cursor-default w-full">
+                                        {/* 2. HERO PRICE DISPLAY (Showcased FIRST) */}
+                                        <div className="flex flex-col items-center justify-center my-2 relative group cursor-default w-full">
                                             <div className="flex items-start justify-center">
                                                 <span className="text-2xl sm:text-3xl font-black text-slate-400 mt-2 mr-1">Rs</span>
-                                                <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-slate-900 via-slate-800 to-slate-600 tracking-tighter drop-shadow-sm group-hover:scale-105 transition-transform duration-300">
+                                                <span className="text-6xl sm:text-7xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 tracking-tighter drop-shadow-sm group-hover:scale-105 transition-transform duration-300">
                                                     1,499
                                                 </span>
                                                 <span className="text-lg sm:text-xl font-bold text-slate-400 mt-auto mb-2 ml-1">/mo</span>
                                             </div>
-                                            {isAnnual ? (
-                                                <div className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-4 py-1.5 shadow-sm">
-                                                    Billed annually at Rs 17,988/year
-                                                </div>
-                                            ) : (
-                                                <div className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 shadow-sm">
-                                                    Billed monthly at Rs 1,499/month
-                                                </div>
-                                            )}
                                         </div>
 
-                                        <div className="text-sm sm:text-base text-slate-600 font-medium max-w-sm mx-auto leading-relaxed px-2 flex flex-col gap-2">
-                                            <div>
-                                                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md inline-block border border-emerald-100 shadow-sm">15-Day Free Trial</span>
-                                            </div>
-                                            {isAnnual ? (
-                                                <>
-                                                    <div className="text-slate-700 font-bold flex items-center justify-center gap-1.5">
-                                                        <span>Includes 3 Months Extra FREE</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-emerald-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shadow-sm">
-                                                            SECURITY DEPOSIT: Rs 0 (No Deposit)
-                                                        </span>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="text-slate-500 font-bold">
-                                                        Pay-as-you-go Flexibility
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-orange-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200 shadow-sm">
-                                                            Rs 3,000 Refundable Security Deposit
-                                                        </span>
-                                                    </div>
-                                                </>
-                                            )}
+                                        {/* 3. Butter-Smooth Sliding Pill Toggle Switch */}
+                                        <div className="relative inline-flex items-center p-1 bg-slate-100/90 rounded-full mb-5 border border-slate-200/80 backdrop-blur-md shadow-inner">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsAnnual(false)}
+                                                className={`relative z-10 px-4 py-1.5 sm:px-6 sm:py-2 rounded-full text-xs sm:text-sm font-extrabold transition-colors duration-200 ${!isAnnual ? "text-slate-900 font-black" : "text-slate-500 hover:text-slate-800"
+                                                    }`}
+                                            >
+                                                {!isAnnual && (
+                                                    <motion.div
+                                                        layoutId="activeBillingTab"
+                                                        transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                                                        className="absolute inset-0 bg-white rounded-full shadow-md border border-slate-200/60 -z-10"
+                                                    />
+                                                )}
+                                                Monthly
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsAnnual(true)}
+                                                className={`relative z-10 px-4 py-1.5 sm:px-6 sm:py-2 rounded-full text-xs sm:text-sm font-extrabold transition-colors duration-200 flex items-center gap-1.5 ${isAnnual ? "text-white font-black" : "text-slate-500 hover:text-slate-800"
+                                                    }`}
+                                            >
+                                                {isAnnual && (
+                                                    <motion.div
+                                                        layoutId="activeBillingTab"
+                                                        transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                                                        className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full shadow-md shadow-emerald-500/30 -z-10"
+                                                    />
+                                                )}
+                                                Yearly
+                                                <span
+                                                    className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-black transition-colors ${isAnnual
+                                                        ? "bg-white/20 text-white border border-white/30"
+                                                        : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                                        }`}
+                                                >
+                                                    Save 20%
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {/* 4. AnimatePresence for Smooth State Content Swap */}
+                                        <div className="w-full max-w-sm mx-auto min-h-[105px] flex items-center justify-center">
+                                            <AnimatePresence mode="wait">
+                                                <motion.div
+                                                    key={isAnnual ? "annual" : "monthly"}
+                                                    initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: -10, scale: 0.97 }}
+                                                    transition={{ duration: 0.2, ease: EASE_PREMIUM }}
+                                                    className="w-full flex flex-col items-center gap-2 text-center"
+                                                >
+                                                    {isAnnual ? (
+                                                        <>
+                                                            <div className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-700 bg-emerald-50/90 border border-emerald-200/80 rounded-full px-4 py-1 shadow-sm">
+                                                                Billed annually at Rs 17,988/year
+                                                            </div>
+                                                            <div className="text-xs sm:text-sm text-slate-600 font-medium">
+                                                                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 shadow-sm inline-block mr-1">15-Day Free Trial</span>
+                                                                <span className="text-slate-800 font-bold">Includes 3 Months Extra FREE</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-emerald-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-emerald-50 px-3 py-1 rounded-md border border-emerald-200/80 shadow-sm">
+                                                                    SECURITY DEPOSIT: Rs 0 (No Deposit)
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-600 bg-slate-100/90 border border-slate-200 rounded-full px-4 py-1 shadow-sm">
+                                                                Billed monthly at Rs 1,499/month
+                                                            </div>
+                                                            <div className="text-xs sm:text-sm text-slate-600 font-medium">
+                                                                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 shadow-sm inline-block mr-1">15-Day Free Trial</span>
+                                                                <span className="text-slate-600 font-semibold">Pay-as-you-go Flexibility</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-orange-700 text-[10px] sm:text-xs uppercase tracking-[0.15em] font-black inline-block bg-orange-50 px-3 py-1 rounded-md border border-orange-200/80 shadow-sm">
+                                                                    Rs 3,000 Refundable Security Deposit
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </motion.div>
+                                            </AnimatePresence>
                                         </div>
                                     </div>
 
                                     {/* Bottom Section: Client Showcase */}
-                                    <div className="pt-8 border-t border-slate-100/80 flex flex-col items-center relative w-full">
-                                        <div className="absolute top-0 inset-x-20 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+                                    <div className="pt-5 border-t border-slate-100/80 flex flex-col items-center relative w-full">
+                                        <div className="absolute top-0 inset-x-12 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
-                                        <div className="relative group cursor-pointer hover:-translate-y-1 transition-all duration-300">
+                                        <div className="relative group cursor-pointer hover:-translate-y-0.5 transition-all duration-300">
                                             <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 via-emerald-400/20 to-orange-400/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                            <div className="relative inline-flex items-center justify-center bg-white/80 backdrop-blur-md px-6 py-3 rounded-full border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] group-hover:border-slate-300 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all overflow-hidden">
+                                            <div className="relative inline-flex items-center justify-center bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] group-hover:border-slate-300 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all overflow-hidden">
                                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
-                                                <p className="text-xs sm:text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2.5">
-                                                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-indigo-50 to-blue-100 border border-blue-200 shadow-inner text-base">
+                                                <p className="text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-indigo-50 to-blue-100 border border-blue-200 shadow-inner text-xs">
                                                         🚀
                                                     </span>
-                                                    Trusted By <span className="bg-gradient-to-r from-slate-800 to-slate-900 bg-clip-text text-transparent drop-shadow-sm">3 Elite Partners</span>
+                                                    Trusted By <span className="bg-gradient-to-r from-slate-800 to-slate-900 bg-clip-text text-transparent drop-shadow-sm">3 Clients</span>
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </motion.div>
                         </div>
 
 
                         {/* Poster Footer Info Badges */}
                         <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-4 border-t border-slate-100 w-full text-xs font-bold text-slate-600">
-                            <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                            <span className="bg-emerald-100/70 text-emerald-800 px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5 shadow-sm">
                                 🇳🇵 Bhadra 1, 2082 (Today)
                             </span>
-                            <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
-                                www.rms.geckoworksnepal.com.np
-                            </span>
-                            <span className="bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-full border border-slate-200 font-mono">
-                                📞 +977 9761424028
-                            </span>
+                            <a
+                                href="mailto:rms@geckoworksnepal.com"
+                                className="bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-emerald-300 font-mono transition-all flex items-center gap-1.5 shadow-sm active:scale-95 group"
+                            >
+                                <Mail className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+                                rms@geckoworksnepal.com
+                            </a>
+                            <a
+                                href="tel:+9779761424028"
+                                className="bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-emerald-300 font-mono transition-all flex items-center gap-1.5 shadow-sm active:scale-95 group"
+                            >
+                                <Phone className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+                                +977 9761424028
+                            </a>
                         </div>
                     </div>
                 </div>

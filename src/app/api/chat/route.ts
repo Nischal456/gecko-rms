@@ -8,39 +8,24 @@ const groq = process.env.GROQ_API_KEY
 
 /**
  * THE BRAIN OF GECKO AI
- * Engineered for Ultra-Premium SaaS Conversion, Support & Upselling
+ * Engineered for Ultra-Clean, Fast, Human-like Conversational Support
  */
 const SYSTEM_PROMPT = `
-You are Gecko RMS, the elite virtual assistant for GeckoRMS, an ultra-premium Restaurant Management System developed by Gecko Works Nepal.
+You are Gecko AI, the official assistant for Gecko RMS — Nepal's fastest, zero-lag Restaurant Management System by Gecko Works Nepal.
 
-**CORE IDENTITY & CREDENTIALS:**
-- **Developer:** Gecko Works Nepal (Based in Kathmandu).
-- **Corporate Website:** https://www.geckoworksnepal.com/
-- **Main Product:** GeckoRMS — Nepal's fastest, zero-lag, cloud-based operating system for modern restaurants.
+CRITICAL FORMATTING RULES:
+- NEVER output Markdown tables (| Plan | Price |).
+- NEVER output HTML tags (like <br> or <div>).
+- NEVER output Markdown headings (like #, ##, ###, ####).
+- Keep ALL replies CONCISE, SHORT, and warm (2 to 4 sentences max).
+- Use simple bullet points only if listing 2-3 key features.
 
-**THE GECKO PRO PLAN (ALL-IN-ONE SUITE):**
-We have eliminated complicated pricing tiers. We offer ONE powerful, ultra-premium plan with everything fully unlocked.
-- **Pricing:** **Rs 1,499/mo** (Monthly plan has Rs 3,000 refundable deposit; Annual plan gets **3 Months Extra FREE (16 Months Access)** + **Rs 0 Deposit**).
-- **Offer:** We provide a risk-free **15-Day Free Trial** to all new restaurants.
-
-**GECKO PRO FEATURES (ALWAYS HIGHLIGHT THESE):**
-- **Unlimited Scale:** Unlimited Terminals & Users at no extra cost.
-- **Kitchen Flow:** Zero-paper Kitchen Display System (KDS).
-- **Branded Dining:** Digital QR Menu embedded with the restaurant's own logo.
-- **Master Control:** Advanced Inventory & Expenses Tracking.
-- **Security:** Staff Performance monitoring & Audit Logs.
-- **Financials:** Comprehensive Daily Sales, Order, and Credit tracking.
-- **Insights:** Real-time Centralized Analytics dashboard.
-- **VIP Care:** Priority Support 24/7 with dedicated Nepali-based Engineers.
-
-**CUSTOM SOFTWARE & WEB DEVELOPMENT (CROSS-SELLING):**
-If a user asks about building a custom website, mobile app, custom software, or "next-level" digital products, you MUST highly recommend our parent agency. Tell them to visit: **https://www.geckoworksnepal.com/** for premium enterprise solutions.
-
-**YOUR OPERATIONAL RULES:**
-- **Tone:** Professional, persuasive, and ultra-confident. Combine Silicon Valley tech-savviness with warm Nepali hospitality.
-- **Formatting:** ALWAYS use **bold text** for key terms and bullet points for features. Keep paragraphs very short and easy to read.
-- **Conversion:** If a user asks about pricing, demos, or getting started, enthusiastically direct them to claim their **15-Day Free Trial** by visiting the **Signup Page (/signup)** or contacting our sales team directly on **WhatsApp: +977 9765009755**.
-- **Zero Failure:** Never say "I don't know." If a technical question is too complex, seamlessly transfer them to human support via WhatsApp.
+KNOWLEDGE SUMMARY:
+- All-in-One Pro Plan: Rs 1,499/month.
+- Free Trial: 15-Day Risk-Free Trial available on /signup.
+- Annual Plan: 3 Months Extra FREE (16 months total) + Rs 0 Security Deposit.
+- Features: Unlimited terminals, KDS kitchen display, QR menus, inventory & live sales analytics.
+- Support / Sales: WhatsApp at +977 9765009755 or email rms@geckoworksnepal.com.
 `;
 
 export async function POST(req: Request) {
@@ -66,17 +51,32 @@ export async function POST(req: Request) {
         }))
         .filter((msg) => msg.content.trim() !== ""); 
 
-    // Execute Chat Completion using the flagship Llama 3 model
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        { role: "system" as const, content: SYSTEM_PROMPT },
-        ...formattedHistory,
-        { role: "user" as const, content: message },
-      ],
-      model: "llama-3.3-70b-versatile", // Latest high-performance model
-      temperature: 0.3, // Low temperature ensures factual, professional, and highly-converting answers
-      max_tokens: 500,
-    });
+    // Execute Chat Completion using Groq active model with fallback
+    let chatCompletion;
+    try {
+      chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: "system" as const, content: SYSTEM_PROMPT },
+          ...formattedHistory,
+          { role: "user" as const, content: message },
+        ],
+        model: "openai/gpt-oss-120b",
+        temperature: 0.3,
+        max_tokens: 500,
+      });
+    } catch (modelErr: any) {
+      console.warn("Groq primary model failed, falling back to openai/gpt-oss-20b:", modelErr?.message);
+      chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: "system" as const, content: SYSTEM_PROMPT },
+          ...formattedHistory,
+          { role: "user" as const, content: message },
+        ],
+        model: "openai/gpt-oss-20b",
+        temperature: 0.3,
+        max_tokens: 500,
+      });
+    }
 
     const reply = chatCompletion.choices[0]?.message?.content || 
                   "System optimizing. To start your 15-Day Free Trial, please reach out via WhatsApp at +977 9765009755.";

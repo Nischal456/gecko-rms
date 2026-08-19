@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, X, Send, MessageCircle, Info, Zap, Smartphone, Sparkles } from "lucide-react";
+import { Bot, X, Send, MessageCircle, Info, Zap, Smartphone, UserPlus } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 // --- ULTRA-PREMIUM MESSAGE FORMATTER ---
 const formatMessage = (text: string) => {
@@ -13,9 +14,11 @@ const formatMessage = (text: string) => {
         const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
         const cleanLine = isBullet ? line.trim().substring(2) : line;
 
-        const parts = cleanLine.split(/(\*\*.*?\*\*|\+977\s?9\d{9})/g);
+        const parts = cleanLine.split(/(\*\*.*?\*\*|\+977\s?9\d{9}|https?:\/\/[^\s]+|\/signup\b)/g);
 
         const formattedLine = parts.map((part, j) => {
+            if (!part) return null;
+
             if (part.startsWith('**') && part.endsWith('**')) {
                 return <strong key={j} className="font-black text-slate-900">{part.slice(2, -2)}</strong>;
             }
@@ -24,6 +27,28 @@ const formatMessage = (text: string) => {
                 return (
                     <a key={j} href={`https://wa.me/${cleanNumber.replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-600 font-black hover:underline inline-flex items-center gap-1">
                         {part}
+                    </a>
+                );
+            }
+            if (part === '/signup' || part.includes('signup')) {
+                return (
+                    <a key={j} href="https://rms.geckoworksnepal.com.np/signup" target="_blank" rel="noopener noreferrer" className="text-emerald-600 font-black underline hover:text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-sm inline-flex items-center gap-1 my-0.5 font-sans">
+                        🚀 Sign Up Page
+                    </a>
+                );
+            }
+            if (part.startsWith('http://') || part.startsWith('https://')) {
+                const cleanUrl = part.replace('www.rms.geckoworksnepal.com.np', 'rms.geckoworksnepal.com.np');
+                if (cleanUrl.includes('signup')) {
+                    return (
+                        <a key={j} href="https://rms.geckoworksnepal.com.np/signup" target="_blank" rel="noopener noreferrer" className="text-emerald-600 font-black underline hover:text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-sm inline-flex items-center gap-1 my-0.5 font-sans">
+                            Sign Up Page
+                        </a>
+                    );
+                }
+                return (
+                    <a key={j} href={cleanUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 font-black underline hover:text-emerald-700">
+                        {cleanUrl}
                     </a>
                 );
             }
@@ -98,6 +123,7 @@ export default function AIChatWidget() {
     };
 
     const QUICK_ACTIONS = [
+        { label: "Sign Up", icon: <UserPlus className="w-3 h-3 text-emerald-500" />, query: "How do I sign up for the free trial?" },
         { label: "Pricing", icon: <Info className="w-3 h-3" />, query: "What are your pricing plans?" },
         { label: "Features", icon: <Zap className="w-3 h-3" />, query: "What are the main features of GeckoRMS?" },
         { label: "Contact", icon: <Smartphone className="w-3 h-3" />, query: "How can I contact a human?" }
@@ -122,13 +148,13 @@ export default function AIChatWidget() {
                             </div>
                             <div className="flex items-center gap-2.5 relative z-10">
                                 <div className="relative">
-                                    <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-inner border border-emerald-400">
+                                    <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-emerald-400/50 shadow-inner bg-white/10 shrink-0">
                                         <Image
-                                            src="/paw.png"
-                                            alt="Paw"
-                                            width={16}
-                                            height={16}
-                                            className="filter brightness-0 invert"
+                                            src="/favicon.ico"
+                                            alt="Gecko AI"
+                                            width={22}
+                                            height={22}
+                                            className="object-contain"
                                         />
                                     </div>
                                     <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-slate-900 rounded-full"></div>
@@ -230,11 +256,11 @@ export default function AIChatWidget() {
                                     <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] flex items-center justify-center gap-1">
                                         Powered by
                                         <Image
-                                            src="/paw.png"
+                                            src="/favicon.ico"
                                             alt="Gecko AI"
                                             width={14}
                                             height={14}
-                                            className="" // makes it full white
+                                            className="object-contain rounded-full"
                                         />
                                         Gecko AI
                                     </p>
