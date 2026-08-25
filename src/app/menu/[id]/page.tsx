@@ -108,6 +108,7 @@ export default function PublicMenuPage() {
         const res = await callWaiter(params.id as string, callingTable.trim());
         setIsCalling(false);
         if (res.success) {
+            new Audio("https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3").play().catch(e => console.log("Audio play blocked", e));
             toast.success("Waiter called successfully!");
             setShowCallModal(false);
         } else {

@@ -81,8 +81,15 @@ export async function getKitchenTickets() {
 
         if (!logs || logs.length === 0) return { success: true, data: [] };
 
-        let allOrders: any[] = [];
-        logs.forEach((log: any) => { allOrders = [...allOrders, ...safeParse(log.orders_data)]; });
+        const uniqueOrders = new Map();
+        logs.sort((a: any, b: any) => a.date.localeCompare(b.date)).forEach((log: any) => {
+            const parsed = safeParse(log.orders_data);
+            parsed.forEach((o: any) => {
+                const oId = o.id || o.invoice_no || Math.random().toString();
+                uniqueOrders.set(oId, o);
+            });
+        });
+        const allOrders = Array.from(uniqueOrders.values());
 
         const activeOrders = allOrders.filter((o: any) => ['pending', 'cooking', 'ready', 'preparing'].includes((o.status || '').toLowerCase().trim()));
 
@@ -378,12 +385,12 @@ export async function getKitchenStats() {
             getKathmanduDateString(new Date(Date.now() + 24 * 60 * 60 * 1000))
         ];
 
-        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("orders_data, paid_history").eq("tenant_id", tenantId).in("date", datesToCheck);
+        const { data: logs } = await supabaseAdmin.from("daily_order_logs").select("date, orders_data, paid_history").eq("tenant_id", tenantId).in("date", datesToCheck);
 
         if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
 
-        let allOrders: any[] = [];
-        logs.forEach(log => { 
+        const uniqueOrders = new Map();
+        logs.sort((a: any, b: any) => a.date.localeCompare(b.date)).forEach(log => { 
             const active = safeParse(log.orders_data) || [];
             let paid = [];
             try {
@@ -399,8 +406,12 @@ export async function getKitchenStats() {
                 table_name: p.table_name || p.table_no
             }));
 
-            allOrders = [...allOrders, ...active, ...normalizedPaid]; 
+            [...active, ...normalizedPaid].forEach((o: any) => {
+                const oId = o.id || o.invoice_no || Math.random().toString();
+                uniqueOrders.set(oId, o);
+            });
         });
+        const allOrders = Array.from(uniqueOrders.values());
 
         const uniqueOrdersMap = new Map();
         allOrders.forEach(o => { if (o.id) uniqueOrdersMap.set(o.id, o); });

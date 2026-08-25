@@ -163,6 +163,22 @@ export default function StaffLoginPage() {
           </motion.div>
       )}
 
+      {/* HEADER FOR SETUP VIEW */}
+      {view === "setup" && (
+          <motion.div 
+            initial={{ y: -20, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.5 }}
+            className="fixed top-0 left-0 right-0 p-4 md:p-8 flex justify-end items-center z-10 pointer-events-none transform-gpu"
+          >
+              <div className="pointer-events-auto">
+                  <a href="/login" className="px-4 py-2.5 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl text-slate-500 text-[10px] font-bold hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200 transition-all shadow-sm ring-1 ring-slate-100 active:scale-95 flex items-center gap-1.5">
+                      <ArrowRight className="w-3.5 h-3.5 rotate-180" /> Main Login
+                  </a>
+              </div>
+          </motion.div>
+      )}
+
       <AnimatePresence mode="wait">
         
         {/* --- VIEW 1: SETUP --- */}

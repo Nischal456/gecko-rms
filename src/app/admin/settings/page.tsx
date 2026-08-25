@@ -215,7 +215,7 @@ export default function SettingsPage() {
 
   if (loading) return (
     <div className="flex h-screen bg-[#F8FAFC]">
-       <div className="hidden md:block"><Sidebar tenantName="" tenantCode="" /></div> 
+       <Sidebar tenantName="" tenantCode="" /> 
        <div className="flex-1 flex flex-col items-center justify-center gap-6">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-500 rounded-full animate-spin"></div>
@@ -228,9 +228,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden selection:bg-emerald-500 selection:text-white">
-      <div className="hidden md:block">
-        <Sidebar tenantName={tenant?.name} tenantCode={tenant?.code} logo={tenant?.logo_url} />
-      </div>
+      <Sidebar tenantName={tenant?.name} tenantCode={tenant?.code} logo={tenant?.logo_url} />
 
       <main className="flex-1 flex flex-col h-full overflow-y-auto relative custom-scrollbar bg-gradient-to-b from-white to-slate-50/50">
         

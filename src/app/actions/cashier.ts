@@ -209,7 +209,7 @@ export async function getCashierData(isPolling: boolean = false) {
             ? (['payment_pending'].includes(activeOrder.status) ? 'payment_pending' 
             : ['served', 'ready'].includes(activeOrder.status) ? 'served' 
             : 'occupied') 
-            : 'free',
+            : (t.status || 'free'),
         currentOrder: activeOrder || null
       };
     }) || [];
@@ -264,6 +264,9 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
     // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
     // If the Cashier frontend fails to pass station/category payload,
     // we look it up live from the database to guarantee the Chef/Bartender OS routes it.
+    const { data: tenantData } = await supabaseAdmin.from("tenants").select("feature_flags").eq("id", tenantId).single();
+    const isSplitActive = tenantData?.feature_flags?.split_kot_bot === true;
+
     const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
     const liveMenu = new Map();
     if (menuData) {
@@ -290,7 +293,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
             time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
             
             // Secure routing fallback to database definition if client omits it!
-            station: dbItem.station || i.station || i.prep_station || (
+            station: isSplitActive ? (dbItem.station || i.station || i.prep_station || (
                 (() => {
                     const itemName = String(i.name).toLowerCase();
                     const catName = String(dbItem.category_name || dbItem.category || i.category || "").toLowerCase();
@@ -299,7 +302,7 @@ export async function createCashierOrder(tableId: string, items: any[], type: 'd
                     }
                     return 'kitchen';
                 })()
-            ),
+            )) : 'kitchen',
             category: dbItem.category_name || dbItem.category || i.category || "",
             dietary: dbItem.dietary || i.dietary || ""
         };

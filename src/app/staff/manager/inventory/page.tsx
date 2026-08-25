@@ -13,6 +13,13 @@ import { toast } from "sonner";
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
 import { getDashboardData } from "@/app/actions/dashboard";
 
+const ReceiptRs = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+    <text x="12" y="15" fontSize="10" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none" style={{ fontFamily: "sans-serif" }}>Rs</text>
+  </svg>
+);
+
 export default function ManagerInventoryPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -283,7 +290,7 @@ export default function ManagerInventoryPage() {
                     </div>
                     <div className="flex gap-3 w-full lg:w-auto">
                         <button onClick={() => { setFinanceType('expense'); setIsExpenseModalOpen(true); }} className="flex-1 lg:flex-none px-6 h-14 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm transition-all whitespace-nowrap active:scale-95 text-sm md:text-base">
-                            <Receipt className="w-5 h-5 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
+                            <ReceiptRs className="w-5 h-5 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
                         </button>
                         <button onClick={() => { setCustomCategory(""); setIsModalOpen(true); }} className="flex-1 lg:flex-none px-6 h-14 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20 active:scale-95 transition-all whitespace-nowrap text-sm md:text-base">
                             <Plus className="w-5 h-5" /> <span className="hidden sm:inline">Add Stock</span><span className="sm:hidden">Stock</span>

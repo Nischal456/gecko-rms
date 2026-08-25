@@ -36,6 +36,7 @@ interface CashierData {
     categories: any[]; 
     cancelledItems?: any[];
     staff?: { name: string; role: string };
+    businessDate?: string;
 }
 
 // --- HELPER CONFIG ---
@@ -61,6 +62,24 @@ const toBS = (dateStr: string) => {
         return npDate.format('YYYY/MM/DD'); 
     } catch { return "---"; }
 };
+
+function toNepaliDigits(num: number | string): string {
+    const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+    return num.toString().replace(/\d/g, d => nepaliDigits[parseInt(d)]);
+}
+
+function formatBusinessDate(bizDateStr: string) {
+    if (!bizDateStr) return "---";
+    try {
+        const [y, m, d] = bizDateStr.split('T')[0].replace(/\//g, '-').split('-').map(Number);
+        const localDate = new Date(y, m - 1, d);
+        const np = new NepaliDate(localDate);
+        const nepaliMonths = ["Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwin", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
+        return `${nepaliMonths[np.getMonth()]} ${toNepaliDigits(np.getDate())}, ${toNepaliDigits(np.getYear())}`;
+    } catch {
+        return "---";
+    }
+}
 
 // --- ITEM FILTERING HELPERS ---
 function mergeArray(items: any[]) {
@@ -561,30 +580,31 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
                         <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest shadow-sm ${isPayable ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>{isPayable ? 'Payable' : 'Pending'}</span>
                     </div>
                     
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
-                        {displayItems.map((item: any, i: number) => {
-                            const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
-                            return (
-                                <div key={i} className={`flex justify-between items-start text-sm p-3 rounded-2xl border shadow-sm transition-all ${isCancelled ? 'bg-red-50/40 border-red-100 opacity-80' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
-                                    <div className="flex gap-3 w-full pr-2">
-                                        <span className={`font-black w-7 h-7 flex items-center justify-center rounded-lg shrink-0 ${isCancelled ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-400'}`}>{item.qty}</span> 
-                                        <div className="flex flex-col justify-center w-full mt-0.5 min-w-0">
-                                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-1 w-full min-w-0">
-                                                <span className={`font-bold leading-tight break-words flex-1 pr-1 ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
-                                                {renderSmallStatus(item.status, item.previous_status)}
+                    <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative">
+                        <div className="p-4 space-y-2 flex-1">
+                            {activeItems.map((item: any, i: number) => {
+                                const isCancelled = ['cancelled', 'void'].includes((item.status || '').toLowerCase().trim());
+                                return (
+                                    <div key={i} className={`flex justify-between items-start text-sm p-3 rounded-2xl border shadow-sm transition-all ${isCancelled ? 'bg-red-50/40 border-red-100 opacity-80' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
+                                        <div className="flex gap-3 w-full pr-2">
+                                            <span className={`font-black w-7 h-7 flex items-center justify-center rounded-lg shrink-0 ${isCancelled ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-400'}`}>{item.qty}</span> 
+                                            <div className="flex flex-col justify-center w-full mt-0.5 min-w-0">
+                                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-1 w-full min-w-0">
+                                                    <span className={`font-bold leading-tight break-words flex-1 pr-1 ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{item.name}</span>
+                                                    {renderSmallStatus(item.status, item.previous_status)}
+                                                </div>
+                                                {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
+                                                <span className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1"><Clock className="w-2.5 h-2.5 opacity-70"/> {item.time_added || order.time}</span>
                                             </div>
-                                            {item.variant && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.variant}</span>}
-                                            <span className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1"><Clock className="w-2.5 h-2.5 opacity-70"/> {item.time_added || order.time}</span>
                                         </div>
+                                        <span className={`font-black flex items-start shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
                                     </div>
-                                    <span className={`font-black flex items-start shrink-0 mt-0.5 ${isCancelled ? 'line-through text-red-300' : 'text-slate-900'}`}>{formatRs(item.price * item.qty)}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    
-                    {/* FINANCIALS PANEL (Advanced Discount System Pinned here) */}
-                    <div className="p-4 md:p-5 bg-white border-t border-slate-200 shrink-0">
+                                );
+                            })}
+                        </div>
+                        
+                        {/* FINANCIALS PANEL (Advanced Discount System Pinned here) */}
+                        <div className="p-4 md:p-5 bg-white border-t border-slate-200 shrink-0 md:sticky md:bottom-0 z-10 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
                         {/* Subtotal */}
                         <div className="flex justify-between items-center mb-2.5">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Subtotal</span>
@@ -687,6 +707,7 @@ function CheckoutModal({ table, onClose, onConfirm, onCancel, restaurant, staff 
                             <span className="text-3xl font-black text-white tracking-tighter">{formatRs(grandTotal)}</span>
                         </div>
                     </div>
+                </div>
                 </div>
                 
                 {/* RIGHT: PAYMENT ACTIONS (Scrollable Body, Pinned Footer) */}
@@ -1278,18 +1299,18 @@ function CreditBookModal({ onClose }: { onClose: () => void }) {
                                                             value={billPayAmount} 
                                                             onChange={(e) => setBillPayAmount(e.target.value)} 
                                                             placeholder="Amount (Rs)" 
-                                                            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                                                            className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
                                                         />
                                                         <button 
                                                             onClick={() => handlePayCreditBill(b.invoice_no, b.due_amount)}
                                                             disabled={isPaying || !billPayAmount}
-                                                            className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                                            className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
                                                         >
                                                             {isPaying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm"}
                                                         </button>
                                                         <button 
                                                             onClick={() => { setPayingInvoice(null); setBillPayAmount(""); }}
-                                                            className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs px-3 py-2 rounded-lg transition-all active:scale-95"
+                                                            className="shrink-0 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs px-3 py-2 rounded-lg transition-all active:scale-95"
                                                         >
                                                             Cancel
                                                         </button>
@@ -1545,31 +1566,31 @@ export default function CashierDashboard() {
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{getGreeting()}, <span className="text-emerald-500">{data.restaurant?.name}</span></h1>
                                 <div className="flex items-center gap-3 mt-1.5">
-                                    <span className="text-[10px] md:text-xs font-bold text-white bg-slate-900 px-2 py-0.5 rounded-md uppercase tracking-widest flex items-center gap-1 shadow-sm"><CalendarClock className="w-3 h-3" /> {toBS(currentTime.toISOString())}</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-white bg-slate-900 px-2 py-0.5 rounded-md uppercase tracking-widest flex items-center gap-1 shadow-sm"><CalendarClock className="w-3 h-3" /> {formatBusinessDate(data?.businessDate || currentTime.toISOString())}</span>
                                     <span className="text-[10px] md:text-xs font-black text-slate-500 tracking-wider">{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                                 </div>
                             </div>
-                            <div className="flex gap-3 md:gap-4 items-center w-full md:w-auto border-t md:border-none border-slate-100 pt-3 md:pt-0">
+                            <div className="flex gap-2 md:gap-4 items-center w-full md:w-auto border-t md:border-none border-slate-100 pt-3 md:pt-0 overflow-x-auto no-scrollbar pb-1 md:pb-0">
                                 
                                 {/* PREMIUM CREDIT BOOK BUTTON */}
-                                <button onClick={() => setShowCreditBook(true)} className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group">
+                                <button onClick={() => setShowCreditBook(true)} className="shrink-0 flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm group">
                                     <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                     <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Credit Ledger</span>
                                 </button>
 
                                 {/* CLOSE DAY BUTTON */}
-                                <button onClick={() => setShowCloseDayModal(true)} className="flex items-center gap-2 bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all shadow-sm group">
+                                <button onClick={() => setShowCloseDayModal(true)} className="shrink-0 flex items-center gap-2 bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all shadow-sm group">
                                     <Lock className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                     <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Close Day</span>
                                 </button>
                                 
-                                <div className="flex items-center gap-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                                <div className="shrink-0 flex items-center gap-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                                     <div className="text-right flex flex-col items-end">
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Active</p>
                                         <p className="text-lg md:text-xl font-black text-orange-500 leading-none">{data.stats?.pendingBills || 0}</p>
                                     </div>
                                     <div className="w-px h-8 bg-slate-200" />
-                                    <div className="text-right flex flex-col items-end">
+                                    <div className="flex text-right flex-col items-end">
                                         <div className="flex items-center justify-end gap-1.5 mb-1">
                                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Sales</p>
                                             <button onClick={() => setShowTotalSales(!showTotalSales)} className="text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none"><Eye className="w-3 h-3" /></button>

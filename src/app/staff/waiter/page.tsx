@@ -22,7 +22,7 @@ import { toast } from "sonner";
 
 // --- SOUND CONSTANTS ---
 const SOUND_NOTIFICATION = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
-const SOUND_CALL = "https://assets.mixkit.co/active_storage/sfx/1000/1000-preview.mp3";
+const SOUND_CALL = "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3";
 
 // --- UTILS ---
 const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
@@ -465,6 +465,7 @@ export default function WaiterDashboard() {
                         notifiedReadyIds.current.add(n.id);
                     } else if (n.type === 'call' && !notifiedReadyIds.current.has(n.id)) {
                         setTopAlert({ msg: `Customer Calling: ${n.desc}` });
+                        new Audio(SOUND_CALL).play().catch(e => console.log("Audio play blocked", e));
                         notifiedReadyIds.current.add(n.id);
                     }
                 });

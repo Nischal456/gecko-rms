@@ -759,9 +759,7 @@ export default function ReportsPage() {
             .custom-np-input input:focus { box-shadow: none !important; }
         `}</style>
   
-        <div className="hidden md:block">
-          <Sidebar tenantName={tenant?.name || "Admin"} tenantCode={tenant?.code || "..."} logo={tenant?.logo_url} />
-        </div>
+        <Sidebar tenantName={tenant?.name || "Admin"} tenantCode={tenant?.code || "..."} logo={tenant?.logo_url} />
   
         <AnimatePresence>
             {showCreditBook && <CreditBookModal onClose={() => {setShowCreditBook(false); loadAllData();}} />}

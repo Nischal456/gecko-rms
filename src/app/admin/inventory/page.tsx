@@ -13,6 +13,13 @@ import { toast } from "sonner";
 import { getInventory, addInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
 import { getDashboardData } from "@/app/actions/dashboard";
 
+const ReceiptRs = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+    <text x="12" y="15" fontSize="10" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none" style={{ fontFamily: "sans-serif" }}>Rs</text>
+  </svg>
+);
+
 export default function AdminInventoryPage() {
   const [tenant, setTenant] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -257,7 +264,7 @@ export default function AdminInventoryPage() {
                         <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={`Search ${activeTab}...`} className="w-full h-12 pl-12 pr-4 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-slate-900 transition-all shadow-sm" />
                     </div>
                     <button onClick={() => { setFinanceType('expense'); setIsExpenseModalOpen(true); }} className="flex-1 xl:flex-none px-6 h-12 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm transition-all whitespace-nowrap active:scale-95">
-                        <Receipt className="w-4 h-4 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
+                        <ReceiptRs className="w-4 h-4 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
                     </button>
                     <button onClick={() => { setCustomCategory(""); setIsModalOpen(true); }} className="flex-1 xl:flex-none px-6 h-12 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20 active:scale-95 transition-all whitespace-nowrap">
                         <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add Stock</span><span className="sm:hidden">Stock</span>

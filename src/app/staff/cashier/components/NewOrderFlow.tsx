@@ -127,13 +127,13 @@ export function TableSelector({ tables, onSelectTable, onBack }: any) {
                             const statusText = isOccupied ? 'Occupied' : 'Vacant';
                             const StatusIcon = isOccupied ? Clock : CheckCircle2;
                             return (
-                                <motion.button key={t.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05)" }} whileTap={{ scale: 0.98 }} onClick={() => onSelectTable(t.label)} className={`relative flex flex-col p-4 md:p-5 rounded-2xl md:rounded-[1.25rem] border-2 transition-all duration-300 text-left group min-h-[150px] md:min-h-[160px] justify-between ${isOccupied ? 'border-orange-200 bg-orange-50/50' : 'border-emerald-200 bg-white hover:border-emerald-400'}`}>
-                                    <div className="flex justify-between items-center w-full gap-2 min-w-0">
-                                        <div className={`h-9 md:h-10 min-w-[2.75rem] md:min-w-[3.25rem] px-2.5 rounded-xl flex-shrink-0 flex items-center justify-center border shadow-sm ${isOccupied ? 'bg-white border-orange-100 text-orange-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <motion.button key={t.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05)" }} whileTap={{ scale: 0.98 }} onClick={() => onSelectTable(t.label)} className={`relative flex flex-col p-3 md:p-5 rounded-2xl md:rounded-[1.25rem] border-2 transition-all duration-300 text-left group min-h-[140px] md:min-h-[160px] justify-between ${isOccupied ? 'border-orange-200 bg-orange-50/50' : 'border-emerald-200 bg-white hover:border-emerald-400'}`}>
+                                    <div className="flex flex-wrap justify-between items-center w-full gap-1.5 md:gap-2 min-w-0">
+                                        <div className={`h-8 md:h-10 min-w-[2.5rem] md:min-w-[3.25rem] px-2 md:px-2.5 rounded-xl flex-shrink-0 flex items-center justify-center border shadow-sm ${isOccupied ? 'bg-white border-orange-100 text-orange-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
                                             <span className="font-black text-sm md:text-base whitespace-nowrap">{t.label}</span>
                                         </div>
-                                        <div className={`h-9 md:h-10 flex items-center gap-1 md:gap-1.5 px-2.5 rounded-xl border text-[9px] md:text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${isOccupied ? 'bg-white/80 border-orange-200 text-orange-600' : 'bg-emerald-100/50 border-emerald-200 text-emerald-700'}`}>
-                                            <StatusIcon className="w-3.5 h-3.5" />
+                                        <div className={`h-8 md:h-10 flex items-center gap-1 md:gap-1.5 px-2 md:px-2.5 rounded-xl border text-[8px] md:text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${isOccupied ? 'bg-white/80 border-orange-200 text-orange-600' : 'bg-emerald-100/50 border-emerald-200 text-emerald-700'}`}>
+                                            <StatusIcon className="w-3 md:w-3.5 h-3 md:h-3.5" />
                                             <span>{statusText}</span>
                                         </div>
                                     </div>

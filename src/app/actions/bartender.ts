@@ -84,10 +84,15 @@ export async function getBartenderTickets() {
 
         if (!logs || logs.length === 0) return { success: true, data: [] };
 
-        let allOrders: any[] = [];
-        logs.forEach((log: any) => {
-            allOrders = [...allOrders, ...safeParse(log.orders_data)];
+        const uniqueOrders = new Map();
+        logs.sort((a: any, b: any) => a.date.localeCompare(b.date)).forEach((log: any) => {
+            const parsed = safeParse(log.orders_data);
+            parsed.forEach((o: any) => {
+                const oId = o.id || o.invoice_no || Math.random().toString();
+                uniqueOrders.set(oId, o);
+            });
         });
+        const allOrders = Array.from(uniqueOrders.values());
 
         const activeOrders = allOrders.filter((o: any) => 
             ['pending', 'cooking', 'ready', 'preparing', 'cancelled'].includes((o.status || '').toLowerCase().trim())
@@ -310,8 +315,8 @@ export async function getBartenderStats() {
 
         if (!logs || logs.length === 0) return { success: true, stats: { total: 0, completed: 0, pending: 0, revenue: 0 }, history: [] };
 
-        let allOrders: any[] = [];
-        logs.forEach(log => {
+        const uniqueOrders = new Map();
+        logs.sort((a: any, b: any) => a.date.localeCompare(b.date)).forEach(log => {
             const active = safeParse(log.orders_data) || [];
             let paid = [];
             try {
@@ -327,8 +332,12 @@ export async function getBartenderStats() {
                 table_name: p.table_name || p.table_no
             }));
 
-            allOrders = [...allOrders, ...active, ...normalizedPaid];
+            [...active, ...normalizedPaid].forEach((o: any) => {
+                const oId = o.id || o.invoice_no || Math.random().toString();
+                uniqueOrders.set(oId, o);
+            });
         });
+        const allOrders = Array.from(uniqueOrders.values());
 
         const uniqueOrdersMap = new Map();
         allOrders.forEach(o => {

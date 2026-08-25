@@ -1169,30 +1169,30 @@ export default function ReportsView({ data: initialData }: any) {
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                                    <th className="pb-3">Order ID</th>
-                                                    <th className="pb-3">Table</th>
-                                                    <th className="pb-3">Time</th>
-                                                    <th className="pb-3">Responsible Server</th>
-                                                    <th className="pb-3">Status</th>
-                                                    <th className="pb-3 text-right">Amount</th>
+                                                    <th className="pb-4 px-4">Order ID</th>
+                                                    <th className="pb-4 px-4">Table</th>
+                                                    <th className="pb-4 px-4">Time</th>
+                                                    <th className="pb-4 px-4">Responsible Server</th>
+                                                    <th className="pb-4 px-4">Status</th>
+                                                    <th className="pb-4 px-4 text-right">Amount</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-50 text-xs font-bold text-slate-700">
+                                            <tbody className="divide-y divide-slate-50 text-xs text-slate-700">
                                                 {cashierReport.summary.pendingOrdersDetails.map((o: any, idx: number) => (
-                                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="py-3 font-mono font-black text-slate-900">#{o.id.slice(-6)}</td>
-                                                        <td className="py-3">Table {o.tbl}</td>
-                                                        <td className="py-3">{o.time}</td>
-                                                        <td className="py-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-5 h-5 rounded-full bg-slate-100 text-[9px] flex items-center justify-center text-slate-500 font-black uppercase">{o.staff.charAt(0)}</div>
-                                                                <span>{o.staff}</span>
+                                                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                                                        <td className="py-4 px-4 font-mono font-black text-slate-900 whitespace-nowrap">#{o.id.slice(-6)}</td>
+                                                        <td className="py-4 px-4 font-bold text-slate-700 whitespace-nowrap">Table {o.tbl}</td>
+                                                        <td className="py-4 px-4 font-medium text-slate-500 whitespace-nowrap">{o.time}</td>
+                                                        <td className="py-4 px-4 whitespace-nowrap">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-[10px] flex items-center justify-center text-slate-600 font-black uppercase shadow-sm group-hover:bg-white group-hover:border-slate-300 transition-colors">{o.staff.charAt(0)}</div>
+                                                                <span className="font-bold text-slate-700">{o.staff}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="py-3">
-                                                            <span className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-orange-100">{o.status}</span>
+                                                        <td className="py-4 px-4 whitespace-nowrap">
+                                                            <span className="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide border border-orange-100 shadow-sm">{o.status}</span>
                                                         </td>
-                                                        <td className="py-3 text-right font-black text-slate-950">{formatRs(o.total)}</td>
+                                                        <td className="py-4 px-4 text-right font-black text-slate-950 whitespace-nowrap">{formatRs(o.total)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

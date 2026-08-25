@@ -32,7 +32,7 @@ function StatCard({ title, value, icon: Icon, color, delay }: any) {
             className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:shadow-md transition-all"
         >
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${colors[color]}`}>
-                <Icon className="w-7 h-7" />
+                {typeof Icon === 'string' ? <span className="font-black text-2xl tracking-tighter">{Icon}</span> : <Icon className="w-7 h-7" />}
             </div>
             <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
@@ -160,19 +160,19 @@ export default function ReportsPage() {
             <LeaveModal isOpen={isLeaveModalOpen} onClose={() => { setLeaveModalOpen(false); loadData(); }} />
             
             <main className="flex-1 flex flex-col h-full overflow-hidden">
-                <header className="px-8 py-6 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-20">
-                    <div className="flex justify-between items-center max-w-5xl mx-auto w-full">
+                <header className="px-5 md:px-8 py-4 md:py-6 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-20">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center max-w-5xl mx-auto w-full gap-4">
                         <div>
                             <h1 className="text-2xl font-black text-slate-900">My Reports</h1>
                             <p className="text-sm font-bold text-slate-400 mt-1">Track performance & earnings</p>
                         </div>
                         
-                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
+                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1 w-full md:w-auto overflow-x-auto">
                             {['performance', 'payroll', 'leave'].map((tab) => (
                                 <button 
                                     key={tab}
                                     onClick={() => setActiveTab(tab as any)}
-                                    className={`px-5 py-2 rounded-lg text-xs font-bold capitalize transition-all ${activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={`px-5 py-2 rounded-lg text-xs font-bold capitalize transition-all whitespace-nowrap shrink-0 flex-1 md:flex-none text-center ${activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 >
                                     {tab}
                                 </button>
@@ -188,7 +188,7 @@ export default function ReportsPage() {
                         {activeTab === 'performance' && (
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <StatCard title="Total Sales (Month)" value={formatRs(stats.totalSales || 0)} icon={IndianRupee} color="emerald" delay={0.1} />
+                                    <StatCard title="Total Sales (Month)" value={formatRs(stats.totalSales || 0)} icon="Rs" color="emerald" delay={0.1} />
                                     <StatCard title="Tables Served" value={stats.tablesServed || 0} icon={LayoutDashboard} color="blue" delay={0.2} />
                                     
                                     {/* REPLACED STAT: Est. Commission -> Avg. Order Value */}

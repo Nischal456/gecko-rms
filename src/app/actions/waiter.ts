@@ -72,9 +72,26 @@ export async function getWaiterDashboardData() {
         .in("date", [yesterdayStr, today])
         .order("date", { ascending: false });
 
-    const todayLog = logs?.find((l:any) => l && l.date === today);
-    const activeOrders = safeParse(todayLog?.orders_data);
-    const paidOrders = safeParse(todayLog?.paid_history);
+    const uniqueActiveOrders = new Map();
+    const uniquePaidOrders = new Map();
+    
+    logs?.sort((a: any, b: any) => a.date.localeCompare(b.date)).forEach((log: any) => {
+        const active = safeParse(log.orders_data) || [];
+        const paid = safeParse(log.paid_history) || [];
+        
+        active.forEach((o: any) => {
+            const oId = o.id || o.invoice_no || Math.random().toString();
+            uniqueActiveOrders.set(oId, o);
+        });
+        
+        paid.forEach((o: any) => {
+            const oId = o.id || o.invoice_no || Math.random().toString();
+            uniquePaidOrders.set(oId, o);
+        });
+    });
+    
+    const activeOrders = Array.from(uniqueActiveOrders.values());
+    const paidOrders = Array.from(uniquePaidOrders.values());
     
     const { data: menuData } = await supabaseAdmin
         .from("menu_optimized")
@@ -162,21 +179,27 @@ export async function getWaiterDashboardData() {
             mySales += grandTotal;
             tablesServed += 1;
             
+            let hasReadyItemInOrder = false;
+            
             validItems.forEach((item: any) => {
                 if (item && item.status === 'ready') {
                     hasReady = true;
-                    notifications.push({
-                        id: order.id,
-                        type: 'kitchen',
-                        title: 'Order Ready',
-                        desc: `Table ${tableName} - ${validItems.length} items`,
-                        time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' }),
-                        items: validItems
-                    });
+                    hasReadyItemInOrder = true;
                 } else if (item && (item.status === 'cooking' || item.status === 'pending')) {
                     hasCooking = true;
                 }
             });
+
+            if (hasReadyItemInOrder) {
+                notifications.push({
+                    id: order.id,
+                    type: 'kitchen',
+                    title: 'Order Ready',
+                    desc: `Table ${tableName}`,
+                    time: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu' }),
+                    items: validItems
+                });
+            }
 
             const current = activeTableStatus.get(tableName);
             if (!current) activeTableStatus.set(tableName, 'occupied');
@@ -186,7 +209,7 @@ export async function getWaiterDashboardData() {
     const processedTables = tables?.map(t => {
         if (!t) return null;
         const label = String(t.label || "").trim();
-        const status = activeTableStatus.get(label) || 'available';
+        const status = activeTableStatus.get(label) || (t.status || 'available');
         return {
             ...t,
             section: t.section || "Main Hall", 

@@ -283,9 +283,13 @@ export default function AdminMenuPage() {
       { value: "tobacco", label: "Tobacco", emoji: "🚬" },
   ];
 
+  const isSplitActive = tenant?.feature_flags?.split_kot_bot === true;
+
   const stationOptions = [
       { value: "kitchen", label: "Kitchen", emoji: "👨‍🍳" },
-      { value: "bar", label: "Bar", emoji: "🍷" }
+      ...(isSplitActive ? [
+          { value: "bar", label: "Bar", emoji: "🍷" }
+      ] : [])
   ];
 
   return (

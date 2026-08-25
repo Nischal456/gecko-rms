@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { getBusinessDate } from "@/lib/utils";
+import { unstable_noStore } from "next/cache";
 
 function safeParse(data: any): any[] {
   if (!data) return [];
@@ -18,6 +19,7 @@ function safeParse(data: any): any[] {
 }
 
 export async function getActiveBusinessDate(tenantId: string | number): Promise<string> {
+    unstable_noStore();
     const dateStr = getBusinessDate(new Date());
     
     try {

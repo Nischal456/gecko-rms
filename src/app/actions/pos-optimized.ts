@@ -42,6 +42,9 @@ export async function createOrderJSON(orderData: any) {
   // --- CRITICAL FIX: SECURE METADATA FALLBACK ---
   // If the client-side QR menu or mobile app fails to pass station/category payload,
   // we look it up live from the database to guarantee the Chef/Bartender OS routes it.
+  const { data: tenantData } = await supabaseAdmin.from("tenants").select("feature_flags").eq("id", tenantId).single();
+  const isSplitActive = tenantData?.feature_flags?.split_kot_bot === true;
+
   const { data: menuData } = await supabaseAdmin.from("menu_optimized").select("items").eq("tenant_id", tenantId);
   const liveMenu = new Map();
   if (menuData) {
@@ -80,7 +83,7 @@ export async function createOrderJSON(orderData: any) {
               time_added: new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit' }),
               
               // Pass these through securely so the Server Actions (Kitchen/Bar) know where to route them!
-              station: dbItem.station || i.station || i.prep_station || (
+              station: isSplitActive ? (dbItem.station || i.station || i.prep_station || (
                   (() => {
                       const itemName = String(i.name).toLowerCase();
                       const catName = String(dbItem.category_name || dbItem.category || i.category || "").toLowerCase();
@@ -89,7 +92,7 @@ export async function createOrderJSON(orderData: any) {
                       }
                       return 'kitchen';
                   })()
-              ),
+              )) : 'kitchen',
               category: dbItem.category_name || dbItem.category || i.category || "",
               dietary: dbItem.dietary || i.dietary || ""
           };

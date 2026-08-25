@@ -12,6 +12,13 @@ import { toast } from "sonner";
 import { getInventory, addInventoryItem, deleteInventoryItem, addExpense, getExpenses, deleteExpense, getMenuItemsForLinking, manualStockAdjust } from "@/app/actions/inventory"; 
 import { getDashboardData } from "@/app/actions/dashboard";
 
+const ReceiptRs = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+    <text x="12" y="15" fontSize="10" fontWeight="bold" textAnchor="middle" fill="currentColor" stroke="none" style={{ fontFamily: "sans-serif" }}>Rs</text>
+  </svg>
+);
+
 function exportExpensesToCSV(expenses: any[]) {
     if (!expenses || expenses.length === 0) return toast.error("No data available to export");
     let csv = "Date,Title/Category,Notes,Type,Payment Method,Amount\n";
@@ -235,7 +242,7 @@ export default function InventoryView() {
           <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-8">
               <div>
                   <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">Vault & Ledger</h1>
-                  <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Premium Control Center</p>
+                  <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-2"><Package className="w-4 h-4 text-amber-500" /> Premium Control Center</p>
               </div>
               <div className="flex flex-wrap gap-3 w-full xl:w-auto">
                   <div className="relative flex-1 md:w-80">
@@ -248,7 +255,7 @@ export default function InventoryView() {
                       </button>
                   )}
                   <button onClick={() => { setFinanceType('expense'); setIsExpenseModalOpen(true); }} className="flex-1 xl:flex-none px-6 h-12 bg-white border-2 border-slate-100 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm transition-all whitespace-nowrap active:scale-95">
-                      <Receipt className="w-4 h-4 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
+                      <ReceiptRs className="w-4 h-4 text-slate-400" /> <span className="hidden sm:inline">Log Cashflow</span><span className="sm:hidden">Log</span>
                   </button>
                   <button onClick={() => { setCustomCategory(""); setIsModalOpen(true); }} className="flex-1 xl:flex-none px-6 h-12 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20 active:scale-95 transition-all whitespace-nowrap">
                       <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add Stock</span><span className="sm:hidden">Stock</span>
@@ -302,7 +309,10 @@ export default function InventoryView() {
                                       </div>
                                   </td>
                                   <td className="p-6 text-right">
-                                      <button onClick={() => triggerDelete(item.id, 'inventory', item.name)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                      <div className="flex items-center justify-end gap-1">
+                                          <button onClick={() => toast.info("Edit feature coming soon")} className="p-3 rounded-xl hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-all"><Edit3 className="w-5 h-5" /></button>
+                                          <button onClick={() => triggerDelete(item.id, 'inventory', item.name)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                      </div>
                                   </td>
                               </tr>
                           )) : filteredExpenses.map((exp) => {
@@ -341,7 +351,10 @@ export default function InventoryView() {
                                           <span className={isInc ? 'text-emerald-600' : 'text-slate-900'}>{isInc ? '+' : '-'} Rs {Math.abs(exp.amount)}</span>
                                       </td>
                                       <td className="p-6 text-right">
-                                          <button onClick={() => triggerDelete(exp.id, 'expense', cleanTitle)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                          <div className="flex items-center justify-end gap-1">
+                                              <button onClick={() => toast.info("Edit feature coming soon")} className="p-3 rounded-xl hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-all"><Edit3 className="w-5 h-5" /></button>
+                                              <button onClick={() => triggerDelete(exp.id, 'expense', cleanTitle)} className="p-3 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-5 h-5" /></button>
+                                          </div>
                                       </td>
                                   </tr>
                               )

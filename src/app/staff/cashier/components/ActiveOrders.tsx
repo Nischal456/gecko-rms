@@ -325,7 +325,7 @@ export default function ActiveOrdersView({ data, onSelectOrder, onServeOrder, on
                 cancelledItems.length === 0 ? (
                     <div className="h-[50vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-red-200/50 rounded-[3rem] bg-red-50/30 mt-4">
                         <div className="w-20 h-20 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-red-100">
-                            <Receipt className="w-8 h-8 md:w-10 md:h-10 opacity-40 text-red-500"/>
+                            <span className="text-3xl md:text-4xl font-black opacity-40 text-red-500">Rs</span>
                         </div>
                         <p className="font-black text-base md:text-lg text-red-400 uppercase tracking-widest">No Waste</p>
                         <p className="text-[10px] md:text-xs font-bold text-slate-500 opacity-60 mt-1">No prepared food was cancelled in the last 24h.</p>
